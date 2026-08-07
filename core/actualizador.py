@@ -5,6 +5,7 @@ import zipfile
 import shutil
 import sys
 import subprocess
+import datetime
 
 
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
@@ -159,9 +160,7 @@ def descargar_actualizacion():
 
         return False
 
-
-
-def instalar_actualizacion(zip_path):
+def crear_backup():
 
     try:
 
@@ -171,6 +170,106 @@ def instalar_actualizacion(zip_path):
             )
         )
 
+        carpeta_backups = os.path.join(
+            carpeta_actual,
+            "backups"
+        )
+
+        os.makedirs(
+            carpeta_backups,
+            exist_ok=True
+        )
+
+
+        fecha = datetime.datetime.now().strftime(
+            "%Y-%m-%d_%H-%M-%S"
+        )
+
+
+        carpeta_backup = os.path.join(
+            carpeta_backups,
+            f"backup_{fecha}"
+        )
+
+
+        os.makedirs(
+            carpeta_backup
+        )
+
+
+        elementos = [
+            "database",
+            "version.txt"
+        ]
+
+
+        for elemento in elementos:
+
+            origen = os.path.join(
+                carpeta_actual,
+                elemento
+            )
+
+
+            destino = os.path.join(
+                carpeta_backup,
+                elemento
+            )
+
+
+            if os.path.exists(origen):
+
+                if os.path.isdir(origen):
+
+                    shutil.copytree(
+                        origen,
+                        destino
+                    )
+
+                else:
+
+                    shutil.copy2(
+                        origen,
+                        destino
+                    )
+
+
+        print(
+            "Backup creado:",
+            carpeta_backup
+        )
+
+
+        return True
+
+
+    except Exception as e:
+
+        print(
+            "Error creando backup:",
+            e
+        )
+
+        return False
+
+def instalar_actualizacion(zip_path):
+
+    try:
+
+        if not crear_backup():
+
+            print(
+                "No se pudo crear backup. Cancelando actualización."
+            )
+
+            return False
+
+
+        carpeta_actual = os.path.dirname(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            )
+        )
 
         carpeta_temp = os.path.join(
             tempfile.gettempdir(),

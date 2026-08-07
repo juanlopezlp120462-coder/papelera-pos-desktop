@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
 
     print(
-        f"PAPELERA POS versión {version}"
+        f"PAPELERA POS actualizado - VERSION {obtener_version_actual()}"
     )
 
 
@@ -219,13 +219,7 @@ if __name__ == "__main__":
 
 
 
-    else:
-
-
-        print(
-            "PAPELERA POS actualizado - VERSION 1.0.4"
-        )
-
+   
 
 
     # ==================================
