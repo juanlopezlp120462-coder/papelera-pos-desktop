@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Entorno virtual
+venv/
+.venv/
+
+# PyInstaller
+build/
+dist/
+
+# Base de datos local
+*.db
+
+# Tickets generados
+tickets/
+
+# Backups
+backups/
+
+# Archivos temporales
+*.tmp
+*.log
