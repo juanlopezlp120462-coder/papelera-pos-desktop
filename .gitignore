@@ -1,25 +1,72 @@
-# Python
+# =========================
+# PYTHON
+# =========================
+
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
-# Entorno virtual
+
+# =========================
+# ENTORNOS VIRTUALES
+# =========================
+
 venv/
 .venv/
 
-# PyInstaller
+
+# =========================
+# PYINSTALLER
+# =========================
+
 build/
 dist/
 
-# Base de datos local
+
+# =========================
+# EJECUTABLES Y ACTUALIZACIONES
+# =========================
+
+*.exe
+*.zip
+UPDATE.zip
+PAPELERA_POS_update.zip
+
+
+# =========================
+# ARCHIVOS INTERNOS GRANDES
+# =========================
+
+_internal/
+
+
+# =========================
+# BASE DE DATOS LOCAL
+# =========================
+
 *.db
 
-# Tickets generados
-tickets/
 
-# Backups
+# =========================
+# TICKETS Y ARCHIVOS GENERADOS
+# =========================
+
+tickets/
 backups/
 
-# Archivos temporales
-*.tmp
+
+# =========================
+# TEMPORALES
+# =========================
+
 *.log
+*.tmp
+
+
+# =========================
+# ARCHIVOS DE PRUEBA GRANDES
+# =========================
+
+prueba.zip
+codigo_completo.txt
