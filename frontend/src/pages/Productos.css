@@ -1,0 +1,152 @@
+.pagina{
+    padding:25px;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+}
+
+.header h1{
+    margin:0;
+}
+
+.nuevo{
+    background:#2563eb;
+    color:white;
+    border:none;
+    padding:12px 18px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:bold;
+}
+
+.buscador{
+    width:100%;
+    padding:12px;
+    border-radius:8px;
+    border:1px solid #ccc;
+    margin-bottom:20px;
+    font-size:16px;
+}
+
+.tabla{
+    width:100%;
+    border-collapse:collapse;
+    background:white;
+    border-radius:10px;
+    overflow:hidden;
+}
+
+.tabla th{
+    background:#0f172a;
+    color:white;
+    padding:14px;
+}
+
+.tabla td{
+    padding:12px;
+    border-bottom:1px solid #eee;
+}
+
+.tabla tr:hover{
+    background:#f8fafc;
+}
+
+.acciones button{
+    margin-right:5px;
+    border:none;
+    padding:8px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.editar{
+    background:#f59e0b;
+}
+
+.eliminar{
+    background:#ef4444;
+    color:white;
+}
+
+.formulario{
+    margin:20px 0;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+}
+
+.formulario input{
+    padding:10px;
+}
+
+.guardar{
+    background:#16a34a;
+    color:white;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.cancelar{
+    background:#64748b;
+    color:white;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+}
+.modalFondo{
+
+    position:fixed;
+    inset:0;
+
+    background:rgba(0,0,0,.45);
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+}
+
+.modal{
+
+    width:500px;
+
+    background:white;
+
+    border-radius:12px;
+
+    padding:25px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:12px;
+
+    box-shadow:0 10px 35px rgba(0,0,0,.25);
+
+}
+
+.modal input{
+
+    padding:12px;
+
+    border:1px solid #d1d5db;
+
+    border-radius:8px;
+
+}
+
+.accionesModal{
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    gap:10px;
+
+}

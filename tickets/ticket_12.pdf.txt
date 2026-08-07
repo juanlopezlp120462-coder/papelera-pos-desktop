@@ -1,0 +1,11 @@
+ABRIL POS
+Comprobante de venta
+Venta Nº: 12
+Fecha: 2026-07-29 13:43:57
+Pago: Efectivo
+Producto Cant Total
+fantasia 1 $1500.0
+TOTAL: $1500.0
+Gracias por su compra
+
+[PDF page 1 image attached. Read this image directly to extract content.]
