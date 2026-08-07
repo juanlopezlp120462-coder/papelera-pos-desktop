@@ -17,23 +17,19 @@ jobs:
       - name: Descargar codigo
         uses: actions/checkout@v4
 
-
       - name: Instalar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
 
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-
       - name: Crear EXE
         run: |
           pyinstaller --noconfirm --clean PAPELERA_POS.spec
-
 
       - name: Crear UPDATE.zip
         shell: powershell
@@ -41,7 +37,6 @@ jobs:
           Compress-Archive `
           -Path dist\PAPELERA_POS\* `
           -DestinationPath UPDATE.zip
-
 
       - name: Crear Release
         uses: softprops/action-gh-release@v2
@@ -51,30 +46,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
       - name: Actualizar version backend
         shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME}
-          VERSION=${VERSION#v}
 
-          URL="https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v${VERSION}/UPDATE.zip"
+          URL="https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/${VERSION}/UPDATE.zip"
 
           git clone https://x-access-token:${{ secrets.BACKEND_TOKEN }}@github.com/juanlopezlp120462-coder/papelera-pos-backend.git backend
 
           cd backend
 
-          echo "{
-            \"version\": \"${VERSION}\",
-            \"mensaje\": \"Papelera POS actualizado\",
-            \"url\": \"${URL}\"
-          }" > app/version.json
+          cat > app/version.json <<EOF
+          {
+            "version": "${VERSION#v}",
+            "mensaje": "Papelera POS actualizado",
+            "url": "${URL}"
+          }
+          EOF
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
           git add app/version.json
-
-          git commit -m "Actualizar version v${VERSION}"
-
+          git commit -m "Actualizar version ${VERSION}"
           git push
