@@ -9,9 +9,7 @@ permissions:
   contents: write
 
 jobs:
-
   build:
-
     runs-on: windows-latest
 
     steps:
@@ -40,9 +38,7 @@ jobs:
       - name: Crear UPDATE.zip
         shell: powershell
         run: |
-          Compress-Archive `
-          -Path dist\PAPELERA_POS\* `
-          -DestinationPath UPDATE.zip
+          Compress-Archive -Path dist\PAPELERA_POS\* -DestinationPath UPDATE.zip
 
 
       - name: Crear Release
@@ -60,34 +56,42 @@ jobs:
 
           VERSION=${GITHUB_REF_NAME}
 
-          URL="https://github.com/juanlopezlp120462-coder/papelera-pos-backend/releases/download/${VERSION}/UPDATE.zip"
+          URL="https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/${VERSION}/UPDATE.zip"
+
 
           git clone https://x-access-token:${{ secrets.BACKEND_TOKEN }}@github.com/juanlopezlp120462-coder/papelera-pos-backend.git backend
 
+
           cd backend
 
-          python - <<EOF
-          import json
 
-          version = "${VERSION}"
-          url = "${URL}"
+          python -c "
+import json
 
-          with open("app/version.json", "w", encoding="utf-8") as f:
-              json.dump(
-                  {
-                      "version": version.replace("v",""),
-                      "mensaje": "Papelera POS actualizado",
-                      "url": url
-                  },
-                  f,
-                  indent=2
-              )
-          EOF
+version='${VERSION}'.replace('v','')
+url='${URL}'
+
+with open('app/version.json','w',encoding='utf-8') as f:
+    json.dump(
+        {
+            'version': version,
+            'mensaje': 'Papelera POS actualizado',
+            'url': url
+        },
+        f,
+        indent=2
+    )
+"
 
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
+
           git add app/version.json
+
+
           git commit -m "Actualizar version ${VERSION}"
+
+
           git push
