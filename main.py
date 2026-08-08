@@ -196,10 +196,36 @@ if __name__ == "__main__":
 
             progreso = QProgressDialog(
                 "Descargando actualización...",
-                None,
+                "Cancelar",
                 0,
                 100
             )
+
+            progreso.setWindowTitle(
+                "Actualizando Papelera POS"
+            )
+
+            progreso.setMinimumDuration(
+                0
+            )
+
+            progreso.setValue(
+                0
+            )
+
+            progreso.setAutoClose(
+                False
+            )
+
+            progreso.setAutoReset(
+                False
+            )
+
+            progreso.show()
+
+            QApplication.processEvents()
+
+            QApplication.processEvents()
 
             progreso.setWindowTitle(
                 "Actualizando Papelera POS"
@@ -222,35 +248,11 @@ if __name__ == "__main__":
                     valor
                 )
 
+                progreso.setLabelText(
+                    f"Descargando actualización... {valor}%"
+                )
 
-            archivo = descargar_actualizacion(
-                actualizar_progreso
-            )
-
-
-            progreso.close()
-            if archivo:
-
-                if instalar_actualizacion(archivo):
-
-                    reiniciar_programa()
-
-
-
-            print(
-                "Archivo descargado:",
-                archivo
-            )
-
-
-
-        else:
-
-
-            print(
-                "Actualización pospuesta"
-            )
-
+                QApplication.processEvents()
 
 
    
