@@ -1,178 +1,93 @@
-name: Crear Release Papelera POS
+name: Crear Update PAPELERA POS
 
 on:
   push:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-
 jobs:
-  build:
+
+  build-update:
+
     runs-on: windows-latest
 
     steps:
 
-      - name: Descargar codigo
-        uses: actions/checkout@v4
+    - name: Descargar repositorio
+      uses: actions/checkout@v4
 
 
-      - name: Instalar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Instalar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
 
-      - name: Instalar dependencias
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
 
-      - name: Crear version.txt
-        shell: powershell
-        run: |
-          $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
+    - name: Crear EXE con PyInstaller
+      run: |
+        pyinstaller PAPELERA_POS.spec
 
-          Set-Content version.txt $VERSION
 
-          Write-Host "VERSION LOCAL:"
-          Get-Content version.txt
+    - name: Crear version.txt
+      shell: powershell
+      run: |
+        Set-Content -Path "dist\PAPELERA_POS\version.txt" -Value "${{ github.ref_name }}"
 
 
-      - name: Crear EXE con PyInstaller
-        shell: powershell
-        run: |
-          pyinstaller --noconfirm --clean PAPELERA_POS.spec
+    # CREAR UPDATE LIMPIO
+    # Copia solamente el contenido del programa,
+    # NO la carpeta PAPELERA_POS completa
 
+    - name: Preparar carpeta Update
+      shell: powershell
+      run: |
 
-      - name: Preparar version dentro de dist
-        shell: powershell
-        run: |
+        if (Test-Path update) {
+            Remove-Item update -Recurse -Force
+        }
 
-          $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
+        New-Item -ItemType Directory -Path update
 
-          Write-Host "VERSION FINAL:"
-          Write-Host $VERSION
+        Copy-Item `
+          "dist\PAPELERA_POS\PAPELERA_POS.exe" `
+          "update\PAPELERA_POS.exe"
 
 
-          Set-Content `
-            -Path dist\PAPELERA_POS\version.txt `
-            -Value $VERSION
+        Copy-Item `
+          "dist\PAPELERA_POS\version.txt" `
+          "update\version.txt"
 
 
-          Write-Host "VERSION DIST:"
-          Get-Content dist\PAPELERA_POS\version.txt
+        Copy-Item `
+          "dist\PAPELERA_POS\_internal" `
+          "update\_internal" `
+          -Recurse
 
 
-      - name: Limpiar versiones internas
-        shell: powershell
-        run: |
+    - name: Crear update.zip
+      shell: powershell
+      run: |
 
-          Remove-Item `
-            dist\PAPELERA_POS\_internal\version.txt `
-            -Force `
-            -ErrorAction SilentlyContinue
+        if (Test-Path update.zip) {
+            Remove-Item update.zip -Force
+        }
 
+        Compress-Archive `
+          -Path "update\*" `
+          -DestinationPath "update.zip"
 
-          Remove-Item `
-            dist\PAPELERA_POS\_internal\_internal `
-            -Recurse `
-            -Force `
-            -ErrorAction SilentlyContinue
 
 
+    - name: Subir update.zip
+      uses: actions/upload-artifact@v4
+      with:
 
-      - name: Ver estructura antes del ZIP
-        shell: powershell
-        run: |
+        name: update
 
-          Write-Host "CONTENIDO DIST:"
-          Get-ChildItem dist\PAPELERA_POS -Recurse
-
-
-
-      - name: Crear UPDATE.zip
-        shell: powershell
-        run: |
-
-          Remove-Item UPDATE.zip -ErrorAction SilentlyContinue
-
-
-          cd dist\PAPELERA_POS
-
-
-          Compress-Archive `
-            -Path * `
-            -DestinationPath ..\..\UPDATE.zip
-
-
-          cd ..\..
-
-
-          Write-Host "REVISANDO ZIP:"
-
-
-          Remove-Item revisar_zip `
-            -Recurse `
-            -Force `
-            -ErrorAction SilentlyContinue
-
-
-          Expand-Archive `
-            UPDATE.zip `
-            -DestinationPath revisar_zip `
-            -Force
-
-
-          Get-ChildItem revisar_zip -Recurse
-
-
-
-      - name: Crear Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: UPDATE.zip
-          generate_release_notes: true
-
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
-      - name: Actualizar version backend
-        shell: bash
-        run: |
-
-          VERSION=${GITHUB_REF_NAME}
-
-
-          URL="https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/${VERSION}/UPDATE.zip"
-
-
-          git clone https://x-access-token:${{ secrets.BACKEND_TOKEN }}@github.com/juanlopezlp120462-coder/papelera-pos-backend.git backend
-
-
-          cd backend
-
-
-          cat > app/version.json <<EOF
-          {
-            "version": "${VERSION#v}",
-            "mensaje": "Papelera POS actualizado",
-            "url": "${URL}"
-          }
-          EOF
-
-
-          git config user.name "github-actions"
-
-          git config user.email "actions@github.com"
-
-
-          git add app/version.json
-
-          git commit -m "Actualizar version ${VERSION}"
-
-          git push
+        path: update.zip
