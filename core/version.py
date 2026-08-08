@@ -79,7 +79,7 @@ def hay_actualizacion(version_actual):
 
     if datos is None:
 
-        return False, None, None
+        return False, None, 
 
 
     ultima_version = datos.get(
@@ -92,10 +92,9 @@ def hay_actualizacion(version_actual):
         "url"
     )
 
-
     if ultima_version != version_actual:
 
-        return True, ultima_version, url
+        return True, ultima_version
 
 
-    return False, ultima_version, url
+    return False, ultima_version

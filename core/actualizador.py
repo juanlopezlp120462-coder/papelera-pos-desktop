@@ -6,6 +6,7 @@ import shutil
 import sys
 import subprocess
 import datetime
+import time
 
 
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
@@ -428,71 +429,33 @@ def instalar_actualizacion(zip_path):
 
         if not crear_backup():
 
-            print(
-                "No se pudo crear backup. Cancelando actualización."
+            escribir_log(
+                "No se pudo crear backup"
             )
 
             return False
 
 
         if getattr(sys, "frozen", False):
+
             carpeta_actual = os.path.dirname(
                 sys.executable
             )
+
         else:
+
             carpeta_actual = os.path.dirname(
                 os.path.dirname(
                     os.path.abspath(__file__)
                 )
             )
-            ruta_debug = os.path.join(
-                tempfile.gettempdir(),
-                "PAPELERA_debug.txt"
-            )
 
-            with open(
-                ruta_debug,
-                "w",
-                encoding="utf-8"
-            ) as f:
-                f.write(
-                    "CARPETA INSTALACION:\n"
-                )
-                f.write(
-                    carpeta_actual
-                )
-                f.write(
-                    "\n\nEXE:\n"
-                )
-                f.write(
-                    sys.executable
-                )
-                f.write(
-                    "\n"
-                )
-               
-        try:
-            with open(
-                "actualizador_debug.txt",
-                "a",
-                encoding="utf-8"
-            ) as f:
-                f.write("\n====================\n")
-                f.write(
-                    f"CARPETA INSTALACION: {carpeta_actual}\n"
-                )
-                f.write(
-                    f"EXE ACTUAL: {sys.executable}\n"
-                )
-                f.write(
-                    f"CONTENIDO: {os.listdir(carpeta_actual)}\n"
-                )
 
-        except Exception as e:
-            pass                    
-                
-        print("CARPETA INSTALACION:", carpeta_actual)
-        print("CONTENIDO INSTALACION:", os.listdir(carpeta_actual))
+        escribir_log(
+            "CARPETA INSTALACION: " + carpeta_actual
+        )
+
+
         carpeta_temp = os.path.join(
             tempfile.gettempdir(),
             "PAPELERA_POS_UPDATE"
@@ -502,17 +465,19 @@ def instalar_actualizacion(zip_path):
         if os.path.exists(carpeta_temp):
 
             shutil.rmtree(
-                carpeta_temp
+                carpeta_temp,
+                ignore_errors=True
             )
 
 
         os.makedirs(
-            carpeta_temp
+            carpeta_temp,
+            exist_ok=True
         )
 
 
-        print(
-            "Extrayendo actualización..."
+        escribir_log(
+            "Extrayendo ZIP"
         )
 
 
@@ -524,19 +489,17 @@ def instalar_actualizacion(zip_path):
             zip_ref.extractall(
                 carpeta_temp
             )
-            
-        # Corregir estructura si viene carpeta PAPELERA_POS dentro del ZIP
+
+
+        # Si viene una carpeta PAPELERA_POS dentro del ZIP
 
         carpeta_extra = os.path.join(
             carpeta_temp,
             "PAPELERA_POS"
         )
 
-        if os.path.exists(carpeta_extra):
 
-            escribir_log(
-                "Detectada carpeta extra PAPELERA_POS"
-            )
+        if os.path.exists(carpeta_extra):
 
             for elemento in os.listdir(carpeta_extra):
 
@@ -553,25 +516,56 @@ def instalar_actualizacion(zip_path):
                 if os.path.exists(destino):
 
                     if os.path.isdir(destino):
-                        shutil.rmtree(destino)
+
+                        shutil.rmtree(
+                            destino
+                        )
+
                     else:
-                        os.remove(destino)
+
+                        os.remove(
+                            destino
+                        )
+
 
                 shutil.move(
                     origen,
                     destino
                 )
 
+
             shutil.rmtree(
                 carpeta_extra
-            )            
+            )
 
 
-        print(
-            "Copiando archivos nuevos..."
+        datos_version = obtener_info_version()
+
+
+        nueva_version = "1.0.0"
+
+
+        if datos_version:
+
+            nueva_version = datos_version.get(
+                "version",
+                "1.0.0"
+            )
+
+
+        archivo_version = os.path.join(
+            carpeta_actual,
+            "version.txt"
         )
 
-        # BORRAR _internal UNA SOLA VEZ
+
+        # Creamos actualizador externo BAT
+
+        bat = os.path.join(
+            tempfile.gettempdir(),
+            "actualizar_papelera_pos.bat"
+        )
+
 
         internal_viejo = os.path.join(
             carpeta_actual,
@@ -579,129 +573,53 @@ def instalar_actualizacion(zip_path):
         )
 
 
-        if os.path.exists(internal_viejo):
-
-            try:
-
-                shutil.rmtree(
-                    internal_viejo
-                )
-
-                escribir_log(
-                    "ELIMINADO _internal VIEJO"
-                )
-
-
-            except Exception as e:
-
-                escribir_log(
-                    f"ERROR BORRANDO _internal: {e}"
-                )
-
-
-
-        # COPIAR TODO EL UPDATE
-
-        for root, dirs, files in os.walk(
-            carpeta_temp
-        ):
-
-
-            destino = root.replace(
-                carpeta_temp,
-                carpeta_actual
-            )
-
-
-            os.makedirs(
-                destino,
-                exist_ok=True
-            )
-
-
-            for archivo in files:
-
-
-                origen_archivo = os.path.join(
-                    root,
-                    archivo
-                )
-
-
-                destino_archivo = os.path.join(
-                    destino,
-                    archivo
-                )
-
-
-                shutil.copy2(
-                    origen_archivo,
-                    destino_archivo
-                )
-
-
-                escribir_log(
-                    f"COPIADO: {destino_archivo}"
-                )
-        print(
-            "Actualización instalada correctamente"
-        )
-        escribir_log(
-            "Actualización instalada correctamente"
-        )
-        # Actualizar versión local instalada
-
-        archivo_version = os.path.join(
-            carpeta_actual,
-            "version.txt"
-        )
-
-        datos_version = obtener_info_version()
-
-        nueva_version = datos_version.get(
-            "version",
-            "1.0.0"
-        ) if datos_version else "1.0.0"
-
-
-        print(
-            "ESCRIBIENDO VERSION EN:",
-            archivo_version
-        )
-
-        print(
-            "NUEVA VERSION:",
-            nueva_version
-        )
-        escribir_log(
-            "ESCRIBIENDO VERSION EN: " + archivo_version
-        )
-
-        escribir_log(
-            "NUEVA VERSION: " + nueva_version
-        )
         with open(
-            archivo_version,
+            bat,
             "w",
             encoding="utf-8"
         ) as f:
 
             f.write(
-                nueva_version
+f"""@echo off
+echo Esperando cierre del programa...
+timeout /t 3 >nul
+
+echo Eliminando _internal viejo...
+rmdir /s /q "{internal_viejo}"
+
+echo Copiando nueva version...
+xcopy "{carpeta_temp}\*" "{carpeta_actual}\" /E /Y /I /H
+
+echo Actualizando version...
+echo {nueva_version}> "{archivo_version}"
+
+echo Reiniciando programa...
+start "" "{sys.executable}"
+
+del "%~f0"
+"""
             )
 
 
-        print(
-            f"Versión local actualizada a {nueva_version}"
+        escribir_log(
+            "Ejecutando actualizador externo"
         )
+
+
+        subprocess.Popen(
+            bat,
+            shell=True
+        )
+
+
         return True
+
 
 
     except Exception as e:
 
-        print(
-            "Error instalando actualización:",
-            e
+        escribir_log(
+            "ERROR INSTALANDO ACTUALIZACION: " + str(e)
         )
 
         return False
