@@ -569,7 +569,39 @@ def instalar_actualizacion(zip_path):
 
 
         for root, dirs, files in os.walk(carpeta_temp):
+            # LIMPIAR ARCHIVOS VIEJOS DE LA INSTALACION
 
+            carpetas_limpiar = [
+                "_internal"
+            ]
+
+            for carpeta in carpetas_limpiar:
+
+                ruta = os.path.join(
+                    carpeta_actual,
+                    carpeta
+                )
+
+                if os.path.exists(ruta):
+
+                    try:
+
+                        shutil.rmtree(
+                            ruta
+                        )
+
+                        print(
+                            "Carpeta eliminada:",
+                            ruta
+                        )
+
+                    except Exception as e:
+
+                        print(
+                            "Error eliminando:",
+                            ruta,
+                            e
+                        )
             destino = root.replace(
                 carpeta_temp,
                 carpeta_actual
