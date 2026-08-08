@@ -440,8 +440,29 @@ def instalar_actualizacion(zip_path):
                 os.path.dirname(
                     os.path.abspath(__file__)
                 )
-            )
+            )        
+        try:
+            with open(
+                "actualizador_debug.txt",
+                "a",
+                encoding="utf-8"
+            ) as f:
+                f.write("\n====================\n")
+                f.write(
+                    f"CARPETA INSTALACION: {carpeta_actual}\n"
+                )
+                f.write(
+                    f"EXE ACTUAL: {sys.executable}\n"
+                )
+                f.write(
+                    f"CONTENIDO: {os.listdir(carpeta_actual)}\n"
+                )
 
+        except Exception as e:
+            pass                    
+                
+        print("CARPETA INSTALACION:", carpeta_actual)
+        print("CONTENIDO INSTALACION:", os.listdir(carpeta_actual))
         carpeta_temp = os.path.join(
             tempfile.gettempdir(),
             "PAPELERA_POS_UPDATE"
