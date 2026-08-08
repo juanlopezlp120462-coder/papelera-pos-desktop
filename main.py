@@ -3,15 +3,18 @@ import sys
 from core.version import obtener_version_actual
 from core.actualizador import hay_actualizacion
 
-from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog
+from PySide6.QtWidgets import (
+    QApplication,
+    QMessageBox,
+    QProgressDialog
+)
+
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
-
 
 from ui.keyboard import KeyboardAndNumberFilter
 from ui.db import init_db
 from ui.dashboard import Dashboard
-
 
 from webhook_server import start_webhook_server
 from sync import sincronizar
@@ -20,9 +23,7 @@ from sync import sincronizar
 
 if __name__ == "__main__":
 
-
     app = QApplication(sys.argv)
-
 
 
     screen = QGuiApplication.primaryScreen().availableGeometry()
@@ -39,7 +40,6 @@ if __name__ == "__main__":
         font-size: {int(14 * factor)}px;
     }}
     """)
-
 
 
     app.setStyleSheet('''
@@ -104,7 +104,6 @@ if __name__ == "__main__":
 
 
     except Exception as e:
-
 
         print(
             "Error sincronización inicial:",
@@ -208,45 +207,37 @@ if __name__ == "__main__":
                 100
             )
 
+
             progreso.setWindowTitle(
                 "Actualizando Papelera POS"
             )
+
 
             progreso.setMinimumDuration(
                 0
             )
 
+
             progreso.setValue(
                 0
             )
 
-            progreso.setAutoClose(
-                False
-            )
-
-            progreso.setAutoReset(
-                False
-            )
-
-            progreso.show()
-
-            QApplication.processEvents()
-
-            QApplication.processEvents()
-
-            progreso.setWindowTitle(
-                "Actualizando Papelera POS"
-            )
 
             progreso.setAutoClose(
                 False
             )
 
+
             progreso.setAutoReset(
                 False
             )
 
+
             progreso.show()
+
+
+            QApplication.processEvents()
+
 
 
             def actualizar_progreso(valor):
@@ -255,14 +246,32 @@ if __name__ == "__main__":
                     valor
                 )
 
+
                 progreso.setLabelText(
                     f"Descargando actualización... {valor}%"
                 )
 
+
                 QApplication.processEvents()
 
 
-   
+
+            zip_actualizacion = descargar_actualizacion(
+                actualizar_progreso
+            )
+
+
+            if zip_actualizacion:
+
+                instalado = instalar_actualizacion(
+                    zip_actualizacion
+                )
+
+
+                if instalado:
+
+                    reiniciar_programa()
+
 
 
     # ==================================

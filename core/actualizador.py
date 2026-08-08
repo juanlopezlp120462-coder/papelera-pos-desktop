@@ -567,41 +567,42 @@ def instalar_actualizacion(zip_path):
             "Copiando archivos nuevos..."
         )
 
+        # BORRAR _internal UNA SOLA VEZ
 
-        for root, dirs, files in os.walk(carpeta_temp):
-            # LIMPIAR ARCHIVOS VIEJOS DE LA INSTALACION
+        internal_viejo = os.path.join(
+            carpeta_actual,
+            "_internal"
+        )
 
-            carpetas_limpiar = [
-                "_internal"
-            ]
 
-            for carpeta in carpetas_limpiar:
+        if os.path.exists(internal_viejo):
 
-                ruta = os.path.join(
-                    carpeta_actual,
-                    carpeta
+            try:
+
+                shutil.rmtree(
+                    internal_viejo
                 )
 
-                if os.path.exists(ruta):
+                escribir_log(
+                    "ELIMINADO _internal VIEJO"
+                )
 
-                    try:
 
-                        shutil.rmtree(
-                            ruta
-                        )
+            except Exception as e:
 
-                        print(
-                            "Carpeta eliminada:",
-                            ruta
-                        )
+                escribir_log(
+                    f"ERROR BORRANDO _internal: {e}"
+                )
 
-                    except Exception as e:
 
-                        print(
-                            "Error eliminando:",
-                            ruta,
-                            e
-                        )
+
+        # COPIAR TODO EL UPDATE
+
+        for root, dirs, files in os.walk(
+            carpeta_temp
+        ):
+
+
             destino = root.replace(
                 carpeta_temp,
                 carpeta_actual
@@ -616,10 +617,12 @@ def instalar_actualizacion(zip_path):
 
             for archivo in files:
 
+
                 origen_archivo = os.path.join(
                     root,
                     archivo
                 )
+
 
                 destino_archivo = os.path.join(
                     destino,
@@ -633,6 +636,9 @@ def instalar_actualizacion(zip_path):
                 )
 
 
+                escribir_log(
+                    f"COPIADO: {destino_archivo}"
+                )
         print(
             "Actualización instalada correctamente"
         )
