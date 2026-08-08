@@ -38,8 +38,13 @@ jobs:
       - name: Preparar UPDATE
         shell: powershell
         run: |
+          $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
+
           Remove-Item dist\PAPELERA_POS\version.txt -ErrorAction SilentlyContinue
-          Copy-Item .\version.txt dist\PAPELERA_POS\version.txt -Force
+
+          Set-Content `
+            -Path dist\PAPELERA_POS\version.txt `
+            -Value $VERSION
 
           Write-Host "VERSION QUE VA AL UPDATE:"
           Get-Content dist\PAPELERA_POS\version.txt
