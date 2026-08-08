@@ -38,7 +38,11 @@ jobs:
       - name: Preparar UPDATE
         shell: powershell
         run: |
-          Copy-Item version.txt dist\PAPELERA_POS\version.txt
+          Remove-Item dist\PAPELERA_POS\version.txt -ErrorAction SilentlyContinue
+          Copy-Item .\version.txt dist\PAPELERA_POS\version.txt -Force
+
+          Write-Host "VERSION QUE VA AL UPDATE:"
+          Get-Content dist\PAPELERA_POS\version.txt
 
 
       - name: Crear UPDATE.zip
