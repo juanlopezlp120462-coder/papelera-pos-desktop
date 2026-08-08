@@ -21,6 +21,11 @@ def escribir_log(texto):
                 sys.executable
             )
 
+            print(
+                "EXE ACTUAL:",
+                sys.executable
+            )
+
         else:
 
             carpeta = os.getcwd()
@@ -55,7 +60,6 @@ def escribir_log(texto):
 
 
     except Exception:
-
         pass
 
 
