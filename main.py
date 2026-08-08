@@ -3,7 +3,7 @@ import sys
 from core.version import obtener_version_actual
 from core.actualizador import hay_actualizacion
 
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
 
@@ -194,7 +194,41 @@ if __name__ == "__main__":
 
 
 
-            archivo = descargar_actualizacion()
+            progreso = QProgressDialog(
+                "Descargando actualización...",
+                None,
+                0,
+                100
+            )
+
+            progreso.setWindowTitle(
+                "Actualizando Papelera POS"
+            )
+
+            progreso.setAutoClose(
+                False
+            )
+
+            progreso.setAutoReset(
+                False
+            )
+
+            progreso.show()
+
+
+            def actualizar_progreso(valor):
+
+                progreso.setValue(
+                    valor
+                )
+
+
+            archivo = descargar_actualizacion(
+                actualizar_progreso
+            )
+
+
+            progreso.close()
             if archivo:
 
                 if instalar_actualizacion(archivo):

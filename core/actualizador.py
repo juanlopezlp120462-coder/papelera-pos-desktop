@@ -91,10 +91,9 @@ def hay_actualizacion(version_actual):
 
 
 
-def descargar_actualizacion():
+def descargar_actualizacion(progreso=None):
 
     url = obtener_url_actualizacion()
-
 
     if not url:
 
@@ -105,12 +104,12 @@ def descargar_actualizacion():
         return False
 
 
-
     try:
 
         respuesta = requests.get(
             url,
-            timeout=60
+            timeout=60,
+            stream=True
         )
 
 
@@ -124,6 +123,13 @@ def descargar_actualizacion():
             return False
 
 
+        total = int(
+            respuesta.headers.get(
+                "content-length",
+                0
+            )
+        )
+
 
         archivo_temp = os.path.join(
             tempfile.gettempdir(),
@@ -131,14 +137,39 @@ def descargar_actualizacion():
         )
 
 
+        descargado = 0
+
+
         with open(
             archivo_temp,
             "wb"
         ) as f:
 
-            f.write(
-                respuesta.content
-            )
+
+            for bloque in respuesta.iter_content(
+                chunk_size=8192
+            ):
+
+                if bloque:
+
+                    f.write(
+                        bloque
+                    )
+
+                    descargado += len(
+                        bloque
+                    )
+
+
+                    if total and progreso:
+
+                        porcentaje = int(
+                            descargado * 100 / total
+                        )
+
+                        progreso(
+                            porcentaje
+                        )
 
 
         print(
@@ -160,6 +191,8 @@ def descargar_actualizacion():
 
         return False
 
+
+
 def crear_backup():
 
     try:
@@ -180,42 +213,33 @@ def crear_backup():
             exist_ok=True
         )
 
-
         fecha = datetime.datetime.now().strftime(
             "%Y-%m-%d_%H-%M-%S"
         )
 
-
-        carpeta_backup = os.path.join(
+        destino = os.path.join(
             carpeta_backups,
             f"backup_{fecha}"
         )
 
+        os.makedirs(destino)
 
-        os.makedirs(
-            carpeta_backup
-        )
-
-
-        elementos = [
+        archivos_backup = [
             "database",
             "version.txt"
         ]
 
-
-        for elemento in elementos:
+        for archivo in archivos_backup:
 
             origen = os.path.join(
                 carpeta_actual,
-                elemento
+                archivo
             )
 
-
-            destino = os.path.join(
-                carpeta_backup,
-                elemento
+            copia = os.path.join(
+                destino,
+                archivo
             )
-
 
             if os.path.exists(origen):
 
@@ -223,23 +247,23 @@ def crear_backup():
 
                     shutil.copytree(
                         origen,
-                        destino
+                        copia
                     )
 
                 else:
 
                     shutil.copy2(
                         origen,
-                        destino
+                        copia
                     )
 
-
         print(
-            "Backup creado:",
-            carpeta_backup
+            "Backup creado correctamente:",
+            destino
         )
-
-
+        
+        limpiar_backups()
+        
         return True
 
 
@@ -251,7 +275,64 @@ def crear_backup():
         )
 
         return False
+def limpiar_backups(max_backups=3):
 
+    try:
+
+        carpeta_actual = os.path.dirname(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            )
+        )
+
+        carpeta_backups = os.path.join(
+            carpeta_actual,
+            "backups"
+        )
+
+
+        if not os.path.exists(carpeta_backups):
+            return
+
+
+        backups = []
+
+        for nombre in os.listdir(carpeta_backups):
+
+            ruta = os.path.join(
+                carpeta_backups,
+                nombre
+            )
+
+            if os.path.isdir(ruta):
+
+                backups.append(ruta)
+
+
+        backups.sort(
+            key=os.path.getmtime,
+            reverse=True
+        )
+
+
+        for backup in backups[max_backups:]:
+
+            shutil.rmtree(
+                backup
+            )
+
+            print(
+                "Backup eliminado:",
+                backup
+            )
+
+
+    except Exception as e:
+
+        print(
+            "Error limpiando backups:",
+            e
+        )
 def instalar_actualizacion(zip_path):
 
     try:
