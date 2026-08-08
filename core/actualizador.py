@@ -11,6 +11,52 @@ import datetime
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 
 TIMEOUT = 10
+def escribir_log(texto):
+
+    try:
+
+        if getattr(sys, "frozen", False):
+
+            carpeta = os.path.dirname(
+                sys.executable
+            )
+
+        else:
+
+            carpeta = os.getcwd()
+
+
+        carpeta_logs = os.path.join(
+            carpeta,
+            "logs"
+        )
+
+        os.makedirs(
+            carpeta_logs,
+            exist_ok=True
+        )
+
+
+        archivo = os.path.join(
+            carpeta_logs,
+            "actualizador.txt"
+        )
+
+
+        with open(
+            archivo,
+            "a",
+            encoding="utf-8"
+        ) as f:
+
+            f.write(
+                str(texto) + "\n"
+            )
+
+
+    except Exception:
+
+        pass
 
 
 def obtener_info_version():
@@ -211,6 +257,9 @@ def crear_backup():
             "CARPETA BACKUP:",
             carpeta_actual
         )
+        escribir_log(
+            "CARPETA BACKUP: " + carpeta_actual
+        )        
 
         print(
             "CONTENIDO:",
@@ -261,6 +310,9 @@ def crear_backup():
                     "Copiando backup:",
                     origen
                 )
+                escribir_log(
+                    "Copiando backup: " + origen
+                )                
 
                 if os.path.isdir(origen):
 
@@ -282,6 +334,9 @@ def crear_backup():
                     "No existe para backup:",
                     origen
                 )
+                escribir_log(
+                    "No existe para backup: " + origen
+                )                
 
         print(
             "Backup creado correctamente:",
@@ -305,17 +360,21 @@ def limpiar_backups(max_backups=3):
 
     try:
 
-        carpeta_actual = os.path.dirname(
-            os.path.dirname(
-                os.path.abspath(__file__)
+        if getattr(sys, "frozen", False):
+            carpeta_actual = os.path.dirname(
+                sys.executable
             )
-        )
+        else:
+            carpeta_actual = os.path.dirname(
+                os.path.dirname(
+                    os.path.abspath(__file__)
+                )
+            )
 
         carpeta_backups = os.path.join(
             carpeta_actual,
             "backups"
         )
-
 
         if not os.path.exists(carpeta_backups):
             return
@@ -457,7 +516,9 @@ def instalar_actualizacion(zip_path):
         print(
             "Actualización instalada correctamente"
         )
-
+        escribir_log(
+            "Actualización instalada correctamente"
+        )
         # Actualizar versión local instalada
 
         archivo_version = os.path.join(
@@ -473,6 +534,22 @@ def instalar_actualizacion(zip_path):
         ) if datos_version else "1.0.0"
 
 
+        print(
+            "ESCRIBIENDO VERSION EN:",
+            archivo_version
+        )
+
+        print(
+            "NUEVA VERSION:",
+            nueva_version
+        )
+        escribir_log(
+            "ESCRIBIENDO VERSION EN: " + archivo_version
+        )
+
+        escribir_log(
+            "NUEVA VERSION: " + nueva_version
+        )
         with open(
             archivo_version,
             "w",
