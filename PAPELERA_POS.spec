@@ -9,9 +9,7 @@ analysis = Analysis(
     ['main.py'],
     pathex=['.'],
     binaries=[],
-    datas=[
-        (os.path.abspath('version.txt'), '.')
-    ],
+    datas=[],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

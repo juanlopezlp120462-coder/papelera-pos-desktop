@@ -43,10 +43,28 @@ jobs:
           Set-Content version.txt $VERSION
           Write-Host "VERSION LOCAL:"
           Get-Content version.txt
-      - name: Crear EXE
+      - name: Corregir version dentro de dist
+        shell: powershell
         run: |
-          pyinstaller --noconfirm --clean PAPELERA_POS.spec
+          $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
 
+          Write-Host "VERSION FINAL:"
+          Write-Host $VERSION
+
+          Set-Content dist\PAPELERA_POS\version.txt $VERSION
+
+          Remove-Item dist\PAPELERA_POS\_internal\version.txt -ErrorAction SilentlyContinue
+
+          Write-Host "VERSION DIST:"
+          Get-Content dist\PAPELERA_POS\version.txt
+      - name: Limpiar version interno viejo
+        shell: powershell
+        run: |
+          Remove-Item dist\PAPELERA_POS\_internal\version.txt -ErrorAction SilentlyContinue            
+      - name: Limpiar version duplicado
+        shell: powershell
+        run: |
+          Remove-Item dist\PAPELERA_POS\_internal\version.txt -ErrorAction SilentlyContinue
 
       - name: Preparar UPDATE
         shell: powershell
