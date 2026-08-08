@@ -257,6 +257,11 @@ def crear_backup():
 
             if os.path.exists(origen):
 
+                print(
+                    "Copiando backup:",
+                    origen
+                )
+
                 if os.path.isdir(origen):
 
                     shutil.copytree(
@@ -270,6 +275,13 @@ def crear_backup():
                         origen,
                         copia
                     )
+
+            else:
+
+                print(
+                    "No existe para backup:",
+                    origen
+                )
 
         print(
             "Backup creado correctamente:",

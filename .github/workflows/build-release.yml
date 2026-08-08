@@ -29,7 +29,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-
+      - name: Crear version.txt
+        shell: powershell
+        run: |
+          $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
+          Set-Content version.txt $VERSION
+          Write-Host "VERSION LOCAL:"
+          Get-Content version.txt
+      - name: Crear version.txt
+        shell: powershell
+        run: |
+          $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
+          Set-Content version.txt $VERSION
+          Write-Host "VERSION LOCAL:"
+          Get-Content version.txt
       - name: Crear EXE
         run: |
           pyinstaller --noconfirm --clean PAPELERA_POS.spec
