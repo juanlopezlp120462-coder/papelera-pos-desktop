@@ -1,17 +1,25 @@
+import sys
 import os
 import requests
-
 
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 
 TIMEOUT = 5
 
 
-VERSION_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "version.txt"
-)
+if getattr(sys, "frozen", False):
 
+    VERSION_FILE = os.path.join(
+        os.path.dirname(sys.executable),
+        "version.txt"
+    )
+
+else:
+
+    VERSION_FILE = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "version.txt"
+    )
 
 def obtener_version_actual():
 

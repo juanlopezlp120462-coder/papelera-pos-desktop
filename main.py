@@ -156,7 +156,14 @@ if __name__ == "__main__":
     )
 
 
-    actualizar, nueva_version = hay_actualizacion(version)
+    if getattr(sys, "frozen", False):
+
+        actualizar, nueva_version = hay_actualizacion(version)
+
+    else:
+
+        actualizar = False
+        nueva_version = None
 
 
 

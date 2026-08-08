@@ -197,10 +197,24 @@ def crear_backup():
 
     try:
 
-        carpeta_actual = os.path.dirname(
-            os.path.dirname(
-                os.path.abspath(__file__)
+        if getattr(sys, "frozen", False):
+            carpeta_actual = os.path.dirname(
+                sys.executable
             )
+        else:
+            carpeta_actual = os.path.dirname(
+                os.path.dirname(
+                    os.path.abspath(__file__)
+                )
+            )
+        print(
+            "CARPETA BACKUP:",
+            carpeta_actual
+        )
+
+        print(
+            "CONTENIDO:",
+            os.listdir(carpeta_actual)
         )
 
         carpeta_backups = os.path.join(
@@ -346,11 +360,16 @@ def instalar_actualizacion(zip_path):
             return False
 
 
-        carpeta_actual = os.path.dirname(
-            os.path.dirname(
-                os.path.abspath(__file__)
+        if getattr(sys, "frozen", False):
+            carpeta_actual = os.path.dirname(
+                sys.executable
             )
-        )
+        else:
+            carpeta_actual = os.path.dirname(
+                os.path.dirname(
+                    os.path.abspath(__file__)
+                )
+            )
 
         carpeta_temp = os.path.join(
             tempfile.gettempdir(),
