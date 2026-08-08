@@ -37,12 +37,13 @@ jobs:
     - name: Crear version.txt
       shell: powershell
       run: |
-        Set-Content -Path "dist\PAPELERA_POS\version.txt" -Value "${{ github.ref_name }}"
+        $version = "${{ github.ref_name }}".Replace("v","")
+        Set-Content -Path "dist\PAPELERA_POS\version.txt" -Value $version
 
 
     # CREAR UPDATE LIMPIO
-    # Copia solamente el contenido del programa,
-    # NO la carpeta PAPELERA_POS completa
+    # Solo contenido interno del programa
+    # NO mete carpeta PAPELERA_POS adentro del ZIP
 
     - name: Preparar carpeta Update
       shell: powershell
@@ -52,7 +53,11 @@ jobs:
             Remove-Item update -Recurse -Force
         }
 
-        New-Item -ItemType Directory -Path update
+
+        New-Item `
+          -ItemType Directory `
+          -Path update
+
 
         Copy-Item `
           "dist\PAPELERA_POS\PAPELERA_POS.exe" `
@@ -70,6 +75,7 @@ jobs:
           -Recurse
 
 
+
     - name: Crear update.zip
       shell: powershell
       run: |
@@ -78,16 +84,24 @@ jobs:
             Remove-Item update.zip -Force
         }
 
+
         Compress-Archive `
           -Path "update\*" `
           -DestinationPath "update.zip"
 
 
 
+    - name: Mostrar contenido update
+      shell: powershell
+      run: |
+
+        Write-Host "CONTENIDO UPDATE ZIP:"
+        Get-ChildItem update -Recurse
+
+
+
     - name: Subir update.zip
       uses: actions/upload-artifact@v4
       with:
-
         name: update
-
         path: update.zip
