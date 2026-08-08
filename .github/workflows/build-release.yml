@@ -5,16 +5,20 @@ on:
     tags:
       - "v*"
 
+
 jobs:
 
   build-update:
 
     runs-on: windows-latest
 
+
     steps:
+
 
     - name: Descargar repositorio
       uses: actions/checkout@v4
+
 
 
     - name: Instalar Python
@@ -23,10 +27,12 @@ jobs:
         python-version: "3.11"
 
 
+
     - name: Instalar dependencias
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+
 
 
     - name: Crear EXE con PyInstaller
@@ -34,23 +40,32 @@ jobs:
         pyinstaller PAPELERA_POS.spec
 
 
+
     - name: Crear version.txt
       shell: powershell
       run: |
+
         $version = "${{ github.ref_name }}".Replace("v","")
-        Set-Content -Path "dist\PAPELERA_POS\version.txt" -Value $version
+
+        Set-Content `
+          -Path "dist\PAPELERA_POS\version.txt" `
+          -Value $version
 
 
+
+    # ================================
     # CREAR UPDATE LIMPIO
-    # Solo contenido interno del programa
-    # NO mete carpeta PAPELERA_POS adentro del ZIP
+    # ================================
 
     - name: Preparar carpeta Update
       shell: powershell
       run: |
 
+
         if (Test-Path update) {
+
             Remove-Item update -Recurse -Force
+
         }
 
 
@@ -59,14 +74,17 @@ jobs:
           -Path update
 
 
+
         Copy-Item `
           "dist\PAPELERA_POS\PAPELERA_POS.exe" `
           "update\PAPELERA_POS.exe"
 
 
+
         Copy-Item `
           "dist\PAPELERA_POS\version.txt" `
           "update\version.txt"
+
 
 
         Copy-Item `
@@ -76,13 +94,29 @@ jobs:
 
 
 
+
+
+    - name: Mostrar contenido Update
+      shell: powershell
+      run: |
+
+        Get-ChildItem update -Recurse
+
+
+
+
+
     - name: Crear update.zip
       shell: powershell
       run: |
 
+
         if (Test-Path update.zip) {
+
             Remove-Item update.zip -Force
+
         }
+
 
 
         Compress-Archive `
@@ -91,17 +125,40 @@ jobs:
 
 
 
-    - name: Mostrar contenido update
-      shell: powershell
-      run: |
-
-        Write-Host "CONTENIDO UPDATE ZIP:"
-        Get-ChildItem update -Recurse
 
 
+    # ================================
+    # GUARDAR ARTIFACT
+    # ================================
 
-    - name: Subir update.zip
+
+    - name: Subir update.zip Artifact
       uses: actions/upload-artifact@v4
       with:
+
         name: update
+
         path: update.zip
+
+
+
+
+
+    # ================================
+    # CREAR RELEASE AUTOMATICO
+    # ================================
+
+
+    - name: Crear Release y subir update.zip
+      uses: softprops/action-gh-release@v2
+
+      with:
+
+        files: update.zip
+
+        generate_release_notes: true
+
+
+      env:
+
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
