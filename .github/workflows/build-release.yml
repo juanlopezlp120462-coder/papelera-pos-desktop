@@ -41,24 +41,20 @@ jobs:
           Get-Content version.txt
 
 
-      - name: Crear EXE
+      - name: Crear EXE con PyInstaller
+        shell: powershell
         run: |
           pyinstaller --noconfirm --clean PAPELERA_POS.spec
 
 
-      - name: Corregir version dentro de dist
+      - name: Preparar version dentro de dist
         shell: powershell
         run: |
+
           $VERSION = "${env:GITHUB_REF_NAME}".Substring(1)
 
           Write-Host "VERSION FINAL:"
           Write-Host $VERSION
-
-          Write-Host "CONTENIDO DIST:"
-          Get-ChildItem dist
-
-          Write-Host "CONTENIDO PAPELERA_POS:"
-          Get-ChildItem dist\PAPELERA_POS
 
 
           Set-Content `
@@ -66,22 +62,72 @@ jobs:
             -Value $VERSION
 
 
-          if (Test-Path "dist\PAPELERA_POS\_internal\version.txt") {
-              Remove-Item `
-              dist\PAPELERA_POS\_internal\version.txt
-          }
-
-
-          Write-Host "VERSION DIST FINAL:"
+          Write-Host "VERSION DIST:"
           Get-Content dist\PAPELERA_POS\version.txt
+
+
+      - name: Limpiar versiones internas
+        shell: powershell
+        run: |
+
+          Remove-Item `
+            dist\PAPELERA_POS\_internal\version.txt `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+
+          Remove-Item `
+            dist\PAPELERA_POS\_internal\_internal `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+
+
+      - name: Ver estructura antes del ZIP
+        shell: powershell
+        run: |
+
+          Write-Host "CONTENIDO DIST:"
+          Get-ChildItem dist\PAPELERA_POS -Recurse
+
 
 
       - name: Crear UPDATE.zip
         shell: powershell
         run: |
+
+          Remove-Item UPDATE.zip -ErrorAction SilentlyContinue
+
+
+          cd dist\PAPELERA_POS
+
+
           Compress-Archive `
-          -Path dist\PAPELERA_POS\* `
-          -DestinationPath UPDATE.zip
+            -Path * `
+            -DestinationPath ..\..\UPDATE.zip
+
+
+          cd ..\..
+
+
+          Write-Host "REVISANDO ZIP:"
+
+
+          Remove-Item revisar_zip `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+
+          Expand-Archive `
+            UPDATE.zip `
+            -DestinationPath revisar_zip `
+            -Force
+
+
+          Get-ChildItem revisar_zip -Recurse
+
 
 
       - name: Crear Release
@@ -89,14 +135,18 @@ jobs:
         with:
           files: UPDATE.zip
           generate_release_notes: true
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 
       - name: Actualizar version backend
         shell: bash
         run: |
+
           VERSION=${GITHUB_REF_NAME}
+
 
           URL="https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/${VERSION}/UPDATE.zip"
 
@@ -117,9 +167,12 @@ jobs:
 
 
           git config user.name "github-actions"
+
           git config user.email "actions@github.com"
 
 
           git add app/version.json
+
           git commit -m "Actualizar version ${VERSION}"
+
           git push

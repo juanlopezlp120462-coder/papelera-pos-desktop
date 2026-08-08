@@ -440,7 +440,33 @@ def instalar_actualizacion(zip_path):
                 os.path.dirname(
                     os.path.abspath(__file__)
                 )
-            )        
+            )
+            ruta_debug = os.path.join(
+                tempfile.gettempdir(),
+                "PAPELERA_debug.txt"
+            )
+
+            with open(
+                ruta_debug,
+                "w",
+                encoding="utf-8"
+            ) as f:
+                f.write(
+                    "CARPETA INSTALACION:\n"
+                )
+                f.write(
+                    carpeta_actual
+                )
+                f.write(
+                    "\n\nEXE:\n"
+                )
+                f.write(
+                    sys.executable
+                )
+                f.write(
+                    "\n"
+                )
+               
         try:
             with open(
                 "actualizador_debug.txt",
@@ -494,6 +520,47 @@ def instalar_actualizacion(zip_path):
             zip_ref.extractall(
                 carpeta_temp
             )
+            
+        # Corregir estructura si viene carpeta PAPELERA_POS dentro del ZIP
+
+        carpeta_extra = os.path.join(
+            carpeta_temp,
+            "PAPELERA_POS"
+        )
+
+        if os.path.exists(carpeta_extra):
+
+            escribir_log(
+                "Detectada carpeta extra PAPELERA_POS"
+            )
+
+            for elemento in os.listdir(carpeta_extra):
+
+                origen = os.path.join(
+                    carpeta_extra,
+                    elemento
+                )
+
+                destino = os.path.join(
+                    carpeta_temp,
+                    elemento
+                )
+
+                if os.path.exists(destino):
+
+                    if os.path.isdir(destino):
+                        shutil.rmtree(destino)
+                    else:
+                        os.remove(destino)
+
+                shutil.move(
+                    origen,
+                    destino
+                )
+
+            shutil.rmtree(
+                carpeta_extra
+            )            
 
 
         print(
