@@ -54,10 +54,10 @@ class Dashboard(QMainWindow):
 
         sl = QVBoxLayout(side)
 
-        brand = QLabel(self.nombre_negocio)
-        brand.setStyleSheet('color:white;font-size:27px;font-weight:900')
-        brand.setAlignment(Qt.AlignCenter)
-        sl.addWidget(brand)
+        self.brand = QLabel(self.nombre_negocio)
+        self.brand.setStyleSheet('color:white;font-size:27px;font-weight:900')
+        self.brand.setAlignment(Qt.AlignCenter)
+        sl.addWidget(self.brand)
         version = QLabel(
             f"Versión {obtener_version_actual()}"
         )
@@ -156,14 +156,37 @@ class Dashboard(QMainWindow):
             self.showMaximized()
 
         self.actualizar()
+    def actualizar_nombre_negocio(self):
+        self.nombre_negocio = get_setting(
+            'nombre_negocio',
+            'COTILLON'
+        ) or 'COTILLON'
+
+        self.setWindowTitle(
+            f'{self.nombre_negocio} POS'
+        )
+
+        self.brand.setText(
+            self.nombre_negocio
+        )
+
+        self.titulo_home.setText(
+            f'Bienvenido a {self.nombre_negocio} 👋'
+        )
 
     def build_home(self):
         panel = QVBoxLayout(self.home)
         panel.setContentsMargins(25, 25, 25, 25)
 
-        h = QLabel(f'Bienvenido a {self.nombre_negocio} 👋')
-        h.setStyleSheet('font-size:32px;font-weight:900')
-        panel.addWidget(h)
+        self.titulo_home = QLabel(
+            f'Bienvenido a {self.nombre_negocio} 👋'
+        )
+
+        self.titulo_home.setStyleSheet(
+            'font-size:32px;font-weight:900'
+        )
+
+        panel.addWidget(self.titulo_home)
 
         sub = QLabel('Punto de venta y gestión del negocio')
         sub.setStyleSheet('font-size:16px;color:#64748b')
