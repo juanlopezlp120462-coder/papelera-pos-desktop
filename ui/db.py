@@ -274,9 +274,43 @@ def init_db():
         real REAL,
         diferencia REAL,
         usuario TEXT,
-        observaciones TEXT
+        observaciones TEXT,
+        ventas_total REAL DEFAULT 0,
+        ventas_efectivo REAL DEFAULT 0,
+        ventas_transferencia REAL DEFAULT 0,
+        ventas_tarjeta REAL DEFAULT 0,
+        ventas_cuenta REAL DEFAULT 0,
+        cantidad_ventas INTEGER DEFAULT 0
     )
     """)
+
+    # =========================
+    # MIGRACION ARQUEOS
+    # =========================
+
+    campos_arqueos = {
+        "ventas_total": "REAL DEFAULT 0",
+        "ventas_efectivo": "REAL DEFAULT 0",
+        "ventas_transferencia": "REAL DEFAULT 0",
+        "ventas_tarjeta": "REAL DEFAULT 0",
+        "ventas_cuenta": "REAL DEFAULT 0",
+        "cantidad_ventas": "INTEGER DEFAULT 0"
+    }
+
+    columnas_arqueos = [
+        fila[1]
+        for fila in x.execute(
+            "PRAGMA table_info(arqueos)"
+        ).fetchall()
+    ]
+
+    for nombre, tipo in campos_arqueos.items():
+
+        if nombre not in columnas_arqueos:
+
+            x.execute(
+                f"ALTER TABLE arqueos ADD COLUMN {nombre} {tipo}"
+            )
 
     # =========================
     # CONFIGURACION
