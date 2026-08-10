@@ -1,5 +1,4 @@
 import requests
-import datetime
 
 from ui.db import create_connection, init_db
 
@@ -10,15 +9,17 @@ SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 def hay_internet():
 
     try:
+
         requests.get(
             SERVIDOR,
             timeout=5
         )
+
         return True
 
     except Exception:
-        return False
 
+        return False
 
 
 def sincronizar_ventas():
@@ -26,6 +27,7 @@ def sincronizar_ventas():
     init_db()
 
     if not hay_internet():
+
         return 0
 
 
@@ -35,9 +37,17 @@ def sincronizar_ventas():
 
     pendientes = cursor.execute(
         """
-        SELECT id,tabla,registro,accion
+        SELECT
+            id,
+            tabla,
+            registro,
+            registro_uuid,
+            accion,
+            datos
         FROM sincronizacion
         WHERE sincronizado=0
+        AND tabla='ventas'
+        ORDER BY id
         """
     ).fetchall()
 
@@ -48,113 +58,129 @@ def sincronizar_ventas():
     for fila in pendientes:
 
         sync_id = fila[0]
-        tabla = fila[1]
-        registro = fila[2]
+        registro_uuid = fila[3]
+        datos_json = fila[5]
 
 
-        if tabla != "ventas":
+        if not registro_uuid:
+
+            print(
+                "Venta sin UUID:",
+                fila[2]
+            )
+
             continue
 
 
+        if not datos_json:
 
-        venta = cursor.execute(
-            """
-            SELECT 
-            id,
-            fecha,
-            total,
-            forma_pago,
-            cliente_id,
-            descuento,
-            usuario,
-            pago_efectivo,
-            pago_transferencia,
-            pago_tarjeta,
-            pago_cuenta
+            print(
+                "Venta sin datos:",
+                fila[2]
+            )
 
-            FROM ventas
-            WHERE id=?
-            """,
-            (registro,)
-        ).fetchone()
-
-
-        if not venta:
             continue
-
-
-
-        detalles = cursor.execute(
-            """
-            SELECT
-            producto,
-            cantidad,
-            precio,
-            subtotal,
-            codigo
-
-            FROM detalle_ventas
-            WHERE venta_id=?
-            """,
-            (registro,)
-        ).fetchall()
-
-
-
-        datos = {
-
-            "venta_id_local": venta[0],
-
-            "fecha": venta[1],
-
-            "total": venta[2],
-
-            "forma_pago": venta[3],
-
-            "cliente_id": venta[4] or 0,
-
-            "descuento": venta[5] or 0,
-
-            "usuario": venta[6],
-
-            "pago_efectivo": venta[7] or 0,
-
-            "pago_transferencia": venta[8] or 0,
-
-            "pago_tarjeta": venta[9] or 0,
-
-            "pago_cuenta": venta[10] or 0,
-
-
-            "items":[
-
-                {
-                    "producto":d[0],
-                    "cantidad":d[1],
-                    "precio":d[2],
-                    "subtotal":d[3],
-                    "codigo":d[4]
-
-                }
-
-                for d in detalles
-
-            ]
-
-        }
-
 
 
         try:
 
+            import json
+
+            venta = json.loads(datos_json)
+
+
+            # ==================================
+            # AGREGAR UUID AL ENVÍO
+            # ==================================
+
+            datos = {
+
+                "uuid": registro_uuid,
+
+                "fecha": venta.get("fecha"),
+
+                "total": venta.get("total", 0),
+
+                "forma_pago": venta.get(
+                    "forma_pago",
+                    "EFECTIVO"
+                ),
+
+                "cliente_id": venta.get(
+                    "cliente_id"
+                ),
+
+                "descuento": venta.get(
+                    "descuento",
+                    0
+                ),
+
+                "usuario": venta.get(
+                    "usuario",
+                    "Administrador"
+                ),
+
+                "pago_efectivo": venta.get(
+                    "pago_efectivo",
+                    0
+                ),
+
+                "pago_transferencia": venta.get(
+                    "pago_transferencia",
+                    0
+                ),
+
+                "pago_tarjeta": venta.get(
+                    "pago_tarjeta",
+                    0
+                ),
+
+                "pago_cuenta": venta.get(
+                    "pago_cuenta",
+                    0
+                ),
+
+                "items": venta.get(
+                    "items",
+                    []
+                )
+
+            }
+
+
+            if not datos["items"]:
+
+                print(
+                    "Venta sin items:",
+                    fila[2]
+                )
+
+                continue
+
+
+            # ==================================
+            # ENVIAR AL SERVIDOR
+            # ==================================
+
             respuesta = requests.post(
+
                 f"{SERVIDOR}/ventas/sync",
+
                 json=datos,
-                timeout=10
+
+                timeout=15
+
             )
 
 
-            if respuesta.status_code in (200,201):
+            # ==================================
+            # VENTA SINCRONIZADA
+            # ==================================
+
+            if respuesta.status_code in (200, 201):
+
+                resultado = respuesta.json()
+
 
                 cursor.execute(
                     """
@@ -162,21 +188,63 @@ def sincronizar_ventas():
                     SET sincronizado=1
                     WHERE id=?
                     """,
-                    (sync_id,)
+                    (
+                        sync_id,
+                    )
                 )
 
 
                 sincronizadas += 1
 
 
+                if resultado.get("actualizada"):
 
-        except Exception:
+                    print(
+                        "Venta actualizada en servidor:",
+                        registro_uuid
+                    )
 
-            pass
+                elif resultado.get("creada"):
 
+                    print(
+                        "Venta creada en servidor:",
+                        registro_uuid
+                    )
+
+                elif resultado.get("duplicada"):
+
+                    print(
+                        "Venta duplicada en servidor:",
+                        registro_uuid
+                    )
+
+                else:
+
+                    print(
+                        "Venta sincronizada:",
+                        registro_uuid
+                    )
+
+
+            else:
+
+                print(
+                    "Error sincronizando venta:",
+                    respuesta.status_code,
+                    respuesta.text
+                )
+
+
+        except Exception as e:
+
+            print(
+                "Error sincronizando venta:",
+                e
+            )
 
 
     conexion.commit()
+
     conexion.close()
 
 
