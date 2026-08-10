@@ -1,5 +1,5 @@
 import sys
-
+import os
 from core.version import obtener_version_actual
 from core.actualizador import hay_actualizacion
 
@@ -158,6 +158,37 @@ if __name__ == "__main__":
     if getattr(sys, "frozen", False):
 
         actualizar, nueva_version = hay_actualizacion(version)
+
+        try:
+            ruta_diagnostico = os.path.join(
+                os.path.dirname(sys.executable),
+                "diagnostico_actualizacion.txt"
+            )
+
+            with open(
+                ruta_diagnostico,
+                "w",
+                encoding="utf-8"
+            ) as f:
+
+                f.write(
+                    f"VERSION LOCAL: {version}\n"
+                )
+
+                f.write(
+                    f"ACTUALIZAR: {actualizar}\n"
+                )
+
+                f.write(
+                    f"NUEVA VERSION: {nueva_version}\n"
+                )
+
+        except Exception as e:
+
+            print(
+                "Error escribiendo diagnóstico:",
+                e
+            )
 
     else:
 
