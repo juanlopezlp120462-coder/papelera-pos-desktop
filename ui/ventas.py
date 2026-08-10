@@ -1875,6 +1875,8 @@ class Ventas(QWidget):
             for item in venta["items"]
         )
         venta_uuid = str(uuid.uuid4())
+        venta["uuid"] = venta_uuid
+        venta["fecha"] = fecha
         
         
         cursor.execute("""
@@ -1909,6 +1911,7 @@ class Ventas(QWidget):
         ))
 
         venta_id = cursor.lastrowid
+        venta["id_local"] = venta_id
 
 
         for item in venta["items"]:
@@ -1952,9 +1955,6 @@ class Ventas(QWidget):
 
         
         import json
-
-        # UUID único para la venta
-        venta_uuid = str(uuid.uuid4())
 
         cursor.execute("""
         UPDATE ventas
@@ -2018,6 +2018,7 @@ class Ventas(QWidget):
 
             venta = {
                 "items": items,
+                "total": total_venta,
                 "forma_pago": datos["forma"],
                 "cliente_id": self.cliente.currentData() or 0,
                 "descuento": 0,
