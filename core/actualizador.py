@@ -12,6 +12,12 @@ import time
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 
 TIMEOUT = 10
+
+
+# ==========================================================
+# LOG
+# ==========================================================
+
 def escribir_log(texto):
 
     try:
@@ -31,7 +37,6 @@ def escribir_log(texto):
 
             carpeta = os.getcwd()
 
-
         carpeta_logs = os.path.join(
             carpeta,
             "logs"
@@ -42,12 +47,10 @@ def escribir_log(texto):
             exist_ok=True
         )
 
-
         archivo = os.path.join(
             carpeta_logs,
             "actualizador.txt"
         )
-
 
         with open(
             archivo,
@@ -59,58 +62,136 @@ def escribir_log(texto):
                 str(texto) + "\n"
             )
 
-
     except Exception:
         pass
 
+
+# ==========================================================
+# CERTIFICADO SSL
+# ==========================================================
+
+def obtener_certificado_ssl():
+
+    if getattr(sys, "frozen", False):
+
+        carpeta_exe = os.path.dirname(
+            sys.executable
+        )
+
+        certificado = os.path.join(
+            carpeta_exe,
+            "_internal",
+            "certifi",
+            "cacert.pem"
+        )
+
+    else:
+
+        import certifi
+
+        certificado = certifi.where()
+
+    return certificado
+
+
+# ==========================================================
+# INFORMACION DE VERSION
+# ==========================================================
 
 def obtener_info_version():
 
     try:
 
+        url = f"{SERVIDOR}/version"
+
+        escribir_log(
+            "Consultando version en: "
+            + url
+        )
+
+        certificado = obtener_certificado_ssl()
+
+        escribir_log(
+            "Certificado SSL: "
+            + certificado
+        )
+
+        escribir_log(
+            "Certificado existe: "
+            + str(os.path.exists(certificado))
+        )
+
         respuesta = requests.get(
-            f"{SERVIDOR}/version",
-            timeout=TIMEOUT
+            url,
+            timeout=TIMEOUT,
+            verify=certificado
+        )
+
+        escribir_log(
+            "HTTP version: "
+            + str(respuesta.status_code)
+        )
+
+        escribir_log(
+            "Respuesta version: "
+            + respuesta.text
         )
 
         if respuesta.status_code == 200:
 
-            return respuesta.json()
+            datos = respuesta.json()
 
+            escribir_log(
+                "Version obtenida: "
+                + str(datos)
+            )
+
+            return datos
+
+        escribir_log(
+            "ERROR HTTP version: "
+            + str(respuesta.status_code)
+        )
 
     except Exception as e:
 
-        print(
-            "Error consultando versión:",
-            e
+        escribir_log(
+            "ERROR consultando version: "
+            + repr(e)
         )
 
+        print(
+            "Error consultando version:",
+            e
+        )
 
     return None
 
 
+# ==========================================================
+# ULTIMA VERSION
+# ==========================================================
 
 def obtener_ultima_version():
 
     datos = obtener_info_version()
 
-
     if datos:
 
         return datos.get(
-            "version",
-            "1.0.0"
+            "version"
         )
-
 
     return None
 
 
+# ==========================================================
+# URL DE ACTUALIZACION
+# ==========================================================
 
 def obtener_url_actualizacion():
 
     datos = obtener_info_version()
-
 
     if datos:
 
@@ -118,29 +199,66 @@ def obtener_url_actualizacion():
             "url"
         )
 
-
     return None
 
 
+# ==========================================================
+# COMPROBAR ACTUALIZACION
+# ==========================================================
 
 def hay_actualizacion(version_actual):
 
-    ultima_version = obtener_ultima_version()
+    escribir_log(
+        "Version local recibida: "
+        + str(version_actual)
+    )
 
+    datos = obtener_info_version()
 
-    if ultima_version is None:
+    if datos is None:
+
+        escribir_log(
+            "RESULTADO: No se pudo obtener informacion del servidor"
+        )
 
         return False, None
 
+    ultima_version = datos.get(
+        "version"
+    )
+
+    escribir_log(
+        "Version servidor: "
+        + str(ultima_version)
+    )
+
+    if not ultima_version:
+
+        escribir_log(
+            "RESULTADO: El servidor no devolvio version"
+        )
+
+        return False, None
 
     if ultima_version != version_actual:
 
+        escribir_log(
+            "RESULTADO: HAY ACTUALIZACION -> "
+            + str(ultima_version)
+        )
+
         return True, ultima_version
 
+    escribir_log(
+        "RESULTADO: NO HAY ACTUALIZACION"
+    )
 
     return False, ultima_version
 
 
+# ==========================================================
+# DESCARGAR ACTUALIZACION
+# ==========================================================
 
 def descargar_actualizacion(progreso=None):
 
@@ -152,17 +270,37 @@ def descargar_actualizacion(progreso=None):
             "No hay URL de actualización"
         )
 
+        escribir_log(
+            "No hay URL de actualización"
+        )
+
         return False
 
-
     try:
+
+        escribir_log(
+            "Descargando actualización desde: "
+            + url
+        )
+
+        certificado = obtener_certificado_ssl()
+
+        escribir_log(
+            "Certificado SSL descarga: "
+            + certificado
+        )
 
         respuesta = requests.get(
             url,
             timeout=60,
-            stream=True
+            stream=True,
+            verify=certificado
         )
 
+        escribir_log(
+            "HTTP descarga: "
+            + str(respuesta.status_code)
+        )
 
         if respuesta.status_code != 200:
 
@@ -171,8 +309,12 @@ def descargar_actualizacion(progreso=None):
                 respuesta.status_code
             )
 
-            return False
+            escribir_log(
+                "Error descargando actualización: "
+                + str(respuesta.status_code)
+            )
 
+            return False
 
         total = int(
             respuesta.headers.get(
@@ -181,21 +323,17 @@ def descargar_actualizacion(progreso=None):
             )
         )
 
-
         archivo_temp = os.path.join(
             tempfile.gettempdir(),
             "PAPELERA_POS_update.zip"
         )
 
-
         descargado = 0
-
 
         with open(
             archivo_temp,
             "wb"
         ) as f:
-
 
             for bloque in respuesta.iter_content(
                 chunk_size=8192
@@ -211,7 +349,6 @@ def descargar_actualizacion(progreso=None):
                         bloque
                     )
 
-
                     if total and progreso:
 
                         porcentaje = int(
@@ -222,16 +359,17 @@ def descargar_actualizacion(progreso=None):
                             porcentaje
                         )
 
+        escribir_log(
+            "Actualización descargada: "
+            + archivo_temp
+        )
 
         print(
             "Actualización descargada:",
             archivo_temp
         )
 
-
         return archivo_temp
-
-
 
     except Exception as e:
 
@@ -240,31 +378,45 @@ def descargar_actualizacion(progreso=None):
             e
         )
 
+        escribir_log(
+            "ERROR descarga actualización: "
+            + repr(e)
+        )
+
         return False
 
 
+# ==========================================================
+# CREAR BACKUP
+# ==========================================================
 
 def crear_backup():
 
     try:
 
         if getattr(sys, "frozen", False):
+
             carpeta_actual = os.path.dirname(
                 sys.executable
             )
+
         else:
+
             carpeta_actual = os.path.dirname(
                 os.path.dirname(
                     os.path.abspath(__file__)
                 )
             )
+
         print(
             "CARPETA BACKUP:",
             carpeta_actual
         )
+
         escribir_log(
-            "CARPETA BACKUP: " + carpeta_actual
-        )        
+            "CARPETA BACKUP: "
+            + carpeta_actual
+        )
 
         print(
             "CONTENIDO:",
@@ -290,7 +442,9 @@ def crear_backup():
             f"backup_{fecha}"
         )
 
-        os.makedirs(destino)
+        os.makedirs(
+            destino
+        )
 
         archivos_backup = [
             "database",
@@ -315,9 +469,11 @@ def crear_backup():
                     "Copiando backup:",
                     origen
                 )
+
                 escribir_log(
-                    "Copiando backup: " + origen
-                )                
+                    "Copiando backup: "
+                    + origen
+                )
 
                 if os.path.isdir(origen):
 
@@ -339,19 +495,25 @@ def crear_backup():
                     "No existe para backup:",
                     origen
                 )
+
                 escribir_log(
-                    "No existe para backup: " + origen
-                )                
+                    "No existe para backup: "
+                    + origen
+                )
 
         print(
             "Backup creado correctamente:",
             destino
         )
-        
-        limpiar_backups()
-        
-        return True
 
+        escribir_log(
+            "Backup creado correctamente: "
+            + destino
+        )
+
+        limpiar_backups()
+
+        return True
 
     except Exception as e:
 
@@ -360,16 +522,30 @@ def crear_backup():
             e
         )
 
+        escribir_log(
+            "ERROR creando backup: "
+            + repr(e)
+        )
+
         return False
+
+
+# ==========================================================
+# LIMPIAR BACKUPS
+# ==========================================================
+
 def limpiar_backups(max_backups=3):
 
     try:
 
         if getattr(sys, "frozen", False):
+
             carpeta_actual = os.path.dirname(
                 sys.executable
             )
+
         else:
+
             carpeta_actual = os.path.dirname(
                 os.path.dirname(
                     os.path.abspath(__file__)
@@ -381,13 +557,17 @@ def limpiar_backups(max_backups=3):
             "backups"
         )
 
-        if not os.path.exists(carpeta_backups):
-            return
+        if not os.path.exists(
+            carpeta_backups
+        ):
 
+            return
 
         backups = []
 
-        for nombre in os.listdir(carpeta_backups):
+        for nombre in os.listdir(
+            carpeta_backups
+        ):
 
             ruta = os.path.join(
                 carpeta_backups,
@@ -396,14 +576,14 @@ def limpiar_backups(max_backups=3):
 
             if os.path.isdir(ruta):
 
-                backups.append(ruta)
-
+                backups.append(
+                    ruta
+                )
 
         backups.sort(
             key=os.path.getmtime,
             reverse=True
         )
-
 
         for backup in backups[max_backups:]:
 
@@ -416,6 +596,10 @@ def limpiar_backups(max_backups=3):
                 backup
             )
 
+            escribir_log(
+                "Backup eliminado: "
+                + backup
+            )
 
     except Exception as e:
 
@@ -423,6 +607,17 @@ def limpiar_backups(max_backups=3):
             "Error limpiando backups:",
             e
         )
+
+        escribir_log(
+            "ERROR limpiando backups: "
+            + repr(e)
+        )
+
+
+# ==========================================================
+# INSTALAR ACTUALIZACION
+# ==========================================================
+
 def instalar_actualizacion(zip_path):
 
     try:
@@ -434,7 +629,6 @@ def instalar_actualizacion(zip_path):
             )
 
             return False
-
 
         if getattr(sys, "frozen", False):
 
@@ -450,36 +644,33 @@ def instalar_actualizacion(zip_path):
                 )
             )
 
-
         escribir_log(
-            "CARPETA INSTALACION: " + carpeta_actual
+            "CARPETA INSTALACION: "
+            + carpeta_actual
         )
-
 
         carpeta_temp = os.path.join(
             tempfile.gettempdir(),
             "PAPELERA_POS_UPDATE"
         )
 
-
-        if os.path.exists(carpeta_temp):
+        if os.path.exists(
+            carpeta_temp
+        ):
 
             shutil.rmtree(
                 carpeta_temp,
                 ignore_errors=True
             )
 
-
         os.makedirs(
             carpeta_temp,
             exist_ok=True
         )
 
-
         escribir_log(
             "Extrayendo ZIP"
         )
-
 
         with zipfile.ZipFile(
             zip_path,
@@ -490,18 +681,26 @@ def instalar_actualizacion(zip_path):
                 carpeta_temp
             )
 
-
-        # Si viene una carpeta PAPELERA_POS dentro del ZIP
+        # ==================================================
+        # NORMALIZAR CARPETA DEL ZIP
+        # ==================================================
 
         carpeta_extra = os.path.join(
             carpeta_temp,
             "PAPELERA_POS"
         )
 
+        if os.path.exists(
+            carpeta_extra
+        ):
 
-        if os.path.exists(carpeta_extra):
+            escribir_log(
+                "El ZIP contiene carpeta PAPELERA_POS"
+            )
 
-            for elemento in os.listdir(carpeta_extra):
+            for elemento in os.listdir(
+                carpeta_extra
+            ):
 
                 origen = os.path.join(
                     carpeta_extra,
@@ -513,9 +712,13 @@ def instalar_actualizacion(zip_path):
                     elemento
                 )
 
-                if os.path.exists(destino):
+                if os.path.exists(
+                    destino
+                ):
 
-                    if os.path.isdir(destino):
+                    if os.path.isdir(
+                        destino
+                    ):
 
                         shutil.rmtree(
                             destino
@@ -527,23 +730,22 @@ def instalar_actualizacion(zip_path):
                             destino
                         )
 
-
                 shutil.move(
                     origen,
                     destino
                 )
 
-
             shutil.rmtree(
                 carpeta_extra
             )
 
+        # ==================================================
+        # OBTENER NUEVA VERSION
+        # ==================================================
 
         datos_version = obtener_info_version()
 
-
         nueva_version = "1.0.0"
-
 
         if datos_version:
 
@@ -552,26 +754,29 @@ def instalar_actualizacion(zip_path):
                 "1.0.0"
             )
 
+        escribir_log(
+            "Nueva versión detectada: "
+            + nueva_version
+        )
 
         archivo_version = os.path.join(
             carpeta_actual,
             "version.txt"
         )
 
-
-        # Creamos actualizador externo BAT
+        # ==================================================
+        # ACTUALIZADOR EXTERNO
+        # ==================================================
 
         bat = os.path.join(
             tempfile.gettempdir(),
             "actualizar_papelera_pos.bat"
         )
 
-
         internal_viejo = os.path.join(
             carpeta_actual,
             "_internal"
         )
-
 
         with open(
             bat,
@@ -580,7 +785,7 @@ def instalar_actualizacion(zip_path):
         ) as f:
 
             f.write(
-f"""@echo off
+                f"""@echo off
 echo Esperando cierre del programa...
 timeout /t 3 >nul
 
@@ -588,7 +793,7 @@ echo Eliminando _internal viejo...
 rmdir /s /q "{internal_viejo}"
 
 echo Copiando nueva version...
-xcopy "{carpeta_temp}\*" "{carpeta_actual}\" /E /Y /I /H
+xcopy "{carpeta_temp}\\*" "{carpeta_actual}\\" /E /Y /I /H
 
 echo Actualizando version...
 echo {nueva_version}> "{archivo_version}"
@@ -600,46 +805,53 @@ del "%~f0"
 """
             )
 
+        escribir_log(
+            "Actualizador externo creado: "
+            + bat
+        )
 
         escribir_log(
             "Ejecutando actualizador externo"
         )
-
 
         subprocess.Popen(
             bat,
             shell=True
         )
 
-
         return True
-
-
 
     except Exception as e:
 
         escribir_log(
-            "ERROR INSTALANDO ACTUALIZACION: " + str(e)
+            "ERROR INSTALANDO ACTUALIZACION: "
+            + repr(e)
         )
 
         return False
 
 
+# ==========================================================
+# REINICIAR PROGRAMA
+# ==========================================================
 
 def reiniciar_programa():
+
     try:
 
         if getattr(sys, "frozen", False):
-            # Si es el .exe generado por PyInstaller
+
             ejecutable = sys.executable
 
             subprocess.Popen(
                 [ejecutable],
-                cwd=os.path.dirname(ejecutable)
+                cwd=os.path.dirname(
+                    ejecutable
+                )
             )
 
         else:
-            # Si estamos ejecutando con Python
+
             archivo_principal = os.path.join(
                 os.path.dirname(
                     os.path.dirname(
@@ -650,17 +862,25 @@ def reiniciar_programa():
             )
 
             subprocess.Popen(
-                [sys.executable, archivo_principal],
-                cwd=os.path.dirname(archivo_principal)
+                [
+                    sys.executable,
+                    archivo_principal
+                ],
+                cwd=os.path.dirname(
+                    archivo_principal
+                )
             )
 
-
         sys.exit()
-
 
     except Exception as e:
 
         print(
             "Error reiniciando:",
             e
+        )
+
+        escribir_log(
+            "ERROR REINICIANDO: "
+            + repr(e)
         )

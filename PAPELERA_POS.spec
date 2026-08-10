@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os
+import certifi
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -20,26 +21,26 @@ hiddenimports = collect_submodules("ui")
 
 
 # ==========================================
-# VERSION.TXT
+# CERTIFICADO SSL
 # ==========================================
 
-VERSION_FILE = os.path.join(
-    PROJECT_DIR,
-    "version.txt"
-)
+CERTIFI_FILE = certifi.where()
 
-
-if not os.path.exists(VERSION_FILE):
+if not os.path.exists(CERTIFI_FILE):
     raise FileNotFoundError(
-        "NO SE ENCONTRO version.txt: "
-        + VERSION_FILE
+        "NO SE ENCONTRO cacert.pem: "
+        + CERTIFI_FILE
     )
 
 
+# ==========================================
+# ARCHIVOS EXTRA
+# ==========================================
+
 datas = [
     (
-        VERSION_FILE,
-        "."
+        CERTIFI_FILE,
+        "certifi"
     )
 ]
 

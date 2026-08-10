@@ -1,0 +1,23 @@
+Consultando version en: https://papelera-pos-backend-production.up.railway.app/version
+HTTP version: 200
+Respuesta version: {"version":"1.0.40","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip"}
+Version obtenida: {'version': '1.0.40', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip'}
+==========================================
+COMPROBANDO ACTUALIZACION
+Version local: 1.0.39
+Consultando version en: https://papelera-pos-backend-production.up.railway.app/version
+HTTP version: 200
+Respuesta version: {"version":"1.0.40","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip"}
+Version obtenida: {'version': '1.0.40', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip'}
+Version servidor: 1.0.40
+RESULTADO: HAY ACTUALIZACION -> 1.0.40
+Consultando version en: https://papelera-pos-backend-production.up.railway.app/version
+HTTP version: 200
+Respuesta version: {"version":"1.0.40","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip"}
+Version obtenida: {'version': '1.0.40', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip'}
+Consultando version en: https://papelera-pos-backend-production.up.railway.app/version
+Certificado SSL: C:\Users\Admin\Desktop\cotillon-pos-v2\venv\Lib\site-packages\certifi\cacert.pem
+Certificado existe: True
+HTTP version: 200
+Respuesta version: {"version":"1.0.40","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip"}
+Version obtenida: {'version': '1.0.40', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip'}
