@@ -249,3 +249,5 @@ def sincronizar_ventas():
 
 
     return sincronizadas
+def sincronizar():
+    sincronizar_ventas()
