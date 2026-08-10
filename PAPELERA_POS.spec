@@ -1,56 +1,70 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 
 import os
-import certifi
 
 from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files
 
 
-# ==========================================
+# ============================================================
 # CARPETA DEL PROYECTO
-# ==========================================
+# ============================================================
 
-PROJECT_DIR = os.getcwd()
-
-
-# ==========================================
-# IMPORTS OCULTOS DE UI
-# ==========================================
-
-hiddenimports = collect_submodules("ui")
+PROJECT_DIR = os.path.dirname(
+    os.path.abspath(SPEC)
+)
 
 
-# ==========================================
-# CERTIFICADO SSL
-# ==========================================
+# ============================================================
+# IMPORTS OCULTOS
+# ============================================================
 
-CERTIFI_FILE = certifi.where()
+hiddenimports = []
 
-if not os.path.exists(CERTIFI_FILE):
-    raise FileNotFoundError(
-        "NO SE ENCONTRO cacert.pem: "
-        + CERTIFI_FILE
+hiddenimports += collect_submodules("ui")
+hiddenimports += collect_submodules("certifi")
+
+
+# ============================================================
+# DATOS
+# ============================================================
+
+datas = []
+
+datas += collect_data_files(
+    "certifi"
+)
+
+
+# ============================================================
+# VERSION.TXT
+# ============================================================
+
+VERSION_FILE = os.path.join(
+    PROJECT_DIR,
+    "version.txt"
+)
+
+if os.path.exists(VERSION_FILE):
+    datas.append(
+        (
+            VERSION_FILE,
+            "."
+        )
     )
 
 
-# ==========================================
-# ARCHIVOS EXTRA
-# ==========================================
-
-datas = [
-    (
-        CERTIFI_FILE,
-        "certifi"
-    )
-]
-
-
-# ==========================================
+# ============================================================
 # ANALYSIS
-# ==========================================
+# ============================================================
 
 analysis = Analysis(
-    ["main.py"],
+    [
+        os.path.join(
+            PROJECT_DIR,
+            "main.py"
+        )
+    ],
 
     pathex=[
         PROJECT_DIR
@@ -70,22 +84,22 @@ analysis = Analysis(
 
     excludes=[],
 
-    noarchive=False,
+    noarchive=False
 )
 
 
-# ==========================================
+# ============================================================
 # PYZ
-# ==========================================
+# ============================================================
 
 pyz = PYZ(
     analysis.pure
 )
 
 
-# ==========================================
+# ============================================================
 # EXE
-# ==========================================
+# ============================================================
 
 exe = EXE(
     pyz,
@@ -106,13 +120,13 @@ exe = EXE(
 
     upx=True,
 
-    console=False,
+    console=False
 )
 
 
-# ==========================================
+# ============================================================
 # COLLECT
-# ==========================================
+# ============================================================
 
 coll = COLLECT(
     exe,
@@ -127,5 +141,6 @@ coll = COLLECT(
 
     upx=True,
 
-    name="PAPELERA_POS",
+    name="PAPELERA_POS"
 )
+

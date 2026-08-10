@@ -70,3 +70,7 @@ backups/
 
 prueba.zip
 codigo_completo.txt
+venv311/
+build/
+dist/
+__pycache__/

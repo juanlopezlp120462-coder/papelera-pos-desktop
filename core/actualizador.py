@@ -1,9 +1,9 @@
 import os
+import sys
 import tempfile
 import requests
 import zipfile
 import shutil
-import sys
 import subprocess
 import datetime
 import time
@@ -14,9 +14,9 @@ SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 TIMEOUT = 10
 
 
-# ==========================================================
+# ============================================================
 # LOG
-# ==========================================================
+# ============================================================
 
 def escribir_log(texto):
 
@@ -25,11 +25,6 @@ def escribir_log(texto):
         if getattr(sys, "frozen", False):
 
             carpeta = os.path.dirname(
-                sys.executable
-            )
-
-            print(
-                "EXE ACTUAL:",
                 sys.executable
             )
 
@@ -66,37 +61,82 @@ def escribir_log(texto):
         pass
 
 
-# ==========================================================
-# CERTIFICADO SSL
-# ==========================================================
+# ============================================================
+# CARPETA DEL PROGRAMA
+# ============================================================
 
-def obtener_certificado_ssl():
+def obtener_carpeta_programa():
 
     if getattr(sys, "frozen", False):
 
-        carpeta_exe = os.path.dirname(
-            sys.executable
+        return os.path.dirname(
+            os.path.abspath(sys.executable)
         )
 
-        certificado = os.path.join(
-            carpeta_exe,
-            "_internal",
-            "certifi",
-            "cacert.pem"
+    return os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+
+
+# ============================================================
+# CERTIFICADO SSL
+# ============================================================
+
+def obtener_certificado_ssl():
+
+    try:
+
+        # ----------------------------------------------------
+        # PyInstaller
+        # ----------------------------------------------------
+
+        if getattr(sys, "frozen", False):
+
+            carpeta_programa = obtener_carpeta_programa()
+
+            certificado = os.path.join(
+                carpeta_programa,
+                "_internal",
+                "certifi",
+                "cacert.pem"
+            )
+
+            if os.path.exists(certificado):
+
+                return certificado
+
+        # ----------------------------------------------------
+        # Python normal
+        # ----------------------------------------------------
+
+        try:
+
+            import certifi
+
+            certificado = certifi.where()
+
+            if os.path.exists(certificado):
+
+                return certificado
+
+        except Exception:
+            pass
+
+    except Exception as e:
+
+        escribir_log(
+            "ERROR obteniendo certificado SSL: "
+            + repr(e)
         )
 
-    else:
-
-        import certifi
-
-        certificado = certifi.where()
-
-    return certificado
+    return None
 
 
-# ==========================================================
+# ============================================================
 # INFORMACION DE VERSION
-# ==========================================================
+# ============================================================
 
 def obtener_info_version():
 
@@ -113,19 +153,34 @@ def obtener_info_version():
 
         escribir_log(
             "Certificado SSL: "
-            + certificado
+            + str(certificado)
+        )
+
+        existe_certificado = bool(
+            certificado
+            and os.path.exists(certificado)
         )
 
         escribir_log(
             "Certificado existe: "
-            + str(os.path.exists(certificado))
+            + str(existe_certificado)
         )
 
-        respuesta = requests.get(
-            url,
-            timeout=TIMEOUT,
-            verify=certificado
-        )
+        if existe_certificado:
+
+            respuesta = requests.get(
+                url,
+                timeout=TIMEOUT,
+                verify=certificado
+            )
+
+        else:
+
+            # Requests utiliza su certificado normal
+            respuesta = requests.get(
+                url,
+                timeout=TIMEOUT
+            )
 
         escribir_log(
             "HTTP version: "
@@ -168,9 +223,9 @@ def obtener_info_version():
     return None
 
 
-# ==========================================================
+# ============================================================
 # ULTIMA VERSION
-# ==========================================================
+# ============================================================
 
 def obtener_ultima_version():
 
@@ -185,9 +240,9 @@ def obtener_ultima_version():
     return None
 
 
-# ==========================================================
-# URL DE ACTUALIZACION
-# ==========================================================
+# ============================================================
+# URL ACTUALIZACION
+# ============================================================
 
 def obtener_url_actualizacion():
 
@@ -202,9 +257,9 @@ def obtener_url_actualizacion():
     return None
 
 
-# ==========================================================
+# ============================================================
 # COMPROBAR ACTUALIZACION
-# ==========================================================
+# ============================================================
 
 def hay_actualizacion(version_actual):
 
@@ -240,11 +295,43 @@ def hay_actualizacion(version_actual):
 
         return False, None
 
+    # --------------------------------------------------------
+    # LIMPIAR VERSIONES
+    # --------------------------------------------------------
+
+    version_actual = str(
+        version_actual
+    ).replace(
+        "\ufeff",
+        ""
+    ).strip()
+
+    ultima_version = str(
+        ultima_version
+    ).replace(
+        "\ufeff",
+        ""
+    ).strip()
+
+    escribir_log(
+        "Version local limpia: "
+        + version_actual
+    )
+
+    escribir_log(
+        "Version servidor limpia: "
+        + ultima_version
+    )
+
+    # --------------------------------------------------------
+    # COMPARAR
+    # --------------------------------------------------------
+
     if ultima_version != version_actual:
 
         escribir_log(
             "RESULTADO: HAY ACTUALIZACION -> "
-            + str(ultima_version)
+            + ultima_version
         )
 
         return True, ultima_version
@@ -256,9 +343,9 @@ def hay_actualizacion(version_actual):
     return False, ultima_version
 
 
-# ==========================================================
+# ============================================================
 # DESCARGAR ACTUALIZACION
-# ==========================================================
+# ============================================================
 
 def descargar_actualizacion(progreso=None):
 
@@ -266,36 +353,51 @@ def descargar_actualizacion(progreso=None):
 
     if not url:
 
-        print(
-            "No hay URL de actualización"
+        escribir_log(
+            "No hay URL de actualizacion"
         )
 
-        escribir_log(
+        print(
             "No hay URL de actualización"
         )
 
         return False
 
-    try:
+    escribir_log(
+        "Descargando actualizacion desde: "
+        + url
+    )
 
-        escribir_log(
-            "Descargando actualización desde: "
-            + url
-        )
+    try:
 
         certificado = obtener_certificado_ssl()
 
         escribir_log(
             "Certificado SSL descarga: "
-            + certificado
+            + str(certificado)
         )
 
-        respuesta = requests.get(
-            url,
-            timeout=60,
-            stream=True,
-            verify=certificado
+        existe_certificado = bool(
+            certificado
+            and os.path.exists(certificado)
         )
+
+        if existe_certificado:
+
+            respuesta = requests.get(
+                url,
+                timeout=60,
+                stream=True,
+                verify=certificado
+            )
+
+        else:
+
+            respuesta = requests.get(
+                url,
+                timeout=60,
+                stream=True
+            )
 
         escribir_log(
             "HTTP descarga: "
@@ -304,14 +406,14 @@ def descargar_actualizacion(progreso=None):
 
         if respuesta.status_code != 200:
 
+            escribir_log(
+                "ERROR descarga HTTP: "
+                + str(respuesta.status_code)
+            )
+
             print(
                 "Error descargando actualización:",
                 respuesta.status_code
-            )
-
-            escribir_log(
-                "Error descargando actualización: "
-                + str(respuesta.status_code)
             )
 
             return False
@@ -327,6 +429,17 @@ def descargar_actualizacion(progreso=None):
             tempfile.gettempdir(),
             "PAPELERA_POS_update.zip"
         )
+
+        if os.path.exists(archivo_temp):
+
+            try:
+
+                os.remove(
+                    archivo_temp
+                )
+
+            except Exception:
+                pass
 
         descargado = 0
 
@@ -360,7 +473,7 @@ def descargar_actualizacion(progreso=None):
                         )
 
         escribir_log(
-            "Actualización descargada: "
+            "Actualizacion descargada: "
             + archivo_temp
         )
 
@@ -373,40 +486,28 @@ def descargar_actualizacion(progreso=None):
 
     except Exception as e:
 
+        escribir_log(
+            "ERROR descarga actualizacion: "
+            + repr(e)
+        )
+
         print(
             "Error descarga actualización:",
             e
         )
 
-        escribir_log(
-            "ERROR descarga actualización: "
-            + repr(e)
-        )
-
         return False
 
 
-# ==========================================================
-# CREAR BACKUP
-# ==========================================================
+# ============================================================
+# BACKUP
+# ============================================================
 
 def crear_backup():
 
     try:
 
-        if getattr(sys, "frozen", False):
-
-            carpeta_actual = os.path.dirname(
-                sys.executable
-            )
-
-        else:
-
-            carpeta_actual = os.path.dirname(
-                os.path.dirname(
-                    os.path.abspath(__file__)
-                )
-            )
+        carpeta_actual = obtener_carpeta_programa()
 
         print(
             "CARPETA BACKUP:",
@@ -416,11 +517,6 @@ def crear_backup():
         escribir_log(
             "CARPETA BACKUP: "
             + carpeta_actual
-        )
-
-        print(
-            "CONTENIDO:",
-            os.listdir(carpeta_actual)
         )
 
         carpeta_backups = os.path.join(
@@ -517,40 +613,28 @@ def crear_backup():
 
     except Exception as e:
 
-        print(
-            "Error creando backup:",
-            e
-        )
-
         escribir_log(
             "ERROR creando backup: "
             + repr(e)
         )
 
+        print(
+            "Error creando backup:",
+            e
+        )
+
         return False
 
 
-# ==========================================================
+# ============================================================
 # LIMPIAR BACKUPS
-# ==========================================================
+# ============================================================
 
 def limpiar_backups(max_backups=3):
 
     try:
 
-        if getattr(sys, "frozen", False):
-
-            carpeta_actual = os.path.dirname(
-                sys.executable
-            )
-
-        else:
-
-            carpeta_actual = os.path.dirname(
-                os.path.dirname(
-                    os.path.abspath(__file__)
-                )
-            )
+        carpeta_actual = obtener_carpeta_programa()
 
         carpeta_backups = os.path.join(
             carpeta_actual,
@@ -588,7 +672,8 @@ def limpiar_backups(max_backups=3):
         for backup in backups[max_backups:]:
 
             shutil.rmtree(
-                backup
+                backup,
+                ignore_errors=True
             )
 
             print(
@@ -603,24 +688,34 @@ def limpiar_backups(max_backups=3):
 
     except Exception as e:
 
-        print(
-            "Error limpiando backups:",
-            e
-        )
-
         escribir_log(
             "ERROR limpiando backups: "
             + repr(e)
         )
 
 
-# ==========================================================
+# ============================================================
 # INSTALAR ACTUALIZACION
-# ==========================================================
+# ============================================================
 
-def instalar_actualizacion(zip_path):
+def instalar_actualizacion(
+    zip_path,
+    nueva_version=None
+):
 
     try:
+
+        if not zip_path or not os.path.exists(zip_path):
+
+            escribir_log(
+                "ZIP de actualizacion no existe"
+            )
+
+            return False
+
+        # ----------------------------------------------------
+        # BACKUP
+        # ----------------------------------------------------
 
         if not crear_backup():
 
@@ -630,24 +725,16 @@ def instalar_actualizacion(zip_path):
 
             return False
 
-        if getattr(sys, "frozen", False):
-
-            carpeta_actual = os.path.dirname(
-                sys.executable
-            )
-
-        else:
-
-            carpeta_actual = os.path.dirname(
-                os.path.dirname(
-                    os.path.abspath(__file__)
-                )
-            )
+        carpeta_actual = obtener_carpeta_programa()
 
         escribir_log(
             "CARPETA INSTALACION: "
             + carpeta_actual
         )
+
+        # ----------------------------------------------------
+        # CARPETA TEMPORAL
+        # ----------------------------------------------------
 
         carpeta_temp = os.path.join(
             tempfile.gettempdir(),
@@ -661,6 +748,10 @@ def instalar_actualizacion(zip_path):
             shutil.rmtree(
                 carpeta_temp,
                 ignore_errors=True
+            )
+
+            time.sleep(
+                0.5
             )
 
         os.makedirs(
@@ -681,21 +772,21 @@ def instalar_actualizacion(zip_path):
                 carpeta_temp
             )
 
-        # ==================================================
-        # NORMALIZAR CARPETA DEL ZIP
-        # ==================================================
+        # ----------------------------------------------------
+        # NORMALIZAR ZIP
+        # ----------------------------------------------------
 
         carpeta_extra = os.path.join(
             carpeta_temp,
             "PAPELERA_POS"
         )
 
-        if os.path.exists(
+        if os.path.isdir(
             carpeta_extra
         ):
 
             escribir_log(
-                "El ZIP contiene carpeta PAPELERA_POS"
+                "ZIP contiene carpeta PAPELERA_POS"
             )
 
             for elemento in os.listdir(
@@ -721,7 +812,8 @@ def instalar_actualizacion(zip_path):
                     ):
 
                         shutil.rmtree(
-                            destino
+                            destino,
+                            ignore_errors=True
                         )
 
                     else:
@@ -736,47 +828,229 @@ def instalar_actualizacion(zip_path):
                 )
 
             shutil.rmtree(
-                carpeta_extra
+                carpeta_extra,
+                ignore_errors=True
             )
 
-        # ==================================================
-        # OBTENER NUEVA VERSION
-        # ==================================================
+        # ----------------------------------------------------
+        # VERSION
+        # ----------------------------------------------------
 
-        datos_version = obtener_info_version()
+        if nueva_version:
 
-        nueva_version = "1.0.0"
+            nueva_version = str(
+                nueva_version
+            ).replace(
+                "\ufeff",
+                ""
+            ).strip()
 
-        if datos_version:
+        else:
 
-            nueva_version = datos_version.get(
-                "version",
-                "1.0.0"
-            )
+            nueva_version = "1.0.0"
 
         escribir_log(
-            "Nueva versión detectada: "
+            "Nueva version para instalar: "
             + nueva_version
         )
 
-        archivo_version = os.path.join(
-            carpeta_actual,
+        # ----------------------------------------------------
+        # COMPROBAR EXE
+        # ----------------------------------------------------
+
+        nuevo_exe = os.path.join(
+            carpeta_temp,
+            "PAPELERA_POS.exe"
+        )
+
+        nuevo_internal = os.path.join(
+            carpeta_temp,
+            "_internal"
+        )
+
+        if not os.path.exists(
+            nuevo_exe
+        ):
+
+            escribir_log(
+                "ERROR: El ZIP no contiene PAPELERA_POS.exe"
+            )
+
+            return False
+
+        if not os.path.isdir(
+            nuevo_internal
+        ):
+
+            escribir_log(
+                "ERROR: El ZIP no contiene _internal"
+            )
+
+            return False
+
+        # ----------------------------------------------------
+        # VERSION.TXT
+        # ----------------------------------------------------
+
+        version_temp = os.path.join(
+            carpeta_temp,
             "version.txt"
         )
 
-        # ==================================================
-        # ACTUALIZADOR EXTERNO
-        # ==================================================
+        with open(
+            version_temp,
+            "w",
+            encoding="utf-8",
+            newline=""
+        ) as f:
+
+            f.write(
+                nueva_version
+            )
+
+        escribir_log(
+            "version.txt preparado: "
+            + nueva_version
+        )
+
+        # ----------------------------------------------------
+        # BAT EXTERNO
+        # ----------------------------------------------------
 
         bat = os.path.join(
             tempfile.gettempdir(),
             "actualizar_papelera_pos.bat"
         )
 
-        internal_viejo = os.path.join(
+        if os.path.exists(bat):
+
+            try:
+
+                os.remove(
+                    bat
+                )
+
+            except Exception:
+                pass
+
+        exe_actual = os.path.join(
+            carpeta_actual,
+            "PAPELERA_POS.exe"
+        )
+
+        internal_actual = os.path.join(
             carpeta_actual,
             "_internal"
         )
+
+        version_actual = os.path.join(
+            carpeta_actual,
+            "version.txt"
+        )
+
+        # ----------------------------------------------------
+        # PID DEL PROCESO ACTUAL
+        #
+        # El BAT esperará específicamente a este PID.
+        # Esto evita problemas si existiera otra instancia.
+        # ----------------------------------------------------
+
+        pid_actual = os.getpid()
+
+        escribir_log(
+            "PID actual: "
+            + str(pid_actual)
+        )
+
+        # ----------------------------------------------------
+        # BAT EXTERNO
+        # ----------------------------------------------------
+
+        contenido_bat = f"""@echo off
+setlocal
+
+echo ==========================================
+echo ACTUALIZANDO PAPELERA POS
+echo ==========================================
+
+echo PID del programa anterior: {pid_actual}
+
+echo.
+echo Esperando cierre del programa anterior...
+
+:ESPERAR_PID
+
+tasklist /FI "PID eq {pid_actual}" 2>NUL | find "{pid_actual}" >NUL
+
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto ESPERAR_PID
+)
+
+echo.
+echo El programa anterior ya esta cerrado.
+
+echo.
+echo Esperando un momento...
+timeout /t 1 /nobreak >nul
+
+echo.
+echo Eliminando _internal anterior...
+
+if exist "{internal_actual}" (
+    rmdir /s /q "{internal_actual}"
+)
+
+echo.
+echo Copiando nueva version...
+
+xcopy "{carpeta_temp}\\*" "{carpeta_actual}\\" /E /I /Y /H /C
+
+echo.
+echo Verificando PAPELERA_POS.exe...
+
+if not exist "{exe_actual}" (
+    echo ERROR: No se encontro el nuevo EXE.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Verificando _internal...
+
+if not exist "{internal_actual}" (
+    echo ERROR: No se encontro _internal.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Actualizando version.txt...
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllText('{version_actual}', '{nueva_version}', (New-Object System.Text.UTF8Encoding($false)))"
+
+echo.
+echo ==========================================
+echo ACTUALIZACION INSTALADA CORRECTAMENTE
+echo ==========================================
+
+echo.
+echo Limpiando archivos temporales...
+
+rmdir /s /q "{carpeta_temp}" 2>NUL
+
+echo.
+echo Reiniciando PAPELERA POS...
+
+start "" "{exe_actual}"
+
+echo.
+echo Actualizador finalizado.
+
+timeout /t 2 /nobreak >nul
+
+del "%~f0"
+"""
 
         with open(
             bat,
@@ -785,24 +1059,7 @@ def instalar_actualizacion(zip_path):
         ) as f:
 
             f.write(
-                f"""@echo off
-echo Esperando cierre del programa...
-timeout /t 3 >nul
-
-echo Eliminando _internal viejo...
-rmdir /s /q "{internal_viejo}"
-
-echo Copiando nueva version...
-xcopy "{carpeta_temp}\\*" "{carpeta_actual}\\" /E /Y /I /H
-
-echo Actualizando version...
-echo {nueva_version}> "{archivo_version}"
-
-echo Reiniciando programa...
-start "" "{sys.executable}"
-
-del "%~f0"
-"""
+                contenido_bat
             )
 
         escribir_log(
@@ -810,14 +1067,45 @@ del "%~f0"
             + bat
         )
 
+        # ----------------------------------------------------
+        # EJECUTAR BAT
+        # ----------------------------------------------------
+
         escribir_log(
             "Ejecutando actualizador externo"
         )
 
         subprocess.Popen(
-            bat,
-            shell=True
+            [
+                "cmd.exe",
+                "/c",
+                bat
+            ],
+            cwd=tempfile.gettempdir(),
+            creationflags=(
+                subprocess.CREATE_NEW_PROCESS_GROUP
+                if hasattr(
+                    subprocess,
+                    "CREATE_NEW_PROCESS_GROUP"
+                )
+                else 0
+            )
         )
+
+        # ----------------------------------------------------
+        # IMPORTANTE
+        #
+        # NO reiniciar desde Python.
+        #
+        # El BAT:
+        #
+        # 1. Espera que muera este PID.
+        # 2. Elimina _internal.
+        # 3. Copia la nueva versión.
+        # 4. Actualiza version.txt.
+        # 5. Abre el nuevo EXE.
+        #
+        # ----------------------------------------------------
 
         return True
 
@@ -828,23 +1116,34 @@ del "%~f0"
             + repr(e)
         )
 
+        print(
+            "Error instalando actualización:",
+            e
+        )
+
         return False
 
 
-# ==========================================================
-# REINICIAR PROGRAMA
-# ==========================================================
+# ============================================================
+# REINICIAR
+# ============================================================
 
 def reiniciar_programa():
 
     try:
 
-        if getattr(sys, "frozen", False):
+        if getattr(
+            sys,
+            "frozen",
+            False
+        ):
 
             ejecutable = sys.executable
 
             subprocess.Popen(
-                [ejecutable],
+                [
+                    ejecutable
+                ],
                 cwd=os.path.dirname(
                     ejecutable
                 )
@@ -855,7 +1154,9 @@ def reiniciar_programa():
             archivo_principal = os.path.join(
                 os.path.dirname(
                     os.path.dirname(
-                        os.path.abspath(__file__)
+                        os.path.abspath(
+                            __file__
+                        )
                     )
                 ),
                 "main.py"
@@ -875,12 +1176,12 @@ def reiniciar_programa():
 
     except Exception as e:
 
+        escribir_log(
+            "ERROR reiniciando: "
+            + repr(e)
+        )
+
         print(
             "Error reiniciando:",
             e
-        )
-
-        escribir_log(
-            "ERROR REINICIANDO: "
-            + repr(e)
         )
