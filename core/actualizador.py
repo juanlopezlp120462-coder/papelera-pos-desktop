@@ -24,9 +24,7 @@ def escribir_log(texto):
 
         if getattr(sys, "frozen", False):
 
-            carpeta = os.path.dirname(
-                sys.executable
-            )
+            carpeta = os.path.dirname(sys.executable)
 
         else:
 
@@ -70,7 +68,9 @@ def obtener_carpeta_programa():
     if getattr(sys, "frozen", False):
 
         return os.path.dirname(
-            os.path.abspath(sys.executable)
+            os.path.abspath(
+                sys.executable
+            )
         )
 
     return os.path.dirname(
@@ -88,10 +88,6 @@ def obtener_certificado_ssl():
 
     try:
 
-        # ----------------------------------------------------
-        # PyInstaller
-        # ----------------------------------------------------
-
         if getattr(sys, "frozen", False):
 
             carpeta_programa = obtener_carpeta_programa()
@@ -106,10 +102,6 @@ def obtener_certificado_ssl():
             if os.path.exists(certificado):
 
                 return certificado
-
-        # ----------------------------------------------------
-        # Python normal
-        # ----------------------------------------------------
 
         try:
 
@@ -151,19 +143,9 @@ def obtener_info_version():
 
         certificado = obtener_certificado_ssl()
 
-        escribir_log(
-            "Certificado SSL: "
-            + str(certificado)
-        )
-
         existe_certificado = bool(
             certificado
             and os.path.exists(certificado)
-        )
-
-        escribir_log(
-            "Certificado existe: "
-            + str(existe_certificado)
         )
 
         if existe_certificado:
@@ -176,7 +158,6 @@ def obtener_info_version():
 
         else:
 
-            # Requests utiliza su certificado normal
             respuesta = requests.get(
                 url,
                 timeout=TIMEOUT
@@ -202,11 +183,6 @@ def obtener_info_version():
             )
 
             return datos
-
-        escribir_log(
-            "ERROR HTTP version: "
-            + str(respuesta.status_code)
-        )
 
     except Exception as e:
 
@@ -289,15 +265,7 @@ def hay_actualizacion(version_actual):
 
     if not ultima_version:
 
-        escribir_log(
-            "RESULTADO: El servidor no devolvio version"
-        )
-
         return False, None
-
-    # --------------------------------------------------------
-    # LIMPIAR VERSIONES
-    # --------------------------------------------------------
 
     version_actual = str(
         version_actual
@@ -312,20 +280,6 @@ def hay_actualizacion(version_actual):
         "\ufeff",
         ""
     ).strip()
-
-    escribir_log(
-        "Version local limpia: "
-        + version_actual
-    )
-
-    escribir_log(
-        "Version servidor limpia: "
-        + ultima_version
-    )
-
-    # --------------------------------------------------------
-    # COMPARAR
-    # --------------------------------------------------------
 
     if ultima_version != version_actual:
 
@@ -357,10 +311,6 @@ def descargar_actualizacion(progreso=None):
             "No hay URL de actualizacion"
         )
 
-        print(
-            "No hay URL de actualización"
-        )
-
         return False
 
     escribir_log(
@@ -371,11 +321,6 @@ def descargar_actualizacion(progreso=None):
     try:
 
         certificado = obtener_certificado_ssl()
-
-        escribir_log(
-            "Certificado SSL descarga: "
-            + str(certificado)
-        )
 
         existe_certificado = bool(
             certificado
@@ -409,11 +354,6 @@ def descargar_actualizacion(progreso=None):
             escribir_log(
                 "ERROR descarga HTTP: "
                 + str(respuesta.status_code)
-            )
-
-            print(
-                "Error descargando actualización:",
-                respuesta.status_code
             )
 
             return False
@@ -477,11 +417,6 @@ def descargar_actualizacion(progreso=None):
             + archivo_temp
         )
 
-        print(
-            "Actualización descargada:",
-            archivo_temp
-        )
-
         return archivo_temp
 
     except Exception as e:
@@ -491,16 +426,20 @@ def descargar_actualizacion(progreso=None):
             + repr(e)
         )
 
-        print(
-            "Error descarga actualización:",
-            e
-        )
-
         return False
 
 
 # ============================================================
 # BACKUP
+#
+# IMPORTANTE:
+#
+# ESTE BACKUP NO TOCA DATABASE.
+#
+# DATABASE NO SE COPIA.
+# DATABASE NO SE BORRA.
+# DATABASE NO SE MUEVE.
+# DATABASE NO SE REEMPLAZA.
 # ============================================================
 
 def crear_backup():
@@ -508,16 +447,6 @@ def crear_backup():
     try:
 
         carpeta_actual = obtener_carpeta_programa()
-
-        print(
-            "CARPETA BACKUP:",
-            carpeta_actual
-        )
-
-        escribir_log(
-            "CARPETA BACKUP: "
-            + carpeta_actual
-        )
 
         carpeta_backups = os.path.join(
             carpeta_actual,
@@ -539,68 +468,32 @@ def crear_backup():
         )
 
         os.makedirs(
-            destino
+            destino,
+            exist_ok=True
         )
 
-        archivos_backup = [
-            "database",
+        # ----------------------------------------------------
+        # SOLO BACKUP DE VERSION.TXT
+        #
+        # DATABASE NO SE COPIA.
+        # ----------------------------------------------------
+
+        version_origen = os.path.join(
+            carpeta_actual,
             "version.txt"
-        ]
-
-        for archivo in archivos_backup:
-
-            origen = os.path.join(
-                carpeta_actual,
-                archivo
-            )
-
-            copia = os.path.join(
-                destino,
-                archivo
-            )
-
-            if os.path.exists(origen):
-
-                print(
-                    "Copiando backup:",
-                    origen
-                )
-
-                escribir_log(
-                    "Copiando backup: "
-                    + origen
-                )
-
-                if os.path.isdir(origen):
-
-                    shutil.copytree(
-                        origen,
-                        copia
-                    )
-
-                else:
-
-                    shutil.copy2(
-                        origen,
-                        copia
-                    )
-
-            else:
-
-                print(
-                    "No existe para backup:",
-                    origen
-                )
-
-                escribir_log(
-                    "No existe para backup: "
-                    + origen
-                )
-
-        print(
-            "Backup creado correctamente:",
-            destino
         )
+
+        version_destino = os.path.join(
+            destino,
+            "version.txt"
+        )
+
+        if os.path.exists(version_origen):
+
+            shutil.copy2(
+                version_origen,
+                version_destino
+            )
 
         escribir_log(
             "Backup creado correctamente: "
@@ -616,11 +509,6 @@ def crear_backup():
         escribir_log(
             "ERROR creando backup: "
             + repr(e)
-        )
-
-        print(
-            "Error creando backup:",
-            e
         )
 
         return False
@@ -676,11 +564,6 @@ def limpiar_backups(max_backups=3):
                 ignore_errors=True
             )
 
-            print(
-                "Backup eliminado:",
-                backup
-            )
-
             escribir_log(
                 "Backup eliminado: "
                 + backup
@@ -696,6 +579,26 @@ def limpiar_backups(max_backups=3):
 
 # ============================================================
 # INSTALAR ACTUALIZACION
+#
+# ============================================================
+#
+# MUY IMPORTANTE:
+#
+# ESTA FUNCION NUNCA MODIFICA DATABASE.
+#
+# SOLO REEMPLAZA:
+#
+#     PAPELERA_POS.exe
+#     _internal
+#     version.txt
+#
+# DATABASE:
+#
+#     NO SE BORRA
+#     NO SE COPIA
+#     NO SE MUEVE
+#     NO SE REEMPLAZA
+#
 # ============================================================
 
 def instalar_actualizacion(
@@ -733,6 +636,20 @@ def instalar_actualizacion(
         )
 
         # ----------------------------------------------------
+        # PROTECCION DATABASE
+        # ----------------------------------------------------
+
+        database_actual = os.path.join(
+            carpeta_actual,
+            "database"
+        )
+
+        escribir_log(
+            "DATABASE PROTEGIDA: "
+            + database_actual
+        )
+
+        # ----------------------------------------------------
         # CARPETA TEMPORAL
         # ----------------------------------------------------
 
@@ -759,9 +676,9 @@ def instalar_actualizacion(
             exist_ok=True
         )
 
-        escribir_log(
-            "Extrayendo ZIP"
-        )
+        # ----------------------------------------------------
+        # EXTRAER ZIP
+        # ----------------------------------------------------
 
         with zipfile.ZipFile(
             zip_path,
@@ -785,13 +702,26 @@ def instalar_actualizacion(
             carpeta_extra
         ):
 
-            escribir_log(
-                "ZIP contiene carpeta PAPELERA_POS"
-            )
-
             for elemento in os.listdir(
                 carpeta_extra
             ):
+
+                # --------------------------------------------
+                # NUNCA PERMITIR DATABASE
+                # --------------------------------------------
+
+                if elemento.lower() in (
+                    "database",
+                    "backups",
+                    "logs"
+                ):
+
+                    escribir_log(
+                        "IGNORANDO elemento protegido del ZIP: "
+                        + elemento
+                    )
+
+                    continue
 
                 origen = os.path.join(
                     carpeta_extra,
@@ -846,15 +776,12 @@ def instalar_actualizacion(
             ).strip()
 
         else:
-            escribir_log(
-                "ERROR: No se recibió nueva versión para instalar"
-            )
-            return False
 
-        escribir_log(
-            "Nueva version para instalar: "
-            + nueva_version
-        )
+            escribir_log(
+                "ERROR: No se recibio nueva version"
+            )
+
+            return False
 
         # ----------------------------------------------------
         # COMPROBAR EXE
@@ -875,7 +802,7 @@ def instalar_actualizacion(
         ):
 
             escribir_log(
-                "ERROR: El ZIP no contiene PAPELERA_POS.exe"
+                "ERROR: ZIP no contiene PAPELERA_POS.exe"
             )
 
             return False
@@ -885,13 +812,13 @@ def instalar_actualizacion(
         ):
 
             escribir_log(
-                "ERROR: El ZIP no contiene _internal"
+                "ERROR: ZIP no contiene _internal"
             )
 
             return False
 
         # ----------------------------------------------------
-        # VERSION.TXT
+        # VERSION.TXT TEMPORAL
         # ----------------------------------------------------
 
         version_temp = os.path.join(
@@ -910,30 +837,9 @@ def instalar_actualizacion(
                 nueva_version
             )
 
-        escribir_log(
-            "version.txt preparado: "
-            + nueva_version
-        )
-
         # ----------------------------------------------------
-        # BAT EXTERNO
+        # RUTAS ACTUALES
         # ----------------------------------------------------
-
-        bat = os.path.join(
-            tempfile.gettempdir(),
-            "actualizar_papelera_pos.bat"
-        )
-
-        if os.path.exists(bat):
-
-            try:
-
-                os.remove(
-                    bat
-                )
-
-            except Exception:
-                pass
 
         exe_actual = os.path.join(
             carpeta_actual,
@@ -951,10 +857,7 @@ def instalar_actualizacion(
         )
 
         # ----------------------------------------------------
-        # PID DEL PROCESO ACTUAL
-        #
-        # El BAT esperará específicamente a este PID.
-        # Esto evita problemas si existiera otra instancia.
+        # PID
         # ----------------------------------------------------
 
         pid_actual = os.getpid()
@@ -967,6 +870,20 @@ def instalar_actualizacion(
         # ----------------------------------------------------
         # BAT EXTERNO
         # ----------------------------------------------------
+
+        bat = os.path.join(
+            tempfile.gettempdir(),
+            "actualizar_papelera_pos.bat"
+        )
+
+        if os.path.exists(bat):
+
+            try:
+
+                os.remove(bat)
+
+            except Exception:
+                pass
 
         contenido_bat = f"""@echo off
 setlocal
@@ -990,54 +907,87 @@ if not errorlevel 1 (
 )
 
 echo.
-echo El programa anterior ya esta cerrado.
+echo Programa anterior cerrado.
 
-echo.
-echo Esperando un momento...
 timeout /t 1 /nobreak >nul
 
 echo.
-echo Eliminando _internal anterior...
+echo ==========================================
+echo PROTECCION DATABASE
+echo ==========================================
+
+if exist "{database_actual}" (
+    echo DATABASE ENCONTRADA.
+    echo NO SE BORRARA.
+    echo NO SE COPIARA.
+    echo NO SE REEMPLAZARA.
+) else (
+    echo DATABASE NO EXISTE.
+)
+
+echo.
+echo ==========================================
+echo ELIMINANDO _internal ANTERIOR
+echo ==========================================
 
 if exist "{internal_actual}" (
     rmdir /s /q "{internal_actual}"
 )
 
 echo.
-echo Copiando nueva version...
+echo ==========================================
+echo COPIANDO NUEVO _internal
+echo ==========================================
 
-xcopy "{carpeta_temp}\\*" "{carpeta_actual}\\" /E /I /Y /H /C
-
-echo.
-echo Verificando PAPELERA_POS.exe...
-
-if not exist "{exe_actual}" (
-    echo ERROR: No se encontro el nuevo EXE.
-    pause
-    exit /b 1
-)
+xcopy "{nuevo_internal}" "{internal_actual}" /E /I /Y /H /C
 
 echo.
-echo Verificando _internal...
+echo ==========================================
+echo COPIANDO NUEVO EXE
+echo ==========================================
 
-if not exist "{internal_actual}" (
-    echo ERROR: No se encontro _internal.
-    pause
-    exit /b 1
-)
+copy /Y "{nuevo_exe}" "{exe_actual}"
 
 echo.
-echo Actualizando version.txt...
+echo ==========================================
+echo ACTUALIZANDO version.txt
+echo ==========================================
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllText('{version_actual}', '{nueva_version}', (New-Object System.Text.UTF8Encoding($false)))"
 
 echo.
 echo ==========================================
-echo ACTUALIZACION INSTALADA CORRECTAMENTE
+echo VERIFICACION FINAL
+echo ==========================================
+
+if not exist "{exe_actual}" (
+    echo ERROR: No se encontro PAPELERA_POS.exe
+    pause
+    exit /b 1
+)
+
+if not exist "{internal_actual}" (
+    echo ERROR: No se encontro _internal
+    pause
+    exit /b 1
+)
+
+if exist "{database_actual}" (
+    echo.
+    echo DATABASE OK.
+    echo DATABASE NO FUE TOCADA.
+) else (
+    echo.
+    echo AVISO: database no existe.
+)
+
+echo.
+echo ==========================================
+echo ACTUALIZACION COMPLETADA
 echo ==========================================
 
 echo.
-echo Limpiando archivos temporales...
+echo Limpiando temporal...
 
 rmdir /s /q "{carpeta_temp}" 2>NUL
 
@@ -1046,12 +996,8 @@ echo Reiniciando PAPELERA POS...
 
 start "" "{exe_actual}"
 
-echo.
-echo Actualizador finalizado.
-
-timeout /t 2 /nobreak >nul
-
 timeout /t 3 /nobreak >nul
+
 exit
 """
 
@@ -1074,10 +1020,6 @@ exit
         # EJECUTAR BAT
         # ----------------------------------------------------
 
-        escribir_log(
-            "Ejecutando actualizador externo"
-        )
-
         subprocess.Popen(
             [
                 "cmd.exe",
@@ -1094,21 +1036,6 @@ exit
                 else 0
             )
         )
-
-        # ----------------------------------------------------
-        # IMPORTANTE
-        #
-        # NO reiniciar desde Python.
-        #
-        # El BAT:
-        #
-        # 1. Espera que muera este PID.
-        # 2. Elimina _internal.
-        # 3. Copia la nueva versión.
-        # 4. Actualiza version.txt.
-        # 5. Abre el nuevo EXE.
-        #
-        # ----------------------------------------------------
 
         return True
 
