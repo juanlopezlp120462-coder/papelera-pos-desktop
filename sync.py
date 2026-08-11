@@ -1,225 +1,246 @@
 import requests
-import sqlite3
 
-
-from ui.db import BASE_DATOS
-
+from ui.db import create_connection, init_db
 
 
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 
 
-
-
-
 def hay_internet():
-
 
     try:
 
         requests.get(
             SERVIDOR,
-            timeout=3
+            timeout=5
         )
 
         return True
 
-
-    except:
+    except Exception:
 
         return False
-
-def existe_producto_servidor(uuid):
-
-    try:
-
-        r = requests.get(
-            f"{SERVIDOR}/productos/uuid/{uuid}",
-            timeout=10
-        )
-
-        if r.status_code == 200:
-            return r.json()["id"]
-
-        return None
-
-
-    except Exception as e:
-
-        print("Error buscando producto:", e)
-        return None
-
-
-
-
 
 
 def sincronizar_ventas():
 
+    init_db()
 
-    conexion = sqlite3.connect(BASE_DATOS)
+    if not hay_internet():
 
-    conexion.row_factory = sqlite3.Row
+        return 0
 
+
+    conexion = create_connection()
     cursor = conexion.cursor()
 
 
-
-    pendientes = cursor.execute("""
-        SELECT *
+    pendientes = cursor.execute(
+        """
+        SELECT
+            id,
+            tabla,
+            registro,
+            registro_uuid,
+            accion,
+            datos
         FROM sincronizacion
         WHERE sincronizado=0
         AND tabla='ventas'
-    """).fetchall()
+        ORDER BY id
+        """
+    ).fetchall()
 
+
+    sincronizadas = 0
 
 
     for fila in pendientes:
 
-
-        venta_id = fila["registro"]
-
-
-
-        venta = cursor.execute("""
-            SELECT *
-            FROM ventas
-            WHERE id=?
-        """,
-        (
-            venta_id,
-        )).fetchone()
+        sync_id = fila[0]
+        registro_uuid = fila[3]
+        datos_json = fila[5]
 
 
+        if not registro_uuid:
 
-        if not venta:
+            print(
+                "Venta sin UUID:",
+                fila[2]
+            )
 
             continue
 
 
+        if not datos_json:
 
+            print(
+                "Venta sin datos:",
+                fila[2]
+            )
 
-
-        detalles = cursor.execute("""
-            SELECT *
-            FROM detalle_ventas
-            WHERE venta_id=?
-        """,
-        (
-            venta_id,
-        )).fetchall()
-
-
-
-        items = []
-
-
-
-        for d in detalles:
-
-
-            items.append({
-
-                "producto_id":0,
-
-                "producto":d["producto"],
-
-                "cantidad":d["cantidad"],
-
-                "precio":d["precio"],
-
-                "codigo":d["codigo"] or ""
-
-            })
-
-
-
-
-
-        datos = {
-
-
-            "items":items,
-
-            "forma_pago":venta["forma_pago"] or "efectivo",
-
-            "cliente_id":venta["cliente_id"] or 0,
-
-            "descuento":venta["descuento"] or 0,
-
-            "usuario":venta["usuario"] or "Administrador",
-
-
-            "pago_efectivo":venta["pago_efectivo"] or 0,
-
-            "pago_transferencia":venta["pago_transferencia"] or 0,
-
-            "pago_tarjeta":venta["pago_tarjeta"] or 0,
-
-            "pago_cuenta":venta["pago_cuenta"] or 0
-
-        }
-
-
-
+            continue
 
 
         try:
 
+            import json
 
-            r = requests.post(
+            venta = json.loads(datos_json)
 
-                f"{SERVIDOR}/ventas/",
+
+            # ==================================
+            # AGREGAR UUID AL ENVÍO
+            # ==================================
+
+            datos = {
+
+                "uuid": registro_uuid,
+
+                "fecha": venta.get("fecha"),
+
+                "total": venta.get("total", 0),
+
+                "forma_pago": venta.get(
+                    "forma_pago",
+                    "EFECTIVO"
+                ),
+
+                "cliente_id": venta.get(
+                    "cliente_id"
+                ),
+
+                "descuento": venta.get(
+                    "descuento",
+                    0
+                ),
+
+                "usuario": venta.get(
+                    "usuario",
+                    "Administrador"
+                ),
+
+                "pago_efectivo": venta.get(
+                    "pago_efectivo",
+                    0
+                ),
+
+                "pago_transferencia": venta.get(
+                    "pago_transferencia",
+                    0
+                ),
+
+                "pago_tarjeta": venta.get(
+                    "pago_tarjeta",
+                    0
+                ),
+
+                "pago_cuenta": venta.get(
+                    "pago_cuenta",
+                    0
+                ),
+
+                "items": venta.get(
+                    "items",
+                    []
+                )
+
+            }
+
+
+            if not datos["items"]:
+
+                print(
+                    "Venta sin items:",
+                    fila[2]
+                )
+
+                continue
+
+
+            # ==================================
+            # ENVIAR AL SERVIDOR
+            # ==================================
+
+            respuesta = requests.post(
+
+                f"{SERVIDOR}/ventas/sync",
 
                 json=datos,
 
-                timeout=10
+                timeout=15
 
             )
 
 
+            # ==================================
+            # VENTA SINCRONIZADA
+            # ==================================
 
-            if r.status_code in (200, 201):
+            if respuesta.status_code in (200, 201):
+
+                resultado = respuesta.json()
 
 
-
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE sincronizacion
                     SET sincronizado=1
                     WHERE id=?
-                """,
-                (
-                    fila["id"],
-                ))
-
-
-
-                print(
-                    "Venta sincronizada:",
-                    venta_id
+                    """,
+                    (
+                        sync_id,
+                    )
                 )
 
+
+                sincronizadas += 1
+
+
+                if resultado.get("actualizada"):
+
+                    print(
+                        "Venta actualizada en servidor:",
+                        registro_uuid
+                    )
+
+                elif resultado.get("creada"):
+
+                    print(
+                        "Venta creada en servidor:",
+                        registro_uuid
+                    )
+
+                elif resultado.get("duplicada"):
+
+                    print(
+                        "Venta duplicada en servidor:",
+                        registro_uuid
+                    )
+
+                else:
+
+                    print(
+                        "Venta sincronizada:",
+                        registro_uuid
+                    )
 
 
             else:
 
-
                 print(
-                    "Error venta:",
-                    r.text
+                    "Error sincronizando venta:",
+                    respuesta.status_code,
+                    respuesta.text
                 )
-
 
 
         except Exception as e:
 
-
             print(
-                "Error venta:",
+                "Error sincronizando venta:",
                 e
             )
-
-
 
 
     conexion.commit()
@@ -227,406 +248,161 @@ def sincronizar_ventas():
     conexion.close()
 
 
+    return sincronizadas
+def sincronizar():
 
+    ventas = sincronizar_ventas()
 
+    productos = sincronizar_productos()
 
-def existe_producto_servidor(uuid_producto):
-
-    try:
-
-        r = requests.get(
-            f"{SERVIDOR}/productos",
-            timeout=10
-        )
-
-        r.raise_for_status()
-
-        productos = r.json()
-
-        for p in productos:
-
-            if p.get("uuid") == uuid_producto:
-
-                return p["id"]
-
-        return None
-
-
-    except Exception as e:
-
-        print(
-            "Error buscando producto servidor:",
-            e
-        )
-
-        return None
+    return {
+        "ventas": ventas,
+        "productos": productos
+    }
 
 def sincronizar_productos():
 
+    init_db()
+
+    if not hay_internet():
+        return 0
 
 
-    conexion = sqlite3.connect(BASE_DATOS)
-
-    conexion.row_factory = sqlite3.Row
-
+    conexion = create_connection()
     cursor = conexion.cursor()
 
 
-
-
-    pendientes = cursor.execute("""
-        SELECT *
+    pendientes = cursor.execute(
+        """
+        SELECT
+            id,
+            tabla,
+            registro_uuid,
+            accion,
+            datos
         FROM sincronizacion
         WHERE sincronizado=0
         AND tabla='productos'
-    """).fetchall()
+        ORDER BY id
+        """
+    ).fetchall()
 
 
-
+    sincronizados = 0
 
 
     for fila in pendientes:
 
+        sync_id = fila[0]
+        producto_uuid = fila[2]
+        datos_json = fila[4]
 
 
-        producto_id = fila["registro"]
-
-
-
-
-        producto = cursor.execute("""
-            SELECT *
-            FROM productos
-            WHERE id=?
-        """,
-        (
-            producto_id,
-        )).fetchone()
-
-
-
-        if not producto:
-
+        if not producto_uuid:
+            print("Producto sin UUID")
             continue
 
 
-
-
-
-        datos = {
-
-            "uuid": producto["uuid"],
-            
-            "codigo_barras":producto["codigo_barras"],
-
-            "nombre":producto["nombre"],
-
-            "categoria":producto["categoria"],
-
-            "precio_compra":producto["precio_compra"],
-
-            "precio_venta":producto["precio_venta"],
-
-            "stock":producto["stock"]
-
-        }
-
-
-
+        if not datos_json:
+            print("Producto sin datos")
+            continue
 
 
         try:
 
-            id_servidor = existe_producto_servidor(
-                producto["uuid"]
+            import json
+
+            producto = json.loads(datos_json)
+
+
+            datos = {
+
+                "uuid": producto_uuid,
+
+                "codigo_barras": producto.get(
+                    "codigo_barras",
+                    ""
+                ),
+
+                "nombre": producto.get(
+                    "nombre",
+                    ""
+                ),
+
+                "categoria": producto.get(
+                    "categoria",
+                    "General"
+                ),
+
+                "precio_compra": producto.get(
+                    "precio_compra",
+                    0
+                ),
+
+                "precio_venta": producto.get(
+                    "precio_venta",
+                    0
+                ),
+
+                "stock": producto.get(
+                    "stock",
+                    0
+                )
+
+            }
+
+
+            respuesta = requests.post(
+                f"{SERVIDOR}/productos/sync",
+                json=datos,
+                timeout=15
             )
 
 
-            if id_servidor:
+            if respuesta.status_code in (200,201):
 
 
-                r = requests.put(
-
-                    f"{SERVIDOR}/productos/{id_servidor}",
-
-                    json=datos,
-
-                    timeout=10
-
-                )
-
-
-            else:
-
-
-                r = requests.post(
-
-                    f"{SERVIDOR}/productos",
-
-                    json=datos,
-
-                    timeout=10
-
-                )
-
-
-            if r.status_code == 200:
-
-
-
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE sincronizacion
                     SET sincronizado=1
                     WHERE id=?
-                """,
-                (
-                    fila["id"],
-                ))
+                    """,
+                    (
+                        sync_id,
+                    )
+                )
 
+
+                sincronizados += 1
 
 
                 print(
                     "Producto sincronizado:",
-                    producto_id
+                    producto_uuid
                 )
-
 
 
             else:
 
-
                 print(
                     "Error producto:",
-                    r.text
+                    respuesta.status_code,
+                    respuesta.text
                 )
-
 
 
         except Exception as e:
 
-
             print(
-                "Error producto:",
+                "Error sincronizando producto:",
                 e
             )
 
 
 
-
     conexion.commit()
-
     conexion.close()
 
 
-
-
-
-
-
-def descargar_productos():
-
-
-
-    conexion = sqlite3.connect(BASE_DATOS)
-
-    conexion.row_factory = sqlite3.Row
-
-    cursor = conexion.cursor()
-
-
-
-    try:
-
-
-
-        respuesta = requests.get(
-
-            f"{SERVIDOR}/productos",
-
-            timeout=10
-
-        )
-
-
-
-        respuesta.raise_for_status()
-
-
-
-        productos = respuesta.json()
-
-
-
-
-
-        for p in productos:
-
-
-
-            existe = cursor.execute("""
-                SELECT id
-                FROM productos
-                WHERE codigo_barras=?
-            """,
-            (
-                p["codigo_barras"],
-            )).fetchone()
-
-
-
-
-
-            if existe:
-
-
-
-                cursor.execute("""
-                    UPDATE productos
-                    SET
-
-                        nombre=?,
-
-                        categoria=?,
-
-                        precio_compra=?,
-
-                        precio_venta=?,
-
-                        stock=?
-
-                    WHERE codigo_barras=?
-
-                """,
-                (
-
-                    p["nombre"],
-
-                    p["categoria"],
-
-                    p["precio_compra"],
-
-                    p["precio_venta"],
-
-                    p["stock"],
-
-                    p["codigo_barras"]
-
-                ))
-
-
-
-
-
-            else:
-
-
-
-                cursor.execute("""
-                    INSERT INTO productos
-                    (
-                        codigo_barras,
-                        nombre,
-                        categoria,
-                        precio_compra,
-                        precio_venta,
-                        stock,
-                        stock_minimo
-                    )
-
-                    VALUES
-                    (?,?,?,?,?,?,?)
-
-                """,
-                (
-
-                    p["codigo_barras"],
-
-                    p["nombre"],
-
-                    p["categoria"],
-
-                    p["precio_compra"],
-
-                    p["precio_venta"],
-
-                    p["stock"],
-
-                    5
-
-                ))
-
-
-
-
-
-
-        conexion.commit()
-
-
-
-        print(
-            "Productos descargados OK"
-        )
-
-
-
-    except Exception as e:
-
-
-
-        print(
-            "Error descargando productos:",
-            e
-        )
-
-
-
-    finally:
-
-
-        conexion.close()
-
-
-
-
-
-
-
-def sincronizar():
-
-
-
-    if not hay_internet():
-
-        
-
-
-        print(
-            "Sin conexión"
-        )
-
-        return
-
-
-
-
-    sincronizar_ventas()
-
-
-
-    sincronizar_productos()
-
-
-
-    descargar_productos()
-
-
-
-
-
-
-
-if __name__ == "__main__":
-
-
-    sincronizar()
+    return sincronizados

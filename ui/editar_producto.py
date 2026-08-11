@@ -1,6 +1,8 @@
 import sys
+import datetime
 import requests
 import sqlite3
+import json
 import datetime
 from ui.db import create_connection
 
@@ -760,24 +762,31 @@ class EditarProducto(QWidget):
             # MARCAR PARA SINCRONIZAR
             # ============================
 
+            import json
+
             cursor.execute("""
                 INSERT INTO sincronizacion
                 (
                     tabla,
-                    registro,
+                    registro_uuid,
                     accion,
+                    datos,
                     fecha,
                     sincronizado
                 )
                 VALUES
                 (
-                    ?,?,?,?,?
+                    ?,?,?,?,?,?
                 )
             """,
             (
                 "productos",
-                self.prod_id,
+                self.prod_uuid,
                 "UPDATE",
+                json.dumps({
+                    "uuid": self.prod_uuid,
+                    **datos
+                }),
                 datetime.datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 ),

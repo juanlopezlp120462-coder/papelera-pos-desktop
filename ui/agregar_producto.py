@@ -4,7 +4,7 @@ import requests
 import sqlite3
 import datetime
 import json
-import datetime
+
 
 from ui.db import BASE_DATOS, create_connection, init_db
 
@@ -719,9 +719,13 @@ class AgregarProducto(QWidget):
             cursor = conexion.cursor()
 
 
+            producto_uuid = str(uuid.uuid4())
+
+
             cursor.execute("""
             INSERT INTO productos
             (
+                uuid,
                 codigo_barras,
                 nombre,
                 categoria,
@@ -730,9 +734,10 @@ class AgregarProducto(QWidget):
                 stock,
                 stock_minimo
             )
-            VALUES (?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?)
             """,
             (
+                producto_uuid,
                 producto["codigo_barras"],
                 producto["nombre"],
                 producto["categoria"],
@@ -746,6 +751,9 @@ class AgregarProducto(QWidget):
             producto_id = cursor.lastrowid
 
 
+            producto["uuid"] = producto_uuid
+
+
             cursor.execute("""
             INSERT INTO sincronizacion
             (
@@ -757,16 +765,13 @@ class AgregarProducto(QWidget):
                 fecha,
                 sincronizado
             )
-            VALUES
-            (
-                ?, ?, ?, ?, ?, ?, ?
-            )
+            VALUES (?,?,?,?,?,?,?)
             """,
             (
                 "productos",
                 producto_id,
-                str(uuid.uuid4()),
-                "INSERT",
+                producto_uuid,
+                "crear",
                 json.dumps(producto),
                 datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 0
@@ -774,6 +779,16 @@ class AgregarProducto(QWidget):
 
 
             conexion.commit()
+
+            print("PRODUCTO GUARDADO UUID:", producto_uuid)
+
+            print(
+                "SYNC INSERTADO:",
+                cursor.execute(
+                    "SELECT * FROM sincronizacion ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+            )
+
             conexion.close()
 
 

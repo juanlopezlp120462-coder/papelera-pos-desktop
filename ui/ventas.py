@@ -39,6 +39,8 @@ from ui.api import (
     listar_productos,
     listar_clientes,
     crear_venta
+    
+    
 )
 
 from ui.db import BASE_DATOS, init_db, get_setting, create_connection
@@ -426,71 +428,592 @@ class EditorCeldaVentasDelegate(QStyledItemDelegate):
 
 
 class DialogoPagoMixto(QDialog):
+
     pago_confirmado = Signal(dict)
+
     def __init__(self, total, parent=None):
-        super().__init__(parent); self.total=total; self.setWindowTitle('Forma de pago'); self.setModal(True); self.setFixedSize(520,460)
-        self._esperando=False; self._inicio_espera=None; self._timer=QTimer(self); self._timer.setInterval(2500); self._timer.timeout.connect(self._buscar_pago_mp)
-        self.setStyleSheet("QDialog{background:#f8fafc;} QLabel{color:#0f172a;} QDoubleSpinBox{background:white;border:1px solid #cbd5e1;border-radius:9px;padding:8px;font-size:16px;} QPushButton{background:#10b981;color:white;border:0;border-radius:9px;padding:10px 16px;font-weight:800;} QPushButton#cancel{background:#e2e8f0;color:#334155;} QPushButton#mp{background:#2563eb;}")
-        lay=QVBoxLayout(self); title=QLabel('💳 ¿Cómo pagó el cliente?'); title.setStyleSheet('font-size:21px;font-weight:900'); lay.addWidget(title)
-        info=QLabel(f'Total de la venta: $ {total:,.2f}'); info.setStyleSheet('font-size:18px;font-weight:900;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:10px;'); lay.addWidget(info)
-        form=QFormLayout(); self.ef=QDoubleSpinBox(); self.tr=QDoubleSpinBox(); self.ta=QDoubleSpinBox(); self.cc=QDoubleSpinBox()
-        for w in (self.ef,self.tr,self.ta,self.cc):
-            w.setRange(0,total)
+
+        super().__init__(parent)
+
+        self.total = total
+
+        self.setWindowTitle("Forma de pago")
+        self.setModal(True)
+        self.setFixedSize(520, 460)
+
+
+        self._esperando = False
+        self._inicio_espera = None
+
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(2500)
+        self._timer.timeout.connect(
+            self._buscar_pago_mp
+        )
+
+
+        self.setStyleSheet("""
+            QDialog {
+                background:#f8fafc;
+            }
+
+            QLabel {
+                color:#0f172a;
+            }
+
+            QDoubleSpinBox {
+                background:white;
+                border:1px solid #cbd5e1;
+                border-radius:9px;
+                padding:8px;
+                font-size:16px;
+            }
+
+            QPushButton {
+                background:#10b981;
+                color:white;
+                border:0;
+                border-radius:9px;
+                padding:10px 16px;
+                font-weight:800;
+            }
+
+            QPushButton#cancel {
+                background:#e2e8f0;
+                color:#334155;
+            }
+
+            QPushButton#mp {
+                background:#2563eb;
+            }
+        """)
+
+
+        lay = QVBoxLayout(self)
+
+
+        title = QLabel(
+            "💳 ¿Cómo pagó el cliente?"
+        )
+
+        title.setStyleSheet(
+            "font-size:21px;font-weight:900;"
+        )
+
+        lay.addWidget(title)
+
+
+
+        info = QLabel(
+            f"Total de la venta: $ {total:,.2f}"
+        )
+
+        info.setStyleSheet("""
+            font-size:18px;
+            font-weight:900;
+            color:#166534;
+            background:#f0fdf4;
+            border:1px solid #bbf7d0;
+            border-radius:9px;
+            padding:10px;
+        """)
+
+        lay.addWidget(info)
+
+
+
+        form = QFormLayout()
+
+
+        self.ef = QDoubleSpinBox()
+        self.tr = QDoubleSpinBox()
+        self.ta = QDoubleSpinBox()
+        self.cc = QDoubleSpinBox()
+
+
+
+        for w in (
+            self.ef,
+            self.tr,
+            self.ta,
+            self.cc
+        ):
+
+            w.setRange(
+                0,
+                total
+            )
+
             w.setDecimals(2)
-            w.setSingleStep(100)
-            w.setPrefix('$ ')
-            w.setLocale(QLocale(QLocale.Spanish, QLocale.Argentina))
-            w.setMaximumWidth(250)
 
-        # Orden explícito de Enter: sigue exactamente el orden visual de los
-        # medios de pago y el último Enter confirma el pago.
-        self._keyboard_enter_sequence = (self.ef, self.tr, self.ta, self.cc)
+            w.setSingleStep(
+                100
+            )
+
+            w.setPrefix(
+                "$ "
+            )
+
+            w.setLocale(
+                QLocale(
+                    QLocale.Spanish,
+                    QLocale.Argentina
+                )
+            )
+
+            w.setMaximumWidth(
+                250
+            )
+
+
+
+        # Orden de Enter
+
+        self._keyboard_enter_sequence = (
+            self.ef,
+            self.tr,
+            self.ta,
+            self.cc
+        )
+
+
         for w in self._keyboard_enter_sequence:
-            w.setFocusPolicy(Qt.StrongFocus)
-        self.setTabOrder(self.ef, self.tr)
-        self.setTabOrder(self.tr, self.ta)
-        self.setTabOrder(self.ta, self.cc)
+            w.setFocusPolicy(
+                Qt.StrongFocus
+            )
 
-        form.addRow('💵 Efectivo:',self.ef); form.addRow('🔄 Mercado Pago:',self.tr); form.addRow('💳 Tarjeta:',self.ta); form.addRow('📒 Cuenta corriente:',self.cc); lay.addLayout(form)
-        self.estado=QLabel(); self.estado.setWordWrap(True); self.estado.setStyleSheet('font-weight:800;'); lay.addWidget(self.estado)
-        self.mp_info=QLabel(''); self.mp_info.setWordWrap(True); lay.addWidget(self.mp_info)
-        for w in (self.ef,self.tr,self.ta,self.cc): w.valueChanged.connect(self.validar)
-        b=QHBoxLayout(); b.addStretch(); cancel=QPushButton('Cancelar'); cancel.setObjectName('cancel'); cancel.clicked.connect(self.reject); self.ok=QPushButton('Confirmar pago'); self.ok.setProperty('keyboard_primary', True); self.ok.clicked.connect(self.confirmar); self.mp=QPushButton('🔎 Esperar Mercado Pago'); self.mp.setObjectName('mp'); self.mp.clicked.connect(self.esperar_mercado_pago); b.addWidget(cancel); b.addWidget(self.mp); b.addWidget(self.ok); lay.addLayout(b); self.validar()
-        self.ef.setFocus(Qt.OtherFocusReason)
-    def suma(self): return self.ef.value()+self.tr.value()+self.ta.value()+self.cc.value()
+
+        self.setTabOrder(
+            self.ef,
+            self.tr
+        )
+
+        self.setTabOrder(
+            self.tr,
+            self.ta
+        )
+
+        self.setTabOrder(
+            self.ta,
+            self.cc
+        )
+
+
+
+        form.addRow(
+            "💵 Efectivo:",
+            self.ef
+        )
+
+        form.addRow(
+            "🔄 Mercado Pago:",
+            self.tr
+        )
+
+        form.addRow(
+            "💳 Tarjeta:",
+            self.ta
+        )
+
+        form.addRow(
+            "📒 Cuenta corriente:",
+            self.cc
+        )
+
+
+        lay.addLayout(form)
+
+
+
+        self.estado = QLabel()
+
+        self.estado.setWordWrap(
+            True
+        )
+
+        self.estado.setStyleSheet(
+            "font-weight:800;"
+        )
+
+        lay.addWidget(
+            self.estado
+        )
+
+
+
+        self.mp_info = QLabel("")
+
+        self.mp_info.setWordWrap(
+            True
+        )
+
+        lay.addWidget(
+            self.mp_info
+        )
+
+
+
+        for w in (
+            self.ef,
+            self.tr,
+            self.ta,
+            self.cc
+        ):
+
+            w.valueChanged.connect(
+                self.validar
+            )
+
+
+
+        botones = QHBoxLayout()
+
+        botones.addStretch()
+
+
+
+        self.cancel = QPushButton(
+            "Cancelar"
+        )
+
+        self.cancel.setObjectName(
+            "cancel"
+        )
+
+        self.cancel.clicked.connect(
+            self.reject
+        )
+
+
+
+        self.ok = QPushButton(
+            "Confirmar pago"
+        )
+
+        self.ok.setProperty(
+            "keyboard_primary",
+            True
+        )
+
+        self.ok.clicked.connect(
+            self.confirmar
+        )
+
+
+
+        self.mp = QPushButton(
+            "🔎 Esperar Mercado Pago"
+        )
+
+        self.mp.setObjectName(
+            "mp"
+        )
+
+        self.mp.clicked.connect(
+            self.esperar_mercado_pago
+        )
+
+
+
+        botones.addWidget(
+            self.cancel
+        )
+
+        botones.addWidget(
+            self.mp
+        )
+
+        botones.addWidget(
+            self.ok
+        )
+
+
+        lay.addLayout(
+            botones
+        )
+
+
+        self.validar()
+
+
+        self.ef.setFocus(
+            Qt.OtherFocusReason
+        )
+
+
+
+    def suma(self):
+
+        return (
+            self.ef.value()
+            + self.tr.value()
+            + self.ta.value()
+            + self.cc.value()
+        )
+
+
+
     def validar(self):
-        dif=round(self.total-self.suma(),2); self.estado.setText('🟢 Importe completo' if abs(dif)<0.01 else (f'⚠️ Falta pagar: $ {dif:,.2f}' if dif>0 else f'⚠️ Excede el total: $ {abs(dif):,.2f}')); self.estado.setStyleSheet('font-weight:800;color:#166534;' if abs(dif)<0.01 else 'font-weight:800;color:#b45309;')
-        self.mp.setEnabled(self.tr.value()>0 and abs(dif)<0.01 and not self._esperando)
-    def keyboard_submit(self): self.confirmar()
-    def confirmar(self):
-        if abs(self.total-self.suma())>=0.01: QMessageBox.warning(self,'Pago incompleto','Los medios de pago deben sumar exactamente el total de la venta.'); return
-        if self.tr.value()>0 and not self._esperando:
-            r=QMessageBox.question(self,'Mercado Pago','Se indicó un pago de Mercado Pago. ¿Querés confirmar manualmente o esperar la acreditación automática?',QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
-            if r==QMessageBox.Yes: self.accept(); return
-            self.esperar_mercado_pago(); return
-        self.accept()
-    def esperar_mercado_pago(self):
-        if self.tr.value()<=0 or abs(self.total-self.suma())>=0.01:return
-        from ui.mercadopago import token_activo, nombre_cuenta_activa
-        token=token_activo()
-        if not token:
-            QMessageBox.warning(self,'Mercado Pago','No hay una cuenta de Mercado Pago activa con Access Token. Configurala antes de usar la detección automática.'); return
-        self._esperando=True; self._inicio_espera=datetime.datetime.now(datetime.timezone.utc); self.mp.setEnabled(False); self.ok.setEnabled(False); self.cancel.setEnabled(False)
-        self.mp_info.setText(f'🔵 Esperando acreditación de $ {self.tr.value():,.2f} en {nombre_cuenta_activa()}...\nEl POS consulta Mercado Pago automáticamente.')
-        self._timer.start()
-    def _buscar_pago_mp(self):
-        try:
-            from ui.mercadopago import token_activo, buscar_pago_aprobado_por_importe, guardar_pagos
-            p=buscar_pago_aprobado_por_importe(token_activo(),self.tr.value(),self._inicio_espera)
-            if p:
-                guardar_pagos([p]); self._timer.stop(); self._esperando=False; self.mp_info.setText(f'✅ Pago encontrado y aprobado. ID: {p.get("id")}'); self.ok.setEnabled(True); self.cancel.setEnabled(True); self.accept()
-        except Exception as e:
-            self.mp_info.setText('⚠️ No se pudo consultar Mercado Pago. Se reintentará automáticamente.')
-    def closeEvent(self,e):
-        self._timer.stop(); super().closeEvent(e)
-    def datos(self):
-        vals={'efectivo':self.ef.value(),'transferencia':self.tr.value(),'tarjeta':self.ta.value(),'cuenta':self.cc.value()}; usados=[k for k,v in vals.items() if v>0]; labels={'efectivo':'Efectivo','transferencia':'Mercado Pago','tarjeta':'Tarjeta','cuenta':'Cuenta corriente'}; vals['forma']=' + '.join(labels[k] for k in usados) if usados else 'Efectivo'; return vals
 
+        diferencia = round(
+            self.total - self.suma(),
+            2
+        )
+
+
+        if abs(diferencia) < 0.01:
+
+            texto = "🟢 Importe completo"
+
+            color = "#166534"
+
+        elif diferencia > 0:
+
+            texto = (
+                f"⚠️ Falta pagar: $ {diferencia:,.2f}"
+            )
+
+            color = "#b45309"
+
+        else:
+
+            texto = (
+                f"⚠️ Excede el total: $ {abs(diferencia):,.2f}"
+            )
+
+            color = "#b45309"
+
+
+
+        self.estado.setText(
+            texto
+        )
+
+        self.estado.setStyleSheet(
+            f"font-weight:800;color:{color};"
+        )
+
+
+        self.mp.setEnabled(
+            self.tr.value() > 0
+            and abs(diferencia) < 0.01
+            and not self._esperando
+        )
+
+
+
+    def keyboard_submit(self):
+
+        self.confirmar()
+
+
+
+    def confirmar(self):
+
+        if abs(self.total - self.suma()) >= 0.01:
+
+            QMessageBox.warning(
+                self,
+                "Pago incompleto",
+                "Los medios de pago deben sumar exactamente el total de la venta."
+            )
+
+            return
+
+
+
+        if self.tr.value() > 0 and not self._esperando:
+
+
+            respuesta = QMessageBox.question(
+                self,
+                "Mercado Pago",
+                "Se indicó un pago de Mercado Pago. ¿Querés confirmar manualmente o esperar la acreditación automática?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+
+            if respuesta == QMessageBox.Yes:
+
+                self.accept()
+
+                return
+
+
+
+            self.esperar_mercado_pago()
+
+            return
+
+
+
+        self.accept()
+
+
+
+    def esperar_mercado_pago(self):
+
+        if (
+            self.tr.value() <= 0
+            or abs(self.total - self.suma()) >= 0.01
+        ):
+
+            return
+
+
+
+        from ui.mercadopago import (
+            token_activo,
+            nombre_cuenta_activa
+        )
+
+
+        token = token_activo()
+
+
+        if not token:
+
+            QMessageBox.warning(
+                self,
+                "Mercado Pago",
+                "No hay una cuenta de Mercado Pago activa con Access Token."
+            )
+
+            return
+
+
+
+        self._esperando = True
+
+        self._inicio_espera = datetime.datetime.now(
+            datetime.timezone.utc
+        )
+
+
+        self.mp.setEnabled(False)
+        self.ok.setEnabled(False)
+        self.cancel.setEnabled(False)
+
+
+
+        self.mp_info.setText(
+            f"🔵 Esperando acreditación de $ {self.tr.value():,.2f} "
+            f"en {nombre_cuenta_activa()}...\n"
+            "El POS consulta Mercado Pago automáticamente."
+        )
+
+
+        self._timer.start()
+
+
+
+    def _buscar_pago_mp(self):
+
+        try:
+
+            from ui.mercadopago import (
+                token_activo,
+                buscar_pago_aprobado_por_importe,
+                guardar_pagos
+            )
+
+
+            pago = buscar_pago_aprobado_por_importe(
+                token_activo(),
+                self.tr.value(),
+                self._inicio_espera
+            )
+
+
+            if pago:
+
+                guardar_pagos(
+                    [pago]
+                )
+
+
+                self._timer.stop()
+
+                self._esperando = False
+
+
+                self.mp_info.setText(
+                    f"✅ Pago encontrado y aprobado. ID: {pago.get('id')}"
+                )
+
+
+                self.ok.setEnabled(True)
+                self.cancel.setEnabled(True)
+
+                self.pago_confirmado.emit(self.datos())
+                self.accept()
+
+
+        except Exception:
+
+            self.mp_info.setText(
+                "⚠️ No se pudo consultar Mercado Pago. Se reintentará automáticamente."
+            )
+
+
+
+    def closeEvent(self, event):
+
+        self._timer.stop()
+
+        super().closeEvent(
+            event
+        )
+
+
+
+    def datos(self):
+
+        valores = {
+
+            "efectivo": self.ef.value(),
+
+            "transferencia": self.tr.value(),
+
+            "tarjeta": self.ta.value(),
+
+            "cuenta": self.cc.value()
+
+        }
+
+
+        usados = [
+            k for k,v in valores.items()
+            if v > 0
+        ]
+
+
+        nombres = {
+
+            "efectivo":"Efectivo",
+
+            "transferencia":"Mercado Pago",
+
+            "tarjeta":"Tarjeta",
+
+            "cuenta":"Cuenta corriente"
+
+        }
+
+
+        valores["forma"] = (
+            " + ".join(
+                nombres[k]
+                for k in usados
+            )
+            if usados
+            else "Efectivo"
+        )
+
+
+        return valores
 class Ventas(QWidget):
 
     def __init__(self):
@@ -1474,11 +1997,7 @@ class Ventas(QWidget):
             self.buscar.setFocus()
             return
 
-        if respuesta == QMessageBox.Yes:
-            self.agregar_producto_libre(texto)
-        else:
-            self.buscar.clear()
-            self.buscar.selectAll()
+
             
     def limpiar_busqueda_al_entrar(self, event):
 
@@ -1565,14 +2084,15 @@ class Ventas(QWidget):
 
 
         # Producto nuevo siempre empieza en 1
-        prod_dict["cantidad"] = 1
+        if "cantidad" not in prod_dict:
+            prod_dict["cantidad"] = 1
 
         self.carrito.append(
             prod_dict
         )
 
 
-        self.actualizar_tabla()
+        
         self.actualizar_tabla()
 
     def limpiar_buscador(self):
@@ -1588,18 +2108,6 @@ class Ventas(QWidget):
             Qt.OtherFocusReason
         )
         
-    def limpiar_buscador(self):
-
-        self.buscar.blockSignals(True)
-
-        self.buscar.clear()
-
-        self.buscar.blockSignals(False)
-
-
-        self.buscar.setFocus(
-            Qt.OtherFocusReason
-        )
 
 
     def actualizar_tabla(self):
@@ -1859,24 +2367,84 @@ class Ventas(QWidget):
         if fila != -1:
             del self.carrito[fila]
             self.actualizar_tabla()
+            
+            
     def guardar_venta_local(self, venta):
-        """
-        Guarda una venta en SQLite local.
-        Funciona sin Internet.
-        """
-        init_db()
+
+        inicializar_base_datos_si_no_existe()
+
         conexion = create_connection()
         cursor = conexion.cursor()
 
-        fecha = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # Datos generales de la venta
+        venta_uuid = str(uuid.uuid4())
+        fecha = datetime.datetime.now().isoformat()
         total = sum(
             item["precio"] * item["cantidad"]
             for item in venta["items"]
         )
-        venta_uuid = str(uuid.uuid4())
-        
-        
+
+
+        # ======================================
+        # TABLA DE SINCRONIZACION SEGURA
+        # ======================================
+
+        # Asegurar tabla sincronizacion
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sincronizacion (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tabla TEXT NOT NULL,
+            registro INTEGER,
+            registro_uuid TEXT,
+            accion TEXT NOT NULL,
+            datos TEXT,
+            fecha TEXT,
+            sincronizado INTEGER DEFAULT 0
+        )
+        """)
+
+
+        columnas = {
+            fila[1]
+            for fila in cursor.execute(
+                "PRAGMA table_info(sincronizacion)"
+            ).fetchall()
+        }
+
+
+        columnas_necesarias = {
+            "registro": "INTEGER",
+            "registro_uuid": "TEXT",
+            "accion": "TEXT",
+            "datos": "TEXT",
+            "fecha": "TEXT",
+            "sincronizado": "INTEGER DEFAULT 0"
+        }
+
+
+        for nombre, tipo in columnas_necesarias.items():
+
+            if nombre not in columnas:
+
+                print(
+                    "Agregando columna faltante:",
+                    nombre
+                )
+
+                cursor.execute(
+                    f"""
+                    ALTER TABLE sincronizacion
+                    ADD COLUMN {nombre} {tipo}
+                    """
+                )
+
+
+
+        # ======================================
+        # GUARDAR CABECERA DE VENTA
+        # ======================================
+
         cursor.execute("""
             INSERT INTO ventas(
                 uuid,
@@ -1893,7 +2461,8 @@ class Ventas(QWidget):
                 pago_cuenta
             )
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-        """,(
+        """,
+        (
             venta_uuid,
             fecha,
             total,
@@ -1908,8 +2477,14 @@ class Ventas(QWidget):
             venta["pago_cuenta"]
         ))
 
+
         venta_id = cursor.lastrowid
 
+
+
+        # ======================================
+        # GUARDAR DETALLE DE VENTA
+        # ======================================
 
         for item in venta["items"]:
 
@@ -1917,6 +2492,7 @@ class Ventas(QWidget):
                 item["precio"] *
                 item["cantidad"]
             )
+
 
             cursor.execute("""
                 INSERT INTO detalle_ventas(
@@ -1928,7 +2504,8 @@ class Ventas(QWidget):
                     codigo
                 )
                 VALUES(?,?,?,?,?,?)
-            """,(
+            """,
+            (
                 venta_id,
                 item["producto"],
                 item["cantidad"],
@@ -1938,34 +2515,28 @@ class Ventas(QWidget):
             ))
 
 
-            # bajar stock local
+
+            # descontar stock local
+
             if item["codigo"] != "LIBRE":
 
                 cursor.execute("""
                     UPDATE productos
                     SET stock = stock - ?
                     WHERE codigo_barras = ?
-                """,(
+                """,
+                (
                     item["cantidad"],
                     item["codigo"]
                 ))
 
-        
-        import json
 
-        # UUID único para la venta
-        venta_uuid = str(uuid.uuid4())
 
-        cursor.execute("""
-        UPDATE ventas
-        SET uuid=?
-        WHERE id=?
-        """, (
-            venta_uuid,
-            venta_id
-        ))
+        # ======================================
+        # GUARDAR PENDIENTE DE SINCRONIZACION
+        # ======================================
 
-        # Guardar pendiente de sincronización
+
         cursor.execute("""
         INSERT INTO sincronizacion
         (
@@ -1977,34 +2548,56 @@ class Ventas(QWidget):
             fecha,
             sincronizado
         )
-        VALUES
-        (
-            ?, ?, ?, ?, ?, ?, ?
-        )
+        VALUES(?,?,?,?,?,?,?)
         """,
         (
             "ventas",
             venta_id,
             venta_uuid,
             "INSERT",
-            json.dumps(venta),
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            json.dumps(
+                venta,
+                ensure_ascii=False
+            ),
+            fecha,
             0
         ))
+
+
+
         conexion.commit()
         conexion.close()
+
 
         return venta_id
     
     
     def cobrar(self):
         if not self.carrito:
-            DialogoAviso("Aviso", "No hay productos en la venta actual.", self).exec(); return
-        total_venta=sum(p["precio"]*p["cantidad"] for p in self.carrito)
-        pago=DialogoPagoMixto(total_venta,self)
-        if pago.exec()!=QDialog.Accepted: return
-        datos=pago.datos()
+            DialogoAviso(
+                "Aviso",
+                "No hay productos en la venta actual.",
+                self
+            ).exec()
+            return
+
+        total_venta = sum(
+            p["precio"] * p["cantidad"]
+            for p in self.carrito
+        )
+
+        pago = DialogoPagoMixto(
+            total_venta,
+            self
+        )
+
+        if pago.exec() != QDialog.Accepted:
+            return
+
+        datos = pago.datos()
+
         try:
+
             items = []
 
             for p in self.carrito:
@@ -2015,6 +2608,7 @@ class Ventas(QWidget):
                     "precio": p["precio"],
                     "codigo": p.get("codigo", "")
                 })
+
 
             venta = {
                 "items": items,
@@ -2028,16 +2622,76 @@ class Ventas(QWidget):
                 "pago_cuenta": datos["cuenta"]
             }
 
+
             venta_id = self.guardar_venta_local(venta)
-            respuesta=QMessageBox.question(self,"Venta Exitosa",f"Venta guardada correctamente.\n\nTotal: $ {total_venta:,.2f}\n\nEfectivo: $ {datos['efectivo']:,.2f}\nTransferencia: $ {datos['transferencia']:,.2f}\n\n¿Desea imprimir el ticket?",QMessageBox.Yes|QMessageBox.No)
-            if respuesta==QMessageBox.Yes:
-                try: imprimir_ticket(generar_ticket(venta_id))
-                except Exception as error: DialogoAviso("Error de Impresión",str(error),self).exec()
-            self.carrito.clear(); self.actualizar_tabla(); self.buscar.clear(); self.buscar.setFocus()
+
+
+            detalle_pago = f"""
+    Venta guardada correctamente.
+
+    Total: $ {total_venta:,.2f}
+
+    Efectivo:
+    $ {datos['efectivo']:,.2f}
+
+    Mercado Pago:
+    $ {datos['transferencia']:,.2f}
+
+    Tarjeta:
+    $ {datos['tarjeta']:,.2f}
+
+    Cuenta corriente:
+    $ {datos['cuenta']:,.2f}
+
+
+    ¿Desea imprimir el ticket?
+    """
+
+
+            respuesta = QMessageBox.question(
+                self,
+                "Venta Exitosa",
+                detalle_pago,
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+
+            if respuesta == QMessageBox.Yes:
+
+                try:
+
+                    ticket = generar_ticket(
+                        venta_id
+                    )
+
+                    imprimir_ticket(
+                        ticket
+                    )
+
+
+                except Exception as error:
+
+                    DialogoAviso(
+                        "Error de Impresión",
+                        str(error),
+                        self
+                    ).exec()
+
+
+
+            self.carrito.clear()
+
+            self.actualizar_tabla()
+
+            self.buscar.clear()
+
+            self.buscar.setFocus()
+
+
         except Exception as error:
+
             DialogoAviso(
                 "Error al guardar la venta",
                 str(error),
                 self
             ).exec()
-

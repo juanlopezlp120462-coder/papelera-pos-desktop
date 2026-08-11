@@ -1,7 +1,7 @@
 import sys
 import sqlite3
 import datetime
-
+from ui.db import registrar_producto_sync
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -27,7 +27,8 @@ from PySide6.QtGui import QColor
 
 from ui.db import (
     create_connection,
-    get_setting
+    get_setting,
+    registrar_producto_sync
 )
 
 
@@ -1951,7 +1952,7 @@ class Productos(QWidget):
         try:
 
 
-            from ui.sync import sincronizar
+            from core.sync import sincronizar
 
 
 
@@ -2066,6 +2067,26 @@ class Productos(QWidget):
 
 
             conexion.close()
+            conexion = create_connection()
+
+            producto = conexion.execute(
+                """
+                SELECT *
+                FROM productos
+                WHERE id=?
+                """,
+                (prod_id,)
+            ).fetchone()
+
+            conexion.close()
+
+
+            if producto:
+
+                registrar_producto_sync(
+                    dict(producto),
+                    "editar"
+                )
 
 
 
@@ -2102,7 +2123,6 @@ class Productos(QWidget):
         )
 
 
-
         if confirmar.exec() != QDialog.Accepted:
 
             return
@@ -2110,35 +2130,103 @@ class Productos(QWidget):
 
 
         conexion = create_connection()
-
-
         cursor = conexion.cursor()
 
 
+        try:
 
-        cursor.execute(
-            """
-            DELETE FROM productos
-            WHERE id=?
-            """,
-            (
-                prod_id,
+
+            # =========================
+            # OBTENER PRODUCTO
+            # ANTES DE BORRAR
+            # =========================
+
+            producto = cursor.execute(
+                """
+                SELECT
+                    uuid,
+                    nombre,
+                    codigo_barras,
+                    categoria,
+                    precio_compra,
+                    precio_venta,
+                    stock
+                FROM productos
+                WHERE id=?
+                """,
+                (
+                    prod_id,
+                )
+            ).fetchone()
+
+
+
+            if producto:
+
+
+                from ui.db import registrar_sincronizacion
+
+
+                # =========================
+                # REGISTRAR ELIMINACION
+                # PARA SINCRONIZAR
+                # =========================
+
+                registrar_sincronizacion(
+                    "productos",
+                    producto[0],
+                    "eliminar",
+                    {
+                        "uuid": producto[0],
+                        "nombre": producto[1],
+                        "codigo_barras": producto[2],
+                        "categoria": producto[3],
+                        "precio_compra": producto[4],
+                        "precio_venta": producto[5],
+                        "stock": producto[6]
+                    }
+                )
+
+
+
+            # =========================
+            # BORRAR PRODUCTO LOCAL
+            # =========================
+
+            cursor.execute(
+                """
+                DELETE FROM productos
+                WHERE id=?
+                """,
+                (
+                    prod_id,
+                )
             )
-        )
+
+
+            conexion.commit()
 
 
 
-        conexion.commit()
+        except Exception as e:
 
 
-        conexion.close()
+            DialogoAviso(
+                "Error eliminando producto",
+                str(e),
+                self
+            ).exec()
+
+
+
+        finally:
+
+
+            conexion.close()
 
 
 
         self.cargar_productos()
-
-
-
 
 
 

@@ -372,6 +372,14 @@ def registrar_sincronizacion(tabla, registro_uuid, accion, datos):
 
     c.commit()
     c.close()    
+def registrar_producto_sync(producto, accion="crear"):
+
+    registrar_sincronizacion(
+        "productos",
+        producto["uuid"],
+        accion,
+        producto
+    ) 
 def obtener_pendientes():
 
     c = create_connection()
