@@ -36,9 +36,41 @@ jobs:
       # ==========================================
 
       - name: Instalar dependencias
+        shell: powershell
         run: |
+
           python -m pip install --upgrade pip
+
           pip install -r requirements.txt
+
+
+      # ==========================================
+      # MOSTRAR VERSION
+      # ==========================================
+
+      - name: Obtener version
+        shell: powershell
+        run: |
+
+          $version = "${{ github.ref_name }}".Replace("v","")
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERSION DEL RELEASE" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          Write-Host "Tag:"
+          Write-Host "${{ github.ref_name }}"
+
+          Write-Host ""
+
+          Write-Host "Version:"
+          Write-Host $version
+
+          Write-Host ""
+
+          "VERSION=$version" >> $env:GITHUB_ENV
 
 
       # ==========================================
@@ -46,8 +78,34 @@ jobs:
       # ==========================================
 
       - name: Crear EXE con PyInstaller
+        shell: powershell
         run: |
-          pyinstaller --clean PAPELERA_POS.spec
+
+          python -m PyInstaller --clean PAPELERA_POS.spec
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "PyInstaller fallo."
+              exit 1
+          }
+
+
+      # ==========================================
+      # VERIFICAR EXE
+      # ==========================================
+
+      - name: Verificar EXE
+        shell: powershell
+        run: |
+
+          if (!(Test-Path "dist\PAPELERA_POS\PAPELERA_POS.exe")) {
+
+              Write-Error "NO EXISTE PAPELERA_POS.exe"
+
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "OK: PAPELERA_POS.exe existe." -ForegroundColor Green
 
 
       # ==========================================
@@ -58,41 +116,102 @@ jobs:
         shell: powershell
         run: |
 
-          $version = "${{ github.ref_name }}".Replace("v","")
+          Write-Host ""
+          Write-Host "Creando version.txt..." -ForegroundColor Cyan
 
-          Write-Host "VERSION:"
-          Write-Host $version
+          # VERSION EN LA RAIZ
 
           Set-Content `
             -Path "dist\PAPELERA_POS\version.txt" `
-            -Value $version `
+            -Value $env:VERSION `
+            -Encoding UTF8
+
+
+          # VERSION DENTRO DE INTERNAL
+
+          if (!(Test-Path "dist\PAPELERA_POS\_internal")) {
+
+              Write-Error "NO EXISTE _internal"
+
+              exit 1
+          }
+
+
+          Set-Content `
+            -Path "dist\PAPELERA_POS\_internal\version.txt" `
+            -Value $env:VERSION `
             -Encoding UTF8
 
 
       # ==========================================
-      # VERIFICAR ARCHIVOS IMPORTANTES
+      # VERIFICAR VERSIONES
       # ==========================================
 
-      - name: Verificar build
+      - name: Verificar versiones
         shell: powershell
         run: |
 
-          Write-Host "=== CONTENIDO DIST ==="
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO VERSIONES" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
 
-          Get-ChildItem `
-            "dist\PAPELERA_POS" `
-            -Recurse
+          $v1 = (
+              Get-Content `
+                "dist\PAPELERA_POS\version.txt" `
+                -Raw
+          ).Trim()
 
+
+          $v2 = (
+              Get-Content `
+                "dist\PAPELERA_POS\_internal\version.txt" `
+                -Raw
+          ).Trim()
+
+
+          Write-Host "Raiz:"
+          Write-Host $v1
 
           Write-Host ""
-          Write-Host "=== VERSION ==="
 
-          Get-Content `
-            "dist\PAPELERA_POS\version.txt"
-
+          Write-Host "_internal:"
+          Write-Host $v2
 
           Write-Host ""
-          Write-Host "=== CERTIFICADO ==="
+
+
+          if ($v1 -ne $env:VERSION) {
+
+              Write-Error `
+                "ERROR: version.txt de raiz incorrecto."
+
+              exit 1
+          }
+
+
+          if ($v2 -ne $env:VERSION) {
+
+              Write-Error `
+                "ERROR: version.txt de _internal incorrecto."
+
+              exit 1
+          }
+
+
+          Write-Host `
+            "OK: Las dos versiones son $env:VERSION" `
+            -ForegroundColor Green
+
+
+      # ==========================================
+      # VERIFICAR CERTIFICADO
+      # ==========================================
+
+      - name: Verificar certificado
+        shell: powershell
+        run: |
 
           if (!(Test-Path `
             "dist\PAPELERA_POS\_internal\certifi\cacert.pem")) {
@@ -104,7 +223,8 @@ jobs:
           }
 
           Write-Host `
-            "OK: certifi\cacert.pem existe"
+            "OK: certifi\cacert.pem existe" `
+            -ForegroundColor Green
 
 
       # ==========================================
@@ -116,6 +236,7 @@ jobs:
         run: |
 
           if (Test-Path "update") {
+
               Remove-Item `
                 "update" `
                 -Recurse `
@@ -125,10 +246,13 @@ jobs:
 
           New-Item `
             -ItemType Directory `
-            -Path "update"
+            -Path "update" `
+            | Out-Null
 
 
+          # ======================================
           # EXE
+          # ======================================
 
           Copy-Item `
             "dist\PAPELERA_POS\PAPELERA_POS.exe" `
@@ -136,7 +260,9 @@ jobs:
             -Force
 
 
+          # ======================================
           # VERSION
+          # ======================================
 
           Copy-Item `
             "dist\PAPELERA_POS\version.txt" `
@@ -144,7 +270,9 @@ jobs:
             -Force
 
 
+          # ======================================
           # INTERNAL COMPLETO
+          # ======================================
 
           Copy-Item `
             "dist\PAPELERA_POS\_internal" `
@@ -161,7 +289,11 @@ jobs:
         shell: powershell
         run: |
 
-          Write-Host "=== UPDATE COMPLETO ==="
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "CONTENIDO UPDATE" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
 
           Get-ChildItem `
             "update" `
@@ -169,28 +301,96 @@ jobs:
 
 
           Write-Host ""
-          Write-Host "=== VERIFICAR VERSION ==="
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO VERSION" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
 
           if (!(Test-Path "update\version.txt")) {
-              Write-Error "FALTA version.txt"
+
+              Write-Error "FALTA update\version.txt"
+
+              exit 1
+          }
+
+
+          $updateVersion = (
+              Get-Content `
+                "update\version.txt" `
+                -Raw
+          ).Trim()
+
+
+          Write-Host "Version del update:"
+          Write-Host $updateVersion
+
+
+          if ($updateVersion -ne $env:VERSION) {
+
+              Write-Error `
+                "ERROR: VERSION INCORRECTA EN UPDATE"
+
+              exit 1
+          }
+
+
+      # ==========================================
+      # VERIFICAR INTERNAL
+      # ==========================================
+
+      - name: Verificar Internal
+        shell: powershell
+        run: |
+
+          if (!(Test-Path "update\_internal")) {
+
+              Write-Error `
+                "FALTA update\_internal"
+
+              exit 1
+          }
+
+
+          if (!(Test-Path "update\_internal\version.txt")) {
+
+              Write-Error `
+                "FALTA update\_internal\version.txt"
+
+              exit 1
+          }
+
+
+          $internalVersion = (
+              Get-Content `
+                "update\_internal\version.txt" `
+                -Raw
+          ).Trim()
+
+
+          if ($internalVersion -ne $env:VERSION) {
+
+              Write-Error `
+                "ERROR: VERSION INCORRECTA EN _internal"
+
+              exit 1
+          }
+
+
+          if (!(Test-Path `
+            "update\_internal\certifi\cacert.pem")) {
+
+              Write-Error `
+                "FALTA certifi\cacert.pem"
+
               exit 1
           }
 
 
           Write-Host ""
-          Write-Host "=== VERIFICAR CERTIFICADO ==="
-
-          if (!(Test-Path "update\_internal\certifi\cacert.pem")) {
-
-              Write-Error `
-                "FALTA update\_internal\certifi\cacert.pem"
-
-              exit 1
-          }
-
-
           Write-Host `
-            "OK: update contiene certifi\cacert.pem"
+            "OK: UPDATE COMPLETO Y CORRECTO" `
+            -ForegroundColor Green
 
 
       # ==========================================
@@ -202,6 +402,7 @@ jobs:
         run: |
 
           if (Test-Path "update.zip") {
+
               Remove-Item `
                 "update.zip" `
                 -Force
@@ -214,6 +415,21 @@ jobs:
             -CompressionLevel Optimal
 
 
+          if (!(Test-Path "update.zip")) {
+
+              Write-Error `
+                "NO SE CREO update.zip"
+
+              exit 1
+          }
+
+
+          Write-Host ""
+          Write-Host `
+            "OK: update.zip creado." `
+            -ForegroundColor Green
+
+
       # ==========================================
       # VERIFICAR ZIP
       # ==========================================
@@ -222,29 +438,68 @@ jobs:
         shell: powershell
         run: |
 
-          Write-Host "=== CONTENIDO DEL ZIP ==="
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "CONTENIDO DEL ZIP" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
 
           tar -tf update.zip
 
 
           Write-Host ""
-          Write-Host "=== BUSCANDO CERTIFICADO ==="
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICAR ARCHIVOS" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
 
-          $certificado = tar -tf update.zip |
-            Select-String "certifi/cacert.pem|certifi\\cacert.pem"
+
+          $contenido = tar -tf update.zip
 
 
-          if (!$certificado) {
+          if (!($contenido -match "PAPELERA_POS.exe")) {
 
               Write-Error `
-                "ERROR: update.zip NO contiene certifi\cacert.pem"
+                "ERROR: Falta PAPELERA_POS.exe"
 
               exit 1
           }
 
 
+          if (!($contenido -match "version.txt")) {
+
+              Write-Error `
+                "ERROR: Falta version.txt"
+
+              exit 1
+          }
+
+
+          if (!($contenido -match "_internal")) {
+
+              Write-Error `
+                "ERROR: Falta _internal"
+
+              exit 1
+          }
+
+
+          if (!(
+            $contenido -match `
+            "certifi/cacert.pem|certifi\\cacert.pem"
+          )) {
+
+              Write-Error `
+                "ERROR: Falta certifi\cacert.pem"
+
+              exit 1
+          }
+
+
+          Write-Host ""
           Write-Host `
-            "OK: update.zip contiene certifi\cacert.pem"
+            "OK: update.zip contiene todos los archivos." `
+            -ForegroundColor Green
 
 
       # ==========================================
@@ -264,13 +519,9 @@ jobs:
 
       - name: Crear Release y subir update.zip
         uses: softprops/action-gh-release@v2
-
         with:
-
           files: update.zip
-
           generate_release_notes: true
-
+          overwrite_files: true
         env:
-
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

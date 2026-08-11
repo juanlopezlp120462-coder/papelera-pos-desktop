@@ -148,7 +148,7 @@ def actualizar():
             nueva_version = v.read().strip()
 
     else:
-        escribir_log(
+        print(
             "ERROR: No se recibió nueva versión para instalar"
         )
         return False
