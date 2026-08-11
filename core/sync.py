@@ -21,21 +21,47 @@ def sincronizar():
         tabla = item[1]
         registro_uuid = item[2]
         accion = item[3]
-        if not item[4]:
-            print("SYNC IGNORADO: registro sin datos", item)
-            marcar_sincronizado(id_sync)
-            continue
 
-        datos = json.loads(item[4])
+        if not item[4]:
+
+            print(
+                "SYNC IGNORADO: registro sin datos",
+                item
+            )
+
+            marcar_sincronizado(id_sync)
+
+            continue
 
 
         try:
 
+            datos = json.loads(item[4])
+
+
+        except Exception as e:
+
+            print(
+                "ERROR leyendo datos de sincronizacion:",
+                e
+            )
+
+            continue
+
+
+        try:
+
+            # ==========================================
+            # PRODUCTOS
+            # ==========================================
+
             if tabla == "productos":
 
                 payload = datos.copy()
+
                 payload["uuid"] = registro_uuid
                 payload["accion"] = accion
+
 
                 respuesta = requests.post(
                     f"{SERVIDOR}/productos/sync",
@@ -43,37 +69,60 @@ def sincronizar():
                     timeout=10
                 )
 
-                print("SYNC PRODUCTO")
-                print("STATUS:", respuesta.status_code)
-                print("RESPUESTA:", respuesta.text)
+
+                print(
+                    "SYNC PRODUCTO",
+                    respuesta.status_code,
+                    respuesta.text
+                )
 
 
-                if respuesta.status_code in (200,201):
+                if respuesta.status_code in (200, 201):
 
-                    marcar_sincronizado(id_sync)
+                    marcar_sincronizado(
+                        id_sync
+                    )
 
+
+            # ==========================================
+            # VENTAS
+            # ==========================================
 
             elif tabla == "ventas":
 
+                payload = datos.copy()
+
+                payload["uuid"] = registro_uuid
+                payload["accion"] = accion
+
+
                 respuesta = requests.post(
                     f"{SERVIDOR}/ventas/sync",
-                    json={
-                        "uuid": registro_uuid,
-                        "accion": accion,
-                        "datos": datos
-                    },
+                    json=payload,
                     timeout=10
                 )
 
 
-                if respuesta.status_code in (200,201):
+                print(
+                    "SYNC VENTA",
+                    respuesta.status_code,
+                    respuesta.text
+                )
 
-                    marcar_sincronizado(id_sync)
+
+                if respuesta.status_code in (200, 201):
+
+                    marcar_sincronizado(
+                        id_sync
+                    )
 
 
         except Exception as e:
 
-            print("Error sincronizando:", e)
+            print(
+                "Error sincronizando:",
+                e
+            )
 
 
     return True

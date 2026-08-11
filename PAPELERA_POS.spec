@@ -120,7 +120,7 @@ exe = EXE(
 
     upx=True,
 
-    console=False
+    console=True
 )
 
 

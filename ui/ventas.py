@@ -2538,17 +2538,17 @@ class Ventas(QWidget):
 
 
         cursor.execute("""
-        INSERT INTO sincronizacion
-        (
-            tabla,
-            registro,
-            registro_uuid,
-            accion,
-            datos,
-            fecha,
-            sincronizado
-        )
-        VALUES(?,?,?,?,?,?,?)
+            INSERT INTO sincronizacion
+            (
+                tabla,
+                registro,
+                registro_uuid,
+                accion,
+                datos,
+                fecha,
+                sincronizado
+            )
+            VALUES(?,?,?,?,?,?,?)
         """,
         (
             "ventas",
@@ -2556,13 +2556,17 @@ class Ventas(QWidget):
             venta_uuid,
             "INSERT",
             json.dumps(
-                venta,
+                {
+                    **venta,
+                    "uuid": venta_uuid,
+                    "fecha": fecha,
+                    "total": total
+                },
                 ensure_ascii=False
             ),
             fecha,
             0
         ))
-
 
 
         conexion.commit()
@@ -2606,6 +2610,7 @@ class Ventas(QWidget):
                     "producto": p["nombre"],
                     "cantidad": p["cantidad"],
                     "precio": p["precio"],
+                    "subtotal": p["cantidad"] * p["precio"],
                     "codigo": p.get("codigo", "")
                 })
 

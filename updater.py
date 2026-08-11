@@ -148,8 +148,10 @@ def actualizar():
             nueva_version = v.read().strip()
 
     else:
-
-        nueva_version = "1.0.0"
+        escribir_log(
+            "ERROR: No se recibió nueva versión para instalar"
+        )
+        return False
 
 
     with open(

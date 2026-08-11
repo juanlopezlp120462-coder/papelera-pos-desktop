@@ -846,8 +846,10 @@ def instalar_actualizacion(
             ).strip()
 
         else:
-
-            nueva_version = "1.0.0"
+            escribir_log(
+                "ERROR: No se recibió nueva versión para instalar"
+            )
+            return False
 
         escribir_log(
             "Nueva version para instalar: "
@@ -1049,7 +1051,8 @@ echo Actualizador finalizado.
 
 timeout /t 2 /nobreak >nul
 
-del "%~f0"
+timeout /t 3 /nobreak >nul
+exit
 """
 
         with open(
