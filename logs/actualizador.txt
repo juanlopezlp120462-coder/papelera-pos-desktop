@@ -21,3 +21,17 @@ Certificado existe: True
 HTTP version: 200
 Respuesta version: {"version":"1.0.40","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip"}
 Version obtenida: {'version': '1.0.40', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.40/update.zip'}
+Version local recibida: 1.0.50
+Consultando version en: https://papelera-pos-backend-production.up.railway.app/version
+HTTP version: 200
+Respuesta version: {"version":"1.0.50","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.50/update.zip"}
+Version obtenida: {'version': '1.0.50', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.50/update.zip'}
+Version servidor: 1.0.50
+RESULTADO: NO HAY ACTUALIZACION
+Version local recibida: 1.0.50
+Consultando version en: https://papelera-pos-backend-production.up.railway.app/version
+HTTP version: 200
+Respuesta version: {"version":"1.0.50","mensaje":"Papelera POS actualizado","url":"https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.50/update.zip"}
+Version obtenida: {'version': '1.0.50', 'mensaje': 'Papelera POS actualizado', 'url': 'https://github.com/juanlopezlp120462-coder/papelera-pos-desktop/releases/download/v1.0.50/update.zip'}
+Version servidor: 1.0.50
+RESULTADO: NO HAY ACTUALIZACION

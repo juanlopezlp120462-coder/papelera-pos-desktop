@@ -46,6 +46,7 @@ VERSION_FILE = os.path.join(
 )
 
 if os.path.exists(VERSION_FILE):
+
     datas.append(
         (
             VERSION_FILE,
