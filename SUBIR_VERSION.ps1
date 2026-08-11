@@ -1,80 +1,104 @@
 ```powershell
-# ==========================================
+# ============================================================
 # SUBIR_VERSION.ps1
 # PAPELERA POS
 #
-# FLUJO COMPLETO
+# USO:
+#     .\SUBIR_VERSION.ps1 1.0.57
 #
-# 1. Cambiar version.txt
-# 2. Limpiar build/dist
-# 3. Compilar PAPELERA_POS
-# 4. Preparar database inicial
-# 5. Verificar database
-# 6. Verificar version.txt
-# 7. Verificar _internal
-# 8. Compilar PAPELERA_UPDATER
-# 9. Crear UPDATE.zip
-# 10. Verificar contenido de UPDATE.zip
-# 11. Verificar que UPDATE.zip NO tenga database
-# 12. Git add
-# 13. Git commit
-# 14. Git push
-# 15. Crear tag
-# 16. Subir tag
+# EL SCRIPT DEBE ESTAR EN LA CARPETA PRINCIPAL DEL PROYECTO.
+#
+# FLUJO:
+#
+# 1. Validar versión
+# 2. Validar database original
+# 3. Actualizar version.txt
+# 4. Limpiar build/dist
+# 5. Compilar PAPELERA_POS
+# 6. Copiar database inicial
+# 7. Copiar version.txt a dist
+# 8. Verificar _internal
+# 9. Compilar PAPELERA_UPDATER
+# 10. Crear UPDATE.zip
+# 11. Verificar UPDATE.zip
+# 12. Verificar que NO tenga database
+# 13. Git add
+# 14. Git commit
+# 15. Git push
+# 16. Crear tag
+# 17. Subir tag
 #
 # IMPORTANTE:
 #
-# La database SOLO pertenece a la instalacion inicial.
-#
-# UPDATE.zip contiene:
-#
+# INSTALACION INICIAL:
 #   PAPELERA_POS.exe
-#   _internal\*
+#   _internal
+#   database\abril.db
+#   version.txt
+#
+# UPDATE.zip:
+#   PAPELERA_POS.exe
+#   _internal
 #   version.txt
 #
 # UPDATE.zip NO contiene:
-#
 #   database
 #   abril.db
 #   backups
 #   logs
 #
-# ==========================================
+# ============================================================
 
 $ErrorActionPreference = "Stop"
 
+# ============================================================
+# RUTA PRINCIPAL DEL PROYECTO
+# ============================================================
+
+$ROOT = $PSScriptRoot
+
+if ([string]::IsNullOrWhiteSpace($ROOT)) {
+    $ROOT = (Get-Location).Path
+}
+
+Set-Location $ROOT
+
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "       SUBIR VERSION - PAPELERA POS" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ==========================================
+Write-Host "Carpeta del proyecto:" -ForegroundColor DarkGray
+Write-Host $ROOT -ForegroundColor DarkGray
+Write-Host ""
+
+# ============================================================
 # RECIBIR VERSION
-# ==========================================
+# ============================================================
 
 if ($args.Count -lt 1) {
 
     Write-Host "ERROR: No se indico la version." -ForegroundColor Red
     Write-Host ""
     Write-Host "Uso:"
-    Write-Host ".\SUBIR_VERSION.ps1 1.0.53"
+    Write-Host ".\SUBIR_VERSION.ps1 1.0.57"
     Write-Host ""
 
     exit 1
 }
 
-$VERSION = $args[0]
+$VERSION = $args[0].ToString().Trim()
 
-# ==========================================
+# ============================================================
 # VALIDAR VERSION
-# ==========================================
+# ============================================================
 
 if ($VERSION -notmatch '^\d+\.\d+\.\d+$') {
 
     Write-Host "ERROR: Version invalida: $VERSION" -ForegroundColor Red
     Write-Host ""
-    Write-Host "Ejemplo correcto: 1.0.53"
+    Write-Host "Ejemplo correcto: 1.0.57"
     Write-Host ""
 
     exit 1
@@ -82,14 +106,48 @@ if ($VERSION -notmatch '^\d+\.\d+\.\d+$') {
 
 $TAG = "v$VERSION"
 
-# ==========================================
-# VERSION ACTUAL
-# ==========================================
+# ============================================================
+# DEFINIR RUTAS
+# ============================================================
 
-if (Test-Path ".\version.txt") {
+$VERSION_FILE = Join-Path $ROOT "version.txt"
+
+$DATABASE_ORIGEN = Join-Path $ROOT "database\abril.db"
+
+$DIST_ROOT = Join-Path $ROOT "dist"
+
+$DIST_APP = Join-Path $DIST_ROOT "PAPELERA_POS"
+
+$DIST_EXE = Join-Path $DIST_APP "PAPELERA_POS.exe"
+
+$DIST_DATABASE_DIR = Join-Path $DIST_APP "database"
+
+$DIST_DATABASE = Join-Path $DIST_DATABASE_DIR "abril.db"
+
+$DIST_VERSION = Join-Path $DIST_APP "version.txt"
+
+$DIST_INTERNAL = Join-Path $DIST_APP "_internal"
+
+$DIST_BASE_LIBRARY = Join-Path $DIST_INTERNAL "base_library.zip"
+
+$UPDATE_DIR = Join-Path $ROOT "UPDATE_TEMP"
+
+$UPDATE_ZIP = Join-Path $ROOT "UPDATE.zip"
+
+$UPDATER_DIST = Join-Path $DIST_ROOT "PAPELERA_UPDATER"
+
+$UPDATER_EXE = Join-Path $UPDATER_DIST "PAPELERA_UPDATER.exe"
+
+$BUILD_ROOT = Join-Path $ROOT "build"
+
+# ============================================================
+# VERSION ACTUAL
+# ============================================================
+
+if (Test-Path -LiteralPath $VERSION_FILE) {
 
     $VERSION_ACTUAL = (
-        Get-Content ".\version.txt" -Raw
+        Get-Content -LiteralPath $VERSION_FILE -Raw
     ).Trim()
 
 }
@@ -104,9 +162,9 @@ Write-Host "Nueva version: $VERSION" -ForegroundColor Yellow
 Write-Host "Nuevo tag: $TAG" -ForegroundColor Yellow
 Write-Host ""
 
-# ==========================================
+# ============================================================
 # CONFIRMACION
-# ==========================================
+# ============================================================
 
 $CONFIRMAR = Read-Host "Continuar con la version $VERSION (S/N)"
 
@@ -114,48 +172,67 @@ if ($CONFIRMAR -notmatch '^[sS]$') {
 
     Write-Host ""
     Write-Host "Operacion cancelada." -ForegroundColor Yellow
+    Write-Host ""
 
     exit 0
 }
 
-# ==========================================
-# COMPROBAR DATABASE ORIGINAL
-# ==========================================
+# ============================================================
+# COMPROBAR ARCHIVOS IMPORTANTES DEL PROYECTO
+# ============================================================
 
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "       COMPROBANDO DATABASE ORIGINAL" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       COMPROBANDO ARCHIVOS" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-$DATABASE_ORIGEN = ".\database\abril.db"
+$ARCHIVOS_REQUERIDOS = @(
+    (Join-Path $ROOT "main.py"),
+    (Join-Path $ROOT "PAPELERA_POS.spec"),
+    (Join-Path $ROOT "updater.py"),
+    (Join-Path $ROOT "PAPELERA_UPDATER.spec"),
+    $DATABASE_ORIGEN
+)
 
-if (!(Test-Path $DATABASE_ORIGEN)) {
+foreach ($ARCHIVO in $ARCHIVOS_REQUERIDOS) {
 
-    Write-Host ""
-    Write-Host "ERROR: No existe la database original:" -ForegroundColor Red
-    Write-Host $DATABASE_ORIGEN -ForegroundColor Red
-    Write-Host ""
+    if (!(Test-Path -LiteralPath $ARCHIVO)) {
 
-    exit 1
+        Write-Host ""
+        Write-Host "ERROR: Falta el archivo:" -ForegroundColor Red
+        Write-Host $ARCHIVO -ForegroundColor Red
+        Write-Host ""
+
+        exit 1
+    }
 }
 
-$DATABASE_ORIGEN_SIZE = (
-    Get-Item $DATABASE_ORIGEN
+Write-Host "Archivos principales OK." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
+# COMPROBAR DATABASE ORIGINAL
+# ============================================================
+
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       COMPROBANDO DATABASE ORIGINAL" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+$DATABASE_SIZE_ORIGINAL = (
+    Get-Item -LiteralPath $DATABASE_ORIGEN
 ).Length
 
 Write-Host "Database original encontrada." -ForegroundColor Green
 Write-Host "Ruta: $DATABASE_ORIGEN"
-Write-Host "Tamaño: $DATABASE_ORIGEN_SIZE bytes"
+Write-Host "Tamaño: $DATABASE_SIZE_ORIGINAL bytes"
 Write-Host ""
-
-# ==========================================
-# COMPROBAR DATABASE ORIGINAL
-# ==========================================
 
 Write-Host "Comprobando contenido de database original..." -ForegroundColor Cyan
 
-$DB_ORIGEN_TEST = python -c "import sqlite3; c=sqlite3.connect(r'$DATABASE_ORIGEN'); print('PRODUCTOS:', c.execute('SELECT COUNT(*) FROM productos').fetchone()[0]); print('VENTAS:', c.execute('SELECT COUNT(*) FROM ventas').fetchone()[0]); c.close()"
+$DB_ORIGEN_TEST = python -c "import sqlite3,sys; p=r'$DATABASE_ORIGEN'; c=sqlite3.connect(p); print('PRODUCTOS:',c.execute('SELECT COUNT(*) FROM productos').fetchone()[0]); print('VENTAS:',c.execute('SELECT COUNT(*) FROM ventas').fetchone()[0]); c.close()"
 
 if ($LASTEXITCODE -ne 0) {
 
@@ -169,91 +246,96 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host $DB_ORIGEN_TEST -ForegroundColor Green
 Write-Host ""
 
-# ==========================================
+# ============================================================
 # ACTUALIZAR VERSION.TXT
-# ==========================================
+# ============================================================
 
-Write-Host "Actualizando version.txt..." -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       ACTUALIZANDO VERSION" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
 
 Set-Content `
-    -Path ".\version.txt" `
+    -LiteralPath $VERSION_FILE `
     -Value $VERSION `
     -Encoding UTF8
 
-# ==========================================
-# COMPROBAR VERSION.TXT
-# ==========================================
-
 $VERSION_COMPROBADA = (
-    Get-Content ".\version.txt" -Raw
+    Get-Content -LiteralPath $VERSION_FILE -Raw
 ).Trim()
 
 if ($VERSION_COMPROBADA -ne $VERSION) {
 
     Write-Host ""
-    Write-Host "ERROR: version.txt no contiene $VERSION" -ForegroundColor Red
+    Write-Host "ERROR: version.txt no contiene $VERSION." -ForegroundColor Red
     Write-Host ""
 
     exit 1
 }
 
 Write-Host "version.txt = $VERSION" -ForegroundColor Green
+Write-Host ""
 
-# ==========================================
+# ============================================================
 # LIMPIAR BUILD Y DIST
-# ==========================================
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       LIMPIANDO COMPILACIONES" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+if (Test-Path -LiteralPath $BUILD_ROOT) {
+
+    Write-Host "Eliminando build..." -ForegroundColor Yellow
+
+    Remove-Item `
+        -LiteralPath $BUILD_ROOT `
+        -Recurse `
+        -Force
+}
+
+if (Test-Path -LiteralPath $DIST_ROOT) {
+
+    Write-Host "Eliminando dist..." -ForegroundColor Yellow
+
+    Remove-Item `
+        -LiteralPath $DIST_ROOT `
+        -Recurse `
+        -Force
+}
+
+if (Test-Path -LiteralPath $UPDATE_DIR) {
+
+    Write-Host "Eliminando UPDATE_TEMP..." -ForegroundColor Yellow
+
+    Remove-Item `
+        -LiteralPath $UPDATE_DIR `
+        -Recurse `
+        -Force
+}
+
+if (Test-Path -LiteralPath $UPDATE_ZIP) {
+
+    Write-Host "Eliminando UPDATE.zip anterior..." -ForegroundColor Yellow
+
+    Remove-Item `
+        -LiteralPath $UPDATE_ZIP `
+        -Force
+}
 
 Write-Host ""
-Write-Host "Limpiando compilaciones anteriores..." -ForegroundColor Cyan
-
-if (Test-Path ".\build") {
-
-    Remove-Item `
-        ".\build" `
-        -Recurse `
-        -Force
-}
-
-if (Test-Path ".\dist") {
-
-    Remove-Item `
-        ".\dist" `
-        -Recurse `
-        -Force
-}
-
 Write-Host "build y dist eliminados." -ForegroundColor Green
+Write-Host ""
 
-# ==========================================
-# LIMPIAR UPDATE TEMPORAL
-# ==========================================
-
-$UPDATE_DIR = ".\UPDATE_TEMP"
-$UPDATE_ZIP = ".\UPDATE.zip"
-
-if (Test-Path $UPDATE_DIR) {
-
-    Remove-Item `
-        $UPDATE_DIR `
-        -Recurse `
-        -Force
-}
-
-if (Test-Path $UPDATE_ZIP) {
-
-    Remove-Item `
-        $UPDATE_ZIP `
-        -Force
-}
-
-# ==========================================
+# ============================================================
 # COMPILAR PAPELERA POS
-# ==========================================
+# ============================================================
 
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "       COMPILANDO PAPELERA POS" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
 python -m PyInstaller --clean PAPELERA_POS.spec
@@ -267,22 +349,16 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ==========================================
-# RUTAS PRINCIPALES
-# ==========================================
-
-$POS_DIR = ".\dist\PAPELERA_POS"
-$EXE = "$POS_DIR\PAPELERA_POS.exe"
-$INTERNAL = "$POS_DIR\_internal"
-
-# ==========================================
+# ============================================================
 # COMPROBAR EXE
-# ==========================================
+# ============================================================
 
-if (!(Test-Path $EXE)) {
+if (!(Test-Path -LiteralPath $DIST_EXE)) {
 
     Write-Host ""
     Write-Host "ERROR: No se genero PAPELERA_POS.exe." -ForegroundColor Red
+    Write-Host "Esperado:" -ForegroundColor Yellow
+    Write-Host $DIST_EXE -ForegroundColor Yellow
     Write-Host ""
 
     exit 1
@@ -291,78 +367,75 @@ if (!(Test-Path $EXE)) {
 Write-Host ""
 Write-Host "PAPELERA_POS compilado correctamente." -ForegroundColor Green
 Write-Host "PAPELERA_POS.exe OK." -ForegroundColor Green
+Write-Host ""
 
-# ==========================================
-# COMPROBAR _INTERNAL
-# ==========================================
+# ============================================================
+# COMPROBAR _INTERNAL GENERADO POR PYINSTALLER
+# ============================================================
 
-if (!(Test-Path $INTERNAL)) {
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       COMPROBANDO _INTERNAL" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+if (!(Test-Path -LiteralPath $DIST_INTERNAL)) {
 
     Write-Host ""
     Write-Host "ERROR: PyInstaller no genero _internal." -ForegroundColor Red
     Write-Host ""
-    Write-Host "Ruta esperada:"
-    Write-Host $INTERNAL
+    Write-Host "Ruta esperada:" -ForegroundColor Yellow
+    Write-Host $DIST_INTERNAL -ForegroundColor Yellow
     Write-Host ""
 
     exit 1
 }
 
-$INTERNAL_FILES = @(
-    Get-ChildItem `
-        $INTERNAL `
-        -Recurse `
-        -File
-)
+Write-Host "_internal encontrado." -ForegroundColor Green
+Write-Host ""
 
-if ($INTERNAL_FILES.Count -eq 0) {
+# ============================================================
+# COMPROBAR BASE_LIBRARY
+# ============================================================
+
+if (!(Test-Path -LiteralPath $DIST_BASE_LIBRARY)) {
 
     Write-Host ""
-    Write-Host "ERROR: _internal esta vacio." -ForegroundColor Red
+    Write-Host "ERROR: No se encontro:" -ForegroundColor Red
+    Write-Host $DIST_BASE_LIBRARY -ForegroundColor Red
     Write-Host ""
 
     exit 1
 }
 
-Write-Host "_internal OK." -ForegroundColor Green
-Write-Host "Archivos dentro de _internal: $($INTERNAL_FILES.Count)" -ForegroundColor Green
+Write-Host "base_library.zip OK." -ForegroundColor Green
+Write-Host ""
 
-# ==========================================
+# ============================================================
 # PREPARAR DATABASE INICIAL
-# ==========================================
+# ============================================================
 
-Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "       PREPARANDO DATABASE INICIAL" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-$DATABASE_DIST_DIR = "$POS_DIR\database"
-$DATABASE_DIST = "$DATABASE_DIST_DIR\abril.db"
-
-if (!(Test-Path $DATABASE_DIST_DIR)) {
+if (!(Test-Path -LiteralPath $DIST_DATABASE_DIR)) {
 
     New-Item `
         -ItemType Directory `
-        -Path $DATABASE_DIST_DIR `
+        -Path $DIST_DATABASE_DIR `
         -Force `
         | Out-Null
-
-    Write-Host "Carpeta database creada en dist." -ForegroundColor Green
 }
 
 Write-Host "Copiando database inicial a dist..." -ForegroundColor Cyan
 
 Copy-Item `
-    $DATABASE_ORIGEN `
-    $DATABASE_DIST `
+    -LiteralPath $DATABASE_ORIGEN `
+    -Destination $DIST_DATABASE `
     -Force
 
-# ==========================================
-# COMPROBAR DATABASE
-# ==========================================
-
-if (!(Test-Path $DATABASE_DIST)) {
+if (!(Test-Path -LiteralPath $DIST_DATABASE)) {
 
     Write-Host ""
     Write-Host "ERROR: No se pudo copiar abril.db a dist." -ForegroundColor Red
@@ -371,23 +444,23 @@ if (!(Test-Path $DATABASE_DIST)) {
     exit 1
 }
 
-$DATABASE_SIZE = (
-    Get-Item $DATABASE_DIST
+$DATABASE_SIZE_DIST = (
+    Get-Item -LiteralPath $DIST_DATABASE
 ).Length
 
 Write-Host ""
 Write-Host "Database inicial OK." -ForegroundColor Green
-Write-Host "Destino: $DATABASE_DIST" -ForegroundColor Green
-Write-Host "Tamaño: $DATABASE_SIZE bytes" -ForegroundColor Green
+Write-Host "Destino: $DIST_DATABASE" -ForegroundColor Green
+Write-Host "Tamaño: $DATABASE_SIZE_DIST bytes" -ForegroundColor Green
 Write-Host ""
 
-# ==========================================
-# COMPROBAR CONTENIDO DATABASE DIST
-# ==========================================
+# ============================================================
+# COMPROBAR DATABASE DIST
+# ============================================================
 
 Write-Host "Comprobando contenido de database de dist..." -ForegroundColor Cyan
 
-$DB_DIST_TEST = python -c "import sqlite3; c=sqlite3.connect(r'$DATABASE_DIST'); print('PRODUCTOS:', c.execute('SELECT COUNT(*) FROM productos').fetchone()[0]); print('VENTAS:', c.execute('SELECT COUNT(*) FROM ventas').fetchone()[0]); c.close()"
+$DB_DIST_TEST = python -c "import sqlite3,sys; p=r'$DIST_DATABASE'; c=sqlite3.connect(p); print('PRODUCTOS:',c.execute('SELECT COUNT(*) FROM productos').fetchone()[0]); print('VENTAS:',c.execute('SELECT COUNT(*) FROM ventas').fetchone()[0]); c.close()"
 
 if ($LASTEXITCODE -ne 0) {
 
@@ -402,32 +475,33 @@ Write-Host $DB_DIST_TEST -ForegroundColor Green
 Write-Host ""
 
 Write-Host "DATABASE INICIAL PREPARADA CORRECTAMENTE." -ForegroundColor Green
-
-# ==========================================
-# COPIAR VERSION.TXT A DIST
-# ==========================================
-
 Write-Host ""
-Write-Host "Preparando version.txt en dist..." -ForegroundColor Cyan
 
-$DIST_VERSION = "$POS_DIR\version.txt"
+# ============================================================
+# COPIAR VERSION.TXT A DIST
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       PREPARANDO VERSION EN DIST" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
 
 Copy-Item `
-    ".\version.txt" `
-    $DIST_VERSION `
+    -LiteralPath $VERSION_FILE `
+    -Destination $DIST_VERSION `
     -Force
 
-if (!(Test-Path $DIST_VERSION)) {
+if (!(Test-Path -LiteralPath $DIST_VERSION)) {
 
     Write-Host ""
-    Write-Host "ERROR: No se pudo copiar version.txt a dist." -ForegroundColor Red
+    Write-Host "ERROR: No se genero version.txt en dist." -ForegroundColor Red
     Write-Host ""
 
     exit 1
 }
 
 $VERSION_DIST = (
-    Get-Content $DIST_VERSION -Raw
+    Get-Content -LiteralPath $DIST_VERSION -Raw
 ).Trim()
 
 if ($VERSION_DIST -ne $VERSION) {
@@ -442,32 +516,15 @@ if ($VERSION_DIST -ne $VERSION) {
 }
 
 Write-Host "version.txt en dist = $VERSION" -ForegroundColor Green
-
-# ==========================================
-# COMPROBAR base_library.zip
-# ==========================================
-
-$BASE_LIBRARY = "$INTERNAL\base_library.zip"
-
-if (!(Test-Path $BASE_LIBRARY)) {
-
-    Write-Host ""
-    Write-Host "ERROR: No se encontro _internal\base_library.zip." -ForegroundColor Red
-    Write-Host ""
-
-    exit 1
-}
-
-Write-Host "base_library.zip OK." -ForegroundColor Green
-
-# ==========================================
-# COMPILAR PAPELERA UPDATER
-# ==========================================
-
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+
+# ============================================================
+# COMPILAR PAPELERA UPDATER
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "       COMPILANDO PAPELERA UPDATER" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
 python -m PyInstaller --clean PAPELERA_UPDATER.spec
@@ -481,12 +538,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$UPDATER_EXE = ".\dist\PAPELERA_UPDATER\PAPELERA_UPDATER.exe"
-
-if (!(Test-Path $UPDATER_EXE)) {
+if (!(Test-Path -LiteralPath $UPDATER_EXE)) {
 
     Write-Host ""
     Write-Host "ERROR: No se genero PAPELERA_UPDATER.exe." -ForegroundColor Red
+    Write-Host "Esperado:" -ForegroundColor Yellow
+    Write-Host $UPDATER_EXE -ForegroundColor Yellow
     Write-Host ""
 
     exit 1
@@ -494,16 +551,24 @@ if (!(Test-Path $UPDATER_EXE)) {
 
 Write-Host ""
 Write-Host "PAPELERA_UPDATER compilado correctamente." -ForegroundColor Green
+Write-Host ""
 
-# ==========================================
+# ============================================================
 # CREAR UPDATE_TEMP
-# ==========================================
+# ============================================================
 
-Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "       PREPARANDO UPDATE.ZIP" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
+
+if (Test-Path -LiteralPath $UPDATE_DIR) {
+
+    Remove-Item `
+        -LiteralPath $UPDATE_DIR `
+        -Recurse `
+        -Force
+}
 
 New-Item `
     -ItemType Directory `
@@ -511,201 +576,167 @@ New-Item `
     -Force `
     | Out-Null
 
-# ==========================================
-# COPIAR EXE
-# ==========================================
+# ============================================================
+# COPIAR EXE AL UPDATE
+# ============================================================
 
 Write-Host "Copiando PAPELERA_POS.exe..." -ForegroundColor Cyan
 
 Copy-Item `
-    $EXE `
-    "$UPDATE_DIR\PAPELERA_POS.exe" `
+    -LiteralPath $DIST_EXE `
+    -Destination (Join-Path $UPDATE_DIR "PAPELERA_POS.exe") `
     -Force
 
-# ==========================================
-# COPIAR _INTERNAL
-# ==========================================
+# ============================================================
+# COPIAR _INTERNAL AL UPDATE
+# ============================================================
 
-Write-Host "Copiando _internal completo..." -ForegroundColor Cyan
+$UPDATE_INTERNAL = Join-Path $UPDATE_DIR "_internal"
 
-New-Item `
-    -ItemType Directory `
-    -Path "$UPDATE_DIR\_internal" `
-    -Force `
-    | Out-Null
+Write-Host "Copiando _internal..." -ForegroundColor Cyan
 
 Copy-Item `
-    "$INTERNAL\*" `
-    "$UPDATE_DIR\_internal\" `
+    -LiteralPath $DIST_INTERNAL `
+    -Destination $UPDATE_INTERNAL `
     -Recurse `
     -Force
 
-# ==========================================
-# COPIAR VERSION
-# ==========================================
+# ============================================================
+# COPIAR VERSION.TXT AL UPDATE
+# ============================================================
 
 Write-Host "Copiando version.txt..." -ForegroundColor Cyan
 
 Copy-Item `
-    ".\version.txt" `
-    "$UPDATE_DIR\version.txt" `
+    -LiteralPath $VERSION_FILE `
+    -Destination (Join-Path $UPDATE_DIR "version.txt") `
     -Force
 
-# ==========================================
-# COMPROBAR UPDATE_TEMP
-# ==========================================
+# ============================================================
+# ASEGURAR QUE UPDATE_TEMP NO TENGA DATABASE
+# ============================================================
 
-Write-Host ""
-Write-Host "Verificando UPDATE_TEMP..." -ForegroundColor Cyan
+$UPDATE_DATABASE = Join-Path $UPDATE_DIR "database"
+$UPDATE_BACKUPS = Join-Path $UPDATE_DIR "backups"
+$UPDATE_LOGS = Join-Path $UPDATE_DIR "logs"
+$UPDATE_ABRIL = Join-Path $UPDATE_DIR "abril.db"
 
-if (!(Test-Path "$UPDATE_DIR\PAPELERA_POS.exe")) {
-
-    Write-Host ""
-    Write-Host "ERROR: No se copio PAPELERA_POS.exe." -ForegroundColor Red
-    exit 1
-}
-
-if (!(Test-Path "$UPDATE_DIR\_internal")) {
-
-    Write-Host ""
-    Write-Host "ERROR: No se copio _internal." -ForegroundColor Red
-    exit 1
-}
-
-if (!(Test-Path "$UPDATE_DIR\version.txt")) {
-
-    Write-Host ""
-    Write-Host "ERROR: No se copio version.txt." -ForegroundColor Red
-    exit 1
-}
-
-$TEMP_INTERNAL_FILES = @(
-    Get-ChildItem `
-        "$UPDATE_DIR\_internal" `
-        -Recurse `
-        -File
-)
-
-if ($TEMP_INTERNAL_FILES.Count -eq 0) {
-
-    Write-Host ""
-    Write-Host "ERROR: UPDATE_TEMP\_internal esta vacio." -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "PAPELERA_POS.exe: OK." -ForegroundColor Green
-Write-Host "_internal: OK." -ForegroundColor Green
-Write-Host "Archivos _internal: $($TEMP_INTERNAL_FILES.Count)" -ForegroundColor Green
-Write-Host "version.txt: OK." -ForegroundColor Green
-Write-Host ""
-
-# ==========================================
-# ASEGURAR QUE NO EXISTAN ELEMENTOS
-# PROTEGIDOS
-# ==========================================
-
-if (Test-Path "$UPDATE_DIR\database") {
-
-    Write-Host "Eliminando database del temporal..." -ForegroundColor Yellow
+if (Test-Path -LiteralPath $UPDATE_DATABASE) {
 
     Remove-Item `
-        "$UPDATE_DIR\database" `
+        -LiteralPath $UPDATE_DATABASE `
         -Recurse `
         -Force
 }
 
-if (Test-Path "$UPDATE_DIR\backups") {
+if (Test-Path -LiteralPath $UPDATE_BACKUPS) {
 
     Remove-Item `
-        "$UPDATE_DIR\backups" `
+        -LiteralPath $UPDATE_BACKUPS `
         -Recurse `
         -Force
 }
 
-if (Test-Path "$UPDATE_DIR\logs") {
+if (Test-Path -LiteralPath $UPDATE_LOGS) {
 
     Remove-Item `
-        "$UPDATE_DIR\logs" `
+        -LiteralPath $UPDATE_LOGS `
         -Recurse `
         -Force
 }
 
-# ==========================================
-# CREAR ZIP CON .NET
-#
-# NO USAMOS Compress-Archive
-#
-# Esto evita el problema:
-#
-# base_library.zip
-# "esta siendo utilizado por otro proceso"
-# ==========================================
+if (Test-Path -LiteralPath $UPDATE_ABRIL) {
+
+    Remove-Item `
+        -LiteralPath $UPDATE_ABRIL `
+        -Force
+}
+
+# ============================================================
+# VERIFICAR UPDATE_TEMP
+# ============================================================
+
+$UPDATE_TEMP_EXE = Join-Path $UPDATE_DIR "PAPELERA_POS.exe"
+$UPDATE_TEMP_VERSION = Join-Path $UPDATE_DIR "version.txt"
+
+if (!(Test-Path -LiteralPath $UPDATE_TEMP_EXE)) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE_TEMP no contiene PAPELERA_POS.exe." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+if (!(Test-Path -LiteralPath $UPDATE_INTERNAL)) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE_TEMP no contiene _internal." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+if (!(Test-Path -LiteralPath $UPDATE_TEMP_VERSION)) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE_TEMP no contiene version.txt." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
 
 Write-Host ""
-Write-Host "Comprimiendo UPDATE.zip..." -ForegroundColor Cyan
+Write-Host "UPDATE_TEMP preparado correctamente." -ForegroundColor Green
+Write-Host ""
 
-Add-Type -AssemblyName System.IO.Compression
+# ============================================================
+# CARGAR SYSTEM.IO.COMPRESSION
+# ============================================================
+
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-if (Test-Path $UPDATE_ZIP) {
+# ============================================================
+# CREAR UPDATE.ZIP CON .NET
+#
+# NO usamos Compress-Archive porque anteriormente
+# produjo un error de archivo bloqueado con
+# _internal\base_library.zip.
+# ============================================================
+
+Write-Host "Creando UPDATE.zip..." -ForegroundColor Cyan
+
+if (Test-Path -LiteralPath $UPDATE_ZIP) {
 
     Remove-Item `
-        $UPDATE_ZIP `
+        -LiteralPath $UPDATE_ZIP `
         -Force
 }
 
-$ZIP_FULL_PATH = (
-    Resolve-Path "." 
-).Path + "\UPDATE.zip"
-
-$ZIP = [System.IO.Compression.ZipFile]::Open(
-    $ZIP_FULL_PATH,
-    [System.IO.Compression.ZipArchiveMode]::Create
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+    $UPDATE_DIR,
+    $UPDATE_ZIP,
+    [System.IO.Compression.CompressionLevel]::Optimal,
+    $false
 )
 
-try {
-
-    $FILES_TO_ZIP = Get-ChildItem `
-        $UPDATE_DIR `
-        -Recurse `
-        -File
-
-    foreach ($FILE in $FILES_TO_ZIP) {
-
-        $RELATIVE_PATH = $FILE.FullName.Substring(
-            (Resolve-Path $UPDATE_DIR).Path.Length + 1
-        )
-
-        $RELATIVE_PATH = $RELATIVE_PATH.Replace("\", "/")
-
-        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-            $ZIP,
-            $FILE.FullName,
-            $RELATIVE_PATH,
-            [System.IO.Compression.CompressionLevel]::Optimal
-        ) | Out-Null
-    }
-
-}
-finally {
-
-    $ZIP.Dispose()
-}
-
-# ==========================================
+# ============================================================
 # ELIMINAR UPDATE_TEMP
-# ==========================================
+# ============================================================
 
-Remove-Item `
-    $UPDATE_DIR `
-    -Recurse `
-    -Force
+if (Test-Path -LiteralPath $UPDATE_DIR) {
 
-# ==========================================
+    Remove-Item `
+        -LiteralPath $UPDATE_DIR `
+        -Recurse `
+        -Force
+}
+
+# ============================================================
 # COMPROBAR UPDATE.ZIP
-# ==========================================
+# ============================================================
 
-if (!(Test-Path $UPDATE_ZIP)) {
+if (!(Test-Path -LiteralPath $UPDATE_ZIP)) {
 
     Write-Host ""
     Write-Host "ERROR: No se pudo crear UPDATE.zip." -ForegroundColor Red
@@ -715,77 +746,97 @@ if (!(Test-Path $UPDATE_ZIP)) {
 }
 
 $UPDATE_SIZE = (
-    Get-Item $UPDATE_ZIP
+    Get-Item -LiteralPath $UPDATE_ZIP
 ).Length
-
-if ($UPDATE_SIZE -le 0) {
-
-    Write-Host ""
-    Write-Host "ERROR: UPDATE.zip esta vacio." -ForegroundColor Red
-    Write-Host ""
-
-    exit 1
-}
 
 Write-Host ""
 Write-Host "UPDATE.zip creado correctamente." -ForegroundColor Green
 Write-Host "Tamaño: $UPDATE_SIZE bytes" -ForegroundColor Green
 Write-Host ""
 
-# ==========================================
-# LEER ZIP
-# ==========================================
+# ============================================================
+# LEER CONTENIDO DEL ZIP
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       VERIFICANDO UPDATE.ZIP" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+$ZIP = [System.IO.Compression.ZipFile]::OpenRead(
+    (Resolve-Path -LiteralPath $UPDATE_ZIP)
+)
+
+$ENTRADAS = @(
+    $ZIP.Entries | ForEach-Object {
+        $_.FullName
+    }
+)
 
 Write-Host "Contenido de UPDATE.zip:" -ForegroundColor Cyan
 Write-Host ""
 
-$ZIP_CHECK = [System.IO.Compression.ZipFile]::OpenRead(
-    (Resolve-Path $UPDATE_ZIP)
-)
+foreach ($ENTRY in $ENTRADAS) {
 
-try {
-
-    foreach ($ENTRY in $ZIP_CHECK.Entries) {
-
-        Write-Host "  $($ENTRY.FullName)"
-    }
-
-}
-finally {
-
-    $ZIP_CHECK.Dispose()
+    Write-Host "  $ENTRY"
 }
 
 Write-Host ""
 
-# ==========================================
-# VERIFICAR ZIP
-# ==========================================
+# ============================================================
+# BUSCAR ARCHIVOS PRINCIPALES
+# ============================================================
 
-$ZIP_CHECK = [System.IO.Compression.ZipFile]::OpenRead(
-    (Resolve-Path $UPDATE_ZIP)
-)
+$TIENE_EXE = $false
+$TIENE_VERSION = $false
+$TIENE_INTERNAL = $false
+$TIENE_DATABASE = $false
+$TIENE_ABRIL = $false
+$TIENE_BACKUPS = $false
+$TIENE_LOGS = $false
 
-try {
+foreach ($ENTRY in $ENTRADAS) {
 
-    $ZIP_ENTRIES = @(
-        $ZIP_CHECK.Entries
-    )
+    $NORMAL = $ENTRY.Replace("\", "/").TrimStart("/")
 
-}
-finally {
-
-    $ZIP_CHECK.Dispose()
-}
-
-# ==========================================
-# BUSCAR EXE
-# ==========================================
-
-$TIENE_EXE = $ZIP_ENTRIES |
-    Where-Object {
-        $_.FullName -eq "PAPELERA_POS.exe"
+    if ($NORMAL -eq "PAPELERA_POS.exe") {
+        $TIENE_EXE = $true
     }
+
+    if ($NORMAL -eq "version.txt") {
+        $TIENE_VERSION = $true
+    }
+
+    if ($NORMAL -eq "_internal/" -or $NORMAL.StartsWith("_internal/")) {
+        $TIENE_INTERNAL = $true
+    }
+
+    if ($NORMAL -eq "database/" -or $NORMAL.StartsWith("database/")) {
+        $TIENE_DATABASE = $true
+    }
+
+    if ($NORMAL -eq "abril.db" -or $NORMAL.EndsWith("/abril.db")) {
+        $TIENE_ABRIL = $true
+    }
+
+    if ($NORMAL -eq "backups/" -or $NORMAL.StartsWith("backups/")) {
+        $TIENE_BACKUPS = $true
+    }
+
+    if ($NORMAL -eq "logs/" -or $NORMAL.StartsWith("logs/")) {
+        $TIENE_LOGS = $true
+    }
+}
+
+# ============================================================
+# CERRAR ZIP
+# ============================================================
+
+$ZIP.Dispose()
+
+# ============================================================
+# VERIFICAR EXE
+# ============================================================
 
 if (!$TIENE_EXE) {
 
@@ -796,32 +847,11 @@ if (!$TIENE_EXE) {
     exit 1
 }
 
-# ==========================================
-# BUSCAR VERSION
-# ==========================================
+Write-Host "PAPELERA_POS.exe: OK." -ForegroundColor Green
 
-$TIENE_VERSION = $ZIP_ENTRIES |
-    Where-Object {
-        $_.FullName -eq "version.txt"
-    }
-
-if (!$TIENE_VERSION) {
-
-    Write-Host ""
-    Write-Host "ERROR: UPDATE.zip no contiene version.txt." -ForegroundColor Red
-    Write-Host ""
-
-    exit 1
-}
-
-# ==========================================
-# BUSCAR _INTERNAL
-# ==========================================
-
-$TIENE_INTERNAL = $ZIP_ENTRIES |
-    Where-Object {
-        $_.FullName -like "_internal/*"
-    }
+# ============================================================
+# VERIFICAR _INTERNAL
+# ============================================================
 
 if (!$TIENE_INTERNAL) {
 
@@ -832,91 +862,187 @@ if (!$TIENE_INTERNAL) {
     exit 1
 }
 
-# ==========================================
-# CONTAR ARCHIVOS INTERNAL
-# ==========================================
-
-$INTERNAL_ZIP_FILES = @(
-    $ZIP_ENTRIES |
-        Where-Object {
-            $_.FullName -like "_internal/*"
-        }
-)
-
-if ($INTERNAL_ZIP_FILES.Count -lt 1) {
-
-    Write-Host ""
-    Write-Host "ERROR: _internal dentro del ZIP esta vacio." -ForegroundColor Red
-    Write-Host ""
-
-    exit 1
-}
-
-# ==========================================
-# VERIFICAR DATABASE
-# ==========================================
-
-$DATABASE_EN_ZIP = $ZIP_ENTRIES |
-    Where-Object {
-
-        $_.FullName -match '(^|/)database(/|$)' -or
-        $_.FullName -match '(^|/)abril\.db$' -or
-        $_.FullName -match '(^|/)backups(/|$)' -or
-        $_.FullName -match '(^|/)logs(/|$)'
-    }
-
-if ($DATABASE_EN_ZIP) {
-
-    Write-Host ""
-    Write-Host "ERROR: UPDATE.zip contiene elementos protegidos." -ForegroundColor Red
-    Write-Host ""
-
-    foreach ($ITEM in $DATABASE_EN_ZIP) {
-
-        Write-Host "  $($ITEM.FullName)" -ForegroundColor Red
-    }
-
-    Write-Host ""
-    Write-Host "La actualizacion NO puede continuar." -ForegroundColor Red
-    Write-Host ""
-
-    exit 1
-}
-
-# ==========================================
-# MOSTRAR RESULTADO ZIP
-# ==========================================
-
-Write-Host "==========================================" -ForegroundColor Green
-Write-Host "       UPDATE.ZIP VERIFICADO" -ForegroundColor Green
-Write-Host "==========================================" -ForegroundColor Green
-Write-Host ""
-
-Write-Host "PAPELERA_POS.exe: OK." -ForegroundColor Green
 Write-Host "_internal: OK." -ForegroundColor Green
-Write-Host "Archivos _internal: $($INTERNAL_ZIP_FILES.Count)" -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR VERSION
+# ============================================================
+
+if (!$TIENE_VERSION) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE.zip no contiene version.txt." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
 Write-Host "version.txt: OK." -ForegroundColor Green
-Write-Host "database: NO incluida." -ForegroundColor Green
-Write-Host "abril.db: NO incluida." -ForegroundColor Green
-Write-Host "backups: NO incluidos." -ForegroundColor Green
-Write-Host "logs: NO incluidos." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR DATABASE
+# ============================================================
+
+if ($TIENE_DATABASE) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE.zip contiene DATABASE." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+if ($TIENE_ABRIL) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE.zip contiene abril.db." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+if ($TIENE_BACKUPS) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE.zip contiene backups." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+if ($TIENE_LOGS) {
+
+    Write-Host ""
+    Write-Host "ERROR: UPDATE.zip contiene logs." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "DATABASE: NO incluida." -ForegroundColor Green
+Write-Host "abril.db: NO incluido." -ForegroundColor Green
+Write-Host "BACKUPS: NO incluidos." -ForegroundColor Green
+Write-Host "LOGS: NO incluidos." -ForegroundColor Green
 Write-Host ""
 
-# ==========================================
+# ============================================================
+# VERIFICAR VERSION DENTRO DEL ZIP
+# ============================================================
+
+$ZIP_VERSION_DIR = Join-Path $ROOT "ZIP_VERSION_CHECK"
+
+if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
+
+    Remove-Item `
+        -LiteralPath $ZIP_VERSION_DIR `
+        -Recurse `
+        -Force
+}
+
+New-Item `
+    -ItemType Directory `
+    -Path $ZIP_VERSION_DIR `
+    -Force `
+    | Out-Null
+
+try {
+
+    Expand-Archive `
+        -LiteralPath $UPDATE_ZIP `
+        -DestinationPath $ZIP_VERSION_DIR `
+        -Force
+
+    $ZIP_VERSION_FILE = Join-Path $ZIP_VERSION_DIR "version.txt"
+
+    if (!(Test-Path -LiteralPath $ZIP_VERSION_FILE)) {
+
+        throw "version.txt no fue encontrado despues de extraer UPDATE.zip."
+    }
+
+    $ZIP_VERSION = (
+        Get-Content -LiteralPath $ZIP_VERSION_FILE -Raw
+    ).Trim()
+
+    if ($ZIP_VERSION -ne $VERSION) {
+
+        throw "La version dentro de UPDATE.zip es $ZIP_VERSION y se esperaba $VERSION."
+    }
+
+    Write-Host "Version dentro de UPDATE.zip = $ZIP_VERSION" -ForegroundColor Green
+}
+finally {
+
+    if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
+
+        Remove-Item `
+            -LiteralPath $ZIP_VERSION_DIR `
+            -Recurse `
+            -Force
+    }
+}
+
+Write-Host ""
+
+# ============================================================
+# RESULTADO FINAL DEL ZIP
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Green
+Write-Host "   UPDATE.ZIP GENERADO Y VERIFICADO" -ForegroundColor Green
+Write-Host "============================================" -ForegroundColor Green
+Write-Host ""
+
+Write-Host "UPDATE.zip contiene:" -ForegroundColor Cyan
+Write-Host "  - PAPELERA_POS.exe"
+Write-Host "  - _internal"
+Write-Host "  - version.txt"
+Write-Host ""
+
+Write-Host "UPDATE.zip NO contiene:" -ForegroundColor Cyan
+Write-Host "  - database"
+Write-Host "  - abril.db"
+Write-Host "  - backups"
+Write-Host "  - logs"
+Write-Host ""
+
+# ============================================================
 # GIT STATUS
-# ==========================================
+# ============================================================
 
-Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "             GIT" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
 git status
 
-# ==========================================
+if ($LASTEXITCODE -ne 0) {
+
+    Write-Host ""
+    Write-Host "ERROR: git status fallo." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+# ============================================================
+# COMPROBAR TAG
+# ============================================================
+
+$TAG_EXISTE_LOCAL = git tag -l $TAG
+
+if ($TAG_EXISTE_LOCAL -eq $TAG) {
+
+    Write-Host ""
+    Write-Host "ERROR: El tag $TAG ya existe localmente." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+# ============================================================
 # GIT ADD
-# ==========================================
+# ============================================================
 
 Write-Host ""
 Write-Host "Agregando cambios a Git..." -ForegroundColor Cyan
@@ -927,22 +1053,33 @@ if ($LASTEXITCODE -ne 0) {
 
     Write-Host ""
     Write-Host "ERROR: git add fallo." -ForegroundColor Red
+    Write-Host ""
 
     exit 1
 }
 
-# ==========================================
-# STATUS
-# ==========================================
+# ============================================================
+# GIT STATUS
+# ============================================================
 
 Write-Host ""
 Write-Host "Cambios preparados:" -ForegroundColor Cyan
+Write-Host ""
 
 git status --short
 
-# ==========================================
+if ($LASTEXITCODE -ne 0) {
+
+    Write-Host ""
+    Write-Host "ERROR: git status fallo." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+# ============================================================
 # GIT COMMIT
-# ==========================================
+# ============================================================
 
 Write-Host ""
 Write-Host "Creando commit..." -ForegroundColor Cyan
@@ -958,9 +1095,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ==========================================
+# ============================================================
 # GIT PUSH
-# ==========================================
+# ============================================================
 
 Write-Host ""
 Write-Host "Subiendo cambios a GitHub..." -ForegroundColor Cyan
@@ -976,24 +1113,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ==========================================
-# COMPROBAR TAG
-# ==========================================
-
-$TAG_EXISTE = git tag -l $TAG
-
-if ($TAG_EXISTE -eq $TAG) {
-
-    Write-Host ""
-    Write-Host "ERROR: El tag $TAG ya existe." -ForegroundColor Red
-    Write-Host ""
-
-    exit 1
-}
-
-# ==========================================
+# ============================================================
 # CREAR TAG
-# ==========================================
+# ============================================================
 
 Write-Host ""
 Write-Host "Creando tag $TAG..." -ForegroundColor Cyan
@@ -1003,15 +1125,15 @@ git tag $TAG
 if ($LASTEXITCODE -ne 0) {
 
     Write-Host ""
-    Write-Host "ERROR: No se pudo crear el tag." -ForegroundColor Red
+    Write-Host "ERROR: No se pudo crear el tag $TAG." -ForegroundColor Red
     Write-Host ""
 
     exit 1
 }
 
-# ==========================================
+# ============================================================
 # SUBIR TAG
-# ==========================================
+# ============================================================
 
 Write-Host ""
 Write-Host "Subiendo tag $TAG a GitHub..." -ForegroundColor Cyan
@@ -1021,20 +1143,20 @@ git push origin $TAG
 if ($LASTEXITCODE -ne 0) {
 
     Write-Host ""
-    Write-Host "ERROR: No se pudo subir el tag." -ForegroundColor Red
+    Write-Host "ERROR: No se pudo subir el tag $TAG." -ForegroundColor Red
     Write-Host ""
 
     exit 1
 }
 
-# ==========================================
+# ============================================================
 # FINAL
-# ==========================================
+# ============================================================
 
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Green
+Write-Host "============================================" -ForegroundColor Green
 Write-Host "       VERSION PUBLICADA CORRECTAMENTE" -ForegroundColor Green
-Write-Host "==========================================" -ForegroundColor Green
+Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 
 Write-Host "Version: $VERSION" -ForegroundColor Green
@@ -1042,9 +1164,9 @@ Write-Host "Tag: $TAG" -ForegroundColor Green
 Write-Host "UPDATE.zip: $UPDATE_ZIP" -ForegroundColor Green
 Write-Host ""
 
-Write-Host "==========================================" -ForegroundColor Yellow
-Write-Host "       RESUMEN DE ACTUALIZACION" -ForegroundColor Yellow
-Write-Host "==========================================" -ForegroundColor Yellow
+Write-Host "============================================" -ForegroundColor Yellow
+Write-Host "       RESUMEN DE LA VERSION" -ForegroundColor Yellow
+Write-Host "============================================" -ForegroundColor Yellow
 Write-Host ""
 
 Write-Host "INSTALACION INICIAL:" -ForegroundColor Cyan
@@ -1054,24 +1176,26 @@ Write-Host "  - database\abril.db"
 Write-Host "  - version.txt"
 Write-Host ""
 
-Write-Host "UPDATE.zip:" -ForegroundColor Cyan
+Write-Host "ACTUALIZACION:" -ForegroundColor Cyan
 Write-Host "  - PAPELERA_POS.exe"
 Write-Host "  - _internal"
 Write-Host "  - version.txt"
 Write-Host ""
 
-Write-Host "UPDATE.zip NO contiene:" -ForegroundColor Cyan
-Write-Host "  - database"
-Write-Host "  - abril.db"
+Write-Host "NO SE ACTUALIZA:" -ForegroundColor Cyan
+Write-Host "  - database\abril.db"
 Write-Host "  - backups"
 Write-Host "  - logs"
-Write-Host ""
-
-Write-Host "GitHub Actions deberia crear ahora el Release." -ForegroundColor Yellow
 Write-Host ""
 
 Write-Host "UPDATE.zip generado y verificado correctamente." -ForegroundColor Green
 Write-Host "La database NO fue incluida en UPDATE.zip." -ForegroundColor Green
 Write-Host "La database de una instalacion existente NO sera reemplazada por el updater." -ForegroundColor Green
 Write-Host ""
-```
+
+Write-Host "GitHub Actions deberia generar/publicar ahora el Release." -ForegroundColor Yellow
+Write-Host ""
+
+# ============================================================
+# FIN
+# ============================================================
