@@ -193,7 +193,92 @@ def sincronizar_productos():
 
 
 # ==========================================
-# 3. DESCARGA DE PRODUCTOS (NUBE -> LOCAL)
+# 3. SUBIDA DE ARQUEOS (LOCAL -> NUBE) [NUEVO]
+# ==========================================
+def sincronizar_arqueos():
+    init_db()
+    if not hay_internet():
+        return 0
+
+    conexion = create_connection()
+    cursor = conexion.cursor()
+
+    pendientes = cursor.execute(
+        """
+        SELECT
+            id,
+            tabla,
+            registro_uuid,
+            accion,
+            datos
+        FROM sincronizacion
+        WHERE sincronizado=0
+        AND tabla='arqueos'
+        ORDER BY id
+        """
+    ).fetchall()
+
+    arqueos_sincronizados = 0
+
+    for fila in pendientes:
+        sync_id = fila[0]
+        arqueo_uuid = fila[2]
+        datos_json = fila[4]
+
+        if not arqueo_uuid or not datos_json:
+            continue
+
+        try:
+            arqueo = json.loads(datos_json)
+
+            datos = {
+                "uuid": arqueo_uuid,
+                "fecha": arqueo.get("fecha"),
+                "apertura": arqueo.get("apertura", 0),
+                "esperado": arqueo.get("esperado", 0),
+                "real": arqueo.get("real", 0),
+                "diferencia": arqueo.get("diferencia", 0),
+                "usuario": arqueo.get("usuario", "Administrador"),
+                "observaciones": arqueo.get("observaciones", ""),
+                "ventas_total": arqueo.get("ventas_total", 0),
+                "ventas_efectivo": arqueo.get("ventas_efectivo", 0),
+                "ventas_transferencia": arqueo.get("ventas_transferencia", 0),
+                "ventas_tarjeta": arqueo.get("ventas_tarjeta", 0),
+                "ventas_cuenta": arqueo.get("ventas_cuenta", 0),
+                "cantidad_ventas": arqueo.get("cantidad_ventas", 0)
+            }
+
+            # Nota: Asegúrate de mandar una lista ya que el backend de caja.py espera List[schemas.ArqueoCreate]
+            respuesta = requests.post(
+                f"{SERVIDOR}/caja/arqueos/sync",
+                json=[datos],
+                timeout=15
+            )
+
+            if respuesta.status_code in (200, 201):
+                cursor.execute(
+                    """
+                    UPDATE sincronizacion
+                    SET sincronizado=1
+                    WHERE id=?
+                    """,
+                    (sync_id,)
+                )
+                arqueos_sincronizados += 1
+                print("Arqueo sincronizado:", arqueo_uuid)
+            else:
+                print("Error arqueo:", respuesta.status_code, respuesta.text)
+
+        except Exception as e:
+            print("Error sincronizando arqueo:", e)
+
+    conexion.commit()
+    conexion.close()
+    return arqueos_sincronizados
+
+
+# ==========================================
+# 4. DESCARGA DE PRODUCTOS (NUBE -> LOCAL)
 # ==========================================
 def descargar_productos():
     if not hay_internet():
@@ -245,7 +330,7 @@ def descargar_productos():
 
 
 # ==========================================
-# 4. DESCARGA DE VENTAS (NUBE -> LOCAL)
+# 5. DESCARGA DE VENTAS (NUBE -> LOCAL)
 # ==========================================
 def descargar_ventas():
     if not hay_internet():
@@ -294,12 +379,14 @@ def descargar_ventas():
 def sincronizar():
     ventas_subidas = sincronizar_ventas()
     productos_subidos = sincronizar_productos()
+    arqueos_subidos = sincronizar_arqueos()
     productos_bajados = descargar_productos()
     ventas_bajadas = descargar_ventas()
 
     return {
         "ventas_subidas": ventas_subidas,
         "productos_subidos": productos_subidos,
+        "arqueos_subidos": arqueos_subidos,
         "productos_bajados": productos_bajados,
         "ventas_bajadas": ventas_bajadas
     }

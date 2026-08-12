@@ -192,21 +192,13 @@ def init_db():
         sincronizado INTEGER DEFAULT 0
     )
     """)
+    
     columnas = [
         fila[1]
         for fila in x.execute(
             "PRAGMA table_info(sincronizacion)"
         ).fetchall()
     ]
-
-
-    columnas = [
-        fila[1]
-        for fila in x.execute(
-            "PRAGMA table_info(sincronizacion)"
-        ).fetchall()
-    ]
-
 
     if "registro_uuid" not in columnas:
 
@@ -214,13 +206,11 @@ def init_db():
             "ALTER TABLE sincronizacion ADD COLUMN registro_uuid TEXT"
         )
 
-
     if "datos" not in columnas:
 
         x.execute(
             "ALTER TABLE sincronizacion ADD COLUMN datos TEXT"
         )
-        
         
     # =========================
     # PEDIDOS
@@ -268,6 +258,7 @@ def init_db():
     x.execute("""
     CREATE TABLE IF NOT EXISTS arqueos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
         fecha TEXT,
         apertura REAL,
         esperado REAL,
@@ -287,6 +278,33 @@ def init_db():
     # =========================
     # MIGRACION ARQUEOS
     # =========================
+
+    columnas_arqueos = [
+        fila[1]
+        for fila in x.execute(
+            "PRAGMA table_info(arqueos)"
+        ).fetchall()
+    ]
+
+    if "uuid" not in columnas_arqueos:
+
+        x.execute(
+            "ALTER TABLE arqueos ADD COLUMN uuid TEXT"
+        )
+
+        arqueos_registros = x.execute(
+            "SELECT id FROM arqueos"
+        ).fetchall()
+
+        for a in arqueos_registros:
+
+            x.execute(
+                "UPDATE arqueos SET uuid=? WHERE id=?",
+                (
+                    str(uuid.uuid4()),
+                    a[0]
+                )
+            )
 
     campos_arqueos = {
         "ventas_total": "REAL DEFAULT 0",
@@ -372,6 +390,7 @@ def registrar_sincronizacion(tabla, registro_uuid, accion, datos):
 
     c.commit()
     c.close()    
+
 def registrar_producto_sync(producto, accion="crear"):
 
     registrar_sincronizacion(
@@ -380,6 +399,7 @@ def registrar_producto_sync(producto, accion="crear"):
         accion,
         producto
     ) 
+
 def obtener_pendientes():
 
     c = create_connection()
@@ -399,6 +419,7 @@ def obtener_pendientes():
     c.close()
 
     return datos
+
 def marcar_sincronizado(id_sync):
 
     c = create_connection()
@@ -411,6 +432,7 @@ def marcar_sincronizado(id_sync):
 
     c.commit()
     c.close()      
+
 def get_setting(k, d=""):
 
     init_db()
@@ -566,6 +588,7 @@ def fecha_actual():
     return datetime.datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+
 # =========================
 # ARCHIVAR VENTAS DEL DIA
 # =========================
@@ -576,9 +599,7 @@ def archivar_ventas(fecha=None):
 
     try:
 
-
         if fecha:
-
 
             c.execute("""
                 UPDATE ventas
@@ -590,9 +611,7 @@ def archivar_ventas(fecha=None):
                 fecha + '%',
             ))
 
-
         else:
-
 
             c.execute("""
                 UPDATE ventas
@@ -600,26 +619,19 @@ def archivar_ventas(fecha=None):
                 WHERE estado='ACTIVA'
             """)
 
-
-
         c.commit()
 
-
-
     except Exception as e:
-
 
         print(
             "Error archivando ventas:",
             e
         )
 
-
-
     finally:
 
-
         c.close()
+
 # =========================
 # CREAR BACKUP
 # =========================
@@ -656,7 +668,6 @@ def create_backup():
         return None
 
 
-
 # =========================
 # BUSCAR BACKUPS VIEJOS
 # =========================
@@ -666,16 +677,13 @@ def find_removable_backups():
     if not os.path.exists(BACKUP_DIR):
         return []
 
-
     archivos = sorted(
         os.listdir(BACKUP_DIR)
     )
 
-
     if len(archivos) <= 10:
 
         return []
-
 
     return [
         os.path.join(
@@ -684,7 +692,6 @@ def find_removable_backups():
         )
         for x in archivos[:-10]
     ]
-
 
 
 # =========================
@@ -702,7 +709,6 @@ def restore_backup(ruta_backup):
 
         return True
 
-
     except Exception as e:
 
         print(
@@ -710,4 +716,4 @@ def restore_backup(ruta_backup):
             e
         )
 
-        return False        
+        return False
