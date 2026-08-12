@@ -243,7 +243,7 @@ class Dashboard(QMainWindow):
     def verificar_sincronizacion_remota(self):
         """Consulta al backend si alguna otra terminal realizó un cierre/arqueo de ventas."""
         try:
-            api_url = get_setting('api_url', 'http://localhost:5000')
+            api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
             response = requests.get(f"{api_url}/sincronizacion/pendientes", timeout=2)
             
             if response.status_code == 200:
@@ -329,7 +329,7 @@ class Dashboard(QMainWindow):
         try:
             datos_sync = {"fecha": hoy, "accion": "archivar_hoy"}
             registrar_sincronizacion("ventas", nuevo_uuid(), "archivar_hoy", datos_sync)
-            api_url = get_setting('api_url', 'http://localhost:5000')
+            api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
             requests.post(f"{api_url}/sincronizar", json={
                 "tabla": "ventas",
                 "registro_uuid": nuevo_uuid(),

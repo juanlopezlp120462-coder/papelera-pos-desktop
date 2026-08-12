@@ -1303,7 +1303,7 @@ $ {self.real.value():,.2f}
                     "ventas_efectivo": self.efectivo_ventas,
                     "cantidad_ventas": self.cantidad_ventas
                 }
-                api_url = get_setting('api_url', 'http://localhost:5000')
+                api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
                 requests.post(f"{api_url}/arqueos", json=datos_arqueo, timeout=5)
                 # Notificar también la acción de sincronización de cierre al backend
                 requests.post(f"{api_url}/sincronizar", json={

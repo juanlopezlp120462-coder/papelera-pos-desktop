@@ -36,6 +36,8 @@ else:
 # ============================================================
 
 def obtener_version_actual():
+    # Versión fija de respaldo por si el archivo de texto no existe o falla
+    version_por_defecto = "1.0.1"
 
     try:
 
@@ -84,7 +86,8 @@ def obtener_version_actual():
             repr(e)
         )
 
-    return "1.0.0"
+    print("Usando versión por defecto:", version_por_defecto)
+    return version_por_defecto
 
 
 # ============================================================

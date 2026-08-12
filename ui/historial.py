@@ -341,12 +341,50 @@ class Historial(QWidget):
 
 
     # ==========================================
+    # SINCRONIZAR VENTAS DESDE LA NUBE
+    # ==========================================
+
+    def sincronizar_ventas_nube(self):
+        try:
+            api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
+            response = requests.get(f"{api_url}/ventas", timeout=3)
+            if response.status_code == 200:
+                ventas_remotas = response.json()
+                con = sqlite3.connect(BASE_DATOS)
+                cur = con.cursor()
+                
+                for v in ventas_remotas:
+                    cur.execute("""
+                        INSERT OR IGNORE INTO ventas (
+                            id, fecha, cliente_id, forma_pago, total, estado,
+                            pago_efectivo, pago_transferencia, pago_tarjeta, pago_cuenta
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        v.get('id'),
+                        v.get('fecha'),
+                        v.get('cliente_id'),
+                        v.get('forma_pago'),
+                        v.get('total'),
+                        v.get('estado', 'ACTIVA'),
+                        v.get('pago_efectivo', 0),
+                        v.get('pago_transferencia', 0),
+                        v.get('pago_tarjeta', 0),
+                        v.get('pago_cuenta', 0)
+                    ))
+                con.commit()
+                con.close()
+        except Exception as e:
+            print("No se pudieron sincronizar las ventas desde la nube:", e)
+
+
+
+    # ==========================================
     # SINCRONIZAR ARQUEOS DESDE LA NUBE
     # ==========================================
 
     def sincronizar_arqueos_nube(self):
         try:
-            api_url = get_setting('api_url', 'http://localhost:5000')
+            api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
             response = requests.get(f"{api_url}/caja/arqueos", timeout=3)
             if response.status_code == 200:
                 arqueos_remotos = response.json()
@@ -443,7 +481,8 @@ class Historial(QWidget):
     def cargar_historial(self):
 
         try:
-            # Sincronizamos arqueos de la nube antes de pintar la tabla
+            # Sincronizamos ventas y arqueos de la nube antes de pintar la tabla
+            self.sincronizar_ventas_nube()
             self.sincronizar_arqueos_nube()
 
             c = sqlite3.connect(
