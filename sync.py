@@ -89,8 +89,6 @@ def sincronizar_ventas():
             )
 
             if respuesta.status_code in (200, 201):
-                resultado = respuesta.json()
-
                 cursor.execute(
                     """
                     UPDATE sincronizacion
@@ -99,7 +97,6 @@ def sincronizar_ventas():
                     """,
                     (sync_id,)
                 )
-
                 sincronizadas += 1
                 print("Venta sincronizada:", registro_uuid)
             else:
@@ -221,18 +218,21 @@ def descargar_productos():
                 stock_minimo = prod.get("stock_minimo", 5)
 
                 if uuid_prod:
-                    cursor.execute("""
-                        INSERT INTO productos (uuid, codigo_barras, nombre, categoria, precio_compra, precio_venta, stock, stock_minimo)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(uuid) DO UPDATE SET
-                            codigo_barras=excluded.codigo_barras,
-                            nombre=excluded.nombre,
-                            categoria=excluded.categoria,
-                            precio_compra=excluded.precio_compra,
-                            precio_venta=excluded.precio_venta,
-                            stock=excluded.stock,
-                            stock_minimo=excluded.stock_minimo
-                    """, (uuid_prod, codigo, nombre, categoria, p_compra, p_venta, stock, stock_minimo))
+                    cursor.execute("SELECT id FROM productos WHERE uuid=?", (uuid_prod,))
+                    existente = cursor.fetchone()
+
+                    if existente:
+                        cursor.execute("""
+                            UPDATE productos 
+                            SET codigo_barras=?, nombre=?, categoria=?, precio_compra=?, precio_venta=?, stock=?, stock_minimo=?
+                            WHERE uuid=?
+                        """, (codigo, nombre, categoria, p_compra, p_venta, stock, stock_minimo, uuid_prod))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO productos (uuid, codigo_barras, nombre, categoria, precio_compra, precio_venta, stock, stock_minimo)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (uuid_prod, codigo, nombre, categoria, p_compra, p_venta, stock, stock_minimo))
+                    
                     actualizados += 1
 
             conexion.commit()
@@ -245,7 +245,7 @@ def descargar_productos():
 
 
 # ==========================================
-# 4. DESCARGA DE VENTAS / HISTORIAL (NUBE -> LOCAL)
+# 4. DESCARGA DE VENTAS (NUBE -> LOCAL)
 # ==========================================
 def descargar_ventas():
     if not hay_internet():
@@ -269,11 +269,15 @@ def descargar_ventas():
                 usuario = venta.get("usuario", "Administrador")
 
                 if uuid_venta:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO ventas (uuid, fecha, total, forma_pago, cliente_id, descuento, usuario)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (uuid_venta, fecha, total, forma_pago, cliente_id, descuento, usuario))
-                    actualizadas += 1
+                    cursor.execute("SELECT id FROM ventas WHERE uuid=?", (uuid_venta,))
+                    existente = cursor.fetchone()
+
+                    if not existente:
+                        cursor.execute("""
+                            INSERT INTO ventas (uuid, fecha, total, forma_pago, cliente_id, descuento, usuario)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (uuid_venta, fecha, total, forma_pago, cliente_id, descuento, usuario))
+                        actualizadas += 1
 
             conexion.commit()
             conexion.close()
@@ -288,11 +292,8 @@ def descargar_ventas():
 # FUNCIÓN PRINCIPAL DE SINCRONIZACIÓN
 # ==========================================
 def sincronizar():
-    # 1. Subir cambios locales pendientes
     ventas_subidas = sincronizar_ventas()
     productos_subidos = sincronizar_productos()
-
-    # 2. Descargar cambios nuevos de la nube (otras PCs)
     productos_bajados = descargar_productos()
     ventas_bajadas = descargar_ventas()
 
