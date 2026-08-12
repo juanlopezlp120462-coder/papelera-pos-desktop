@@ -1289,6 +1289,7 @@ $ {self.real.value():,.2f}
             registrar_sincronizacion("ventas", nuevo_uuid(), "archivar_hoy", datos_sync)
 
             # Sincronización saliente hacia la nube/backend para que se refleje en todas las PCs
+# Sincronización saliente hacia la nube/backend para que se refleje en todas las PCs
             try:
                 datos_arqueo = {
                     "uuid": uuid_arqueo,
@@ -1304,7 +1305,9 @@ $ {self.real.value():,.2f}
                     "cantidad_ventas": self.cantidad_ventas
                 }
                 api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
-                requests.post(f"{api_url}/arqueos", json=datos_arqueo, timeout=5)
+                # CORREGIDO: Añadido '/caja' para que coincida con el backend
+                requests.post(f"{api_url}/caja/arqueos", json=datos_arqueo, timeout=5)
+                
                 # Notificar también la acción de sincronización de cierre al backend
                 requests.post(f"{api_url}/sincronizar", json={
                     "tabla": "ventas",

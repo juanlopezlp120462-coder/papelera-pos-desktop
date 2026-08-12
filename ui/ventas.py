@@ -4,7 +4,7 @@ import sqlite3
 import datetime
 import uuid
 import json
-
+import requests
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -1347,9 +1347,35 @@ class Ventas(QWidget):
         except Exception:
             # Nunca impedir que el módulo Ventas abra por un ajuste visual.
             pass
-
+        
+    def verificar_estado_caja_remota(self):
+            try:
+                api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
+                response = requests.get(f"{api_url}/ventas/caja/estado", timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    if not data.get("caja_abierta", True):
+                        # Si la caja está cerrada en la nube, limpiamos el carrito local
+                        self.carrito.clear()
+                        self.actualizar_tabla()
+            except Exception as e:
+                print("No se pudo verificar el estado de la caja:", e)
+    
+    def verificar_caja(self):
+        try:
+            api_url = get_setting('api_url', '...')
+            resp = requests.get(f"{api_url}/caja/estado", timeout=3)
+            if resp.status_code == 200:
+                esta_abierta = resp.json().get("caja_abierta")
+                if not esta_abierta:
+                    # Deshabilitar botones de venta
+                    self.boton_vender.setEnabled(False)
+                    QMessageBox.warning(self, "Atención", "La caja está cerrada.")
+        except:
+            pass
     def showEvent(self, event):
         super().showEvent(event)
+        self.verificar_estado_caja_remota()
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

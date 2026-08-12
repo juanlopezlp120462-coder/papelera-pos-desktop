@@ -347,37 +347,22 @@ class Historial(QWidget):
     def sincronizar_ventas_nube(self):
             try:
                 api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
-                response = requests.get(f"{api_url}/ventas", timeout=3)
+                response = requests.get(f"{api_url}/ventas", timeout=5) # Aumenté un poco el timeout
                 if response.status_code == 200:
                     ventas_remotas = response.json()
                     con = sqlite3.connect(BASE_DATOS)
                     cur = con.cursor()
                     
-                    # Asegurar que la tabla ventas tenga la columna uuid (similar a arqueos)[cite: 9]
-                    cur.execute("""
-                        CREATE TABLE IF NOT EXISTS ventas (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            uuid TEXT UNIQUE,
-                            fecha TEXT,
-                            cliente_id INTEGER,
-                            forma_pago TEXT,
-                            total REAL,
-                            estado TEXT,
-                            pago_efectivo REAL,
-                            pago_transferencia REAL,
-                            pago_tarjeta REAL,
-                            pago_cuenta REAL
-                        )
-                    """)
-
+                    # Usamos INSERT OR REPLACE para que, si el UUID ya existe, se actualice la venta
+                    # en lugar de crear una fila duplicada.
                     for v in ventas_remotas:
                         cur.execute("""
-                            INSERT OR IGNORE INTO ventas (
+                            INSERT OR REPLACE INTO ventas (
                                 uuid, fecha, cliente_id, forma_pago, total, estado,
                                 pago_efectivo, pago_transferencia, pago_tarjeta, pago_cuenta
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
-                            v.get('uuid'),  # Usamos el uuid remoto
+                            v.get('uuid'),
                             v.get('fecha'),
                             v.get('cliente_id'),
                             v.get('forma_pago'),
@@ -391,10 +376,7 @@ class Historial(QWidget):
                     con.commit()
                     con.close()
             except Exception as e:
-                print("No se pudieron sincronizar las ventas desde la nube:", e)
-    # ==========================================
-    # SINCRONIZAR ARQUEOS DESDE LA NUBE
-    # ==========================================
+                print("Error al sincronizar:", e)
 
     def sincronizar_arqueos_nube(self):
         try:
