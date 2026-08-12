@@ -1,5 +1,7 @@
 import sqlite3
 import datetime
+import uuid
+import requests
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt, QTimer
@@ -8,7 +10,9 @@ from ui.db import (
     BASE_DATOS,
     init_db,
     archivar_ventas,
-    get_setting
+    get_setting,
+    registrar_sincronizacion,
+    nuevo_uuid
 )
 
 from ui.keyboard import setup_numeric
@@ -521,11 +525,6 @@ class Caja(QWidget):
         )
 
 
-        # self.obs.returnPressed.connect(
-        #     self.enter_observacion
-        # )
-
-
 
         # ==========================
         # ACTUALIZAR MIENTRAS ESCRIBE
@@ -584,11 +583,6 @@ class Caja(QWidget):
         campo.setPrefix(
             "$ "
         )
-
-
-        # IMPORTANTE:
-        # NO usar setValue(0)
-        # porque pisa lo escrito
 
 
         campo.setKeyboardTracking(
@@ -669,6 +663,9 @@ class Caja(QWidget):
 
 
         self.apertura.lineEdit().selectAll()
+
+
+
     # ==========================
     # FECHAS
     # ==========================
@@ -973,6 +970,9 @@ $ {self.real.value():,.2f}
 {estado}
 """
         )
+
+
+
     # ==========================
     # CERRAR CAJA
     # ==========================
@@ -1229,7 +1229,8 @@ $ {self.real.value():,.2f}
 
 
         try:
-
+            uuid_arqueo = str(uuid.uuid4())
+            fecha_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             con = sqlite3.connect(
                 BASE_DATOS
@@ -1241,6 +1242,7 @@ $ {self.real.value():,.2f}
                 """
                 INSERT INTO arqueos
                 (
+                    uuid,
                     fecha,
                     apertura,
                     esperado,
@@ -1254,33 +1256,22 @@ $ {self.real.value():,.2f}
                 )
 
                 VALUES
-                (?,?,?,?,?,?,?,?,?,?)
+                (?,?,?,?,?,?,?,?,?,?,?)
                 """,
 
                 (
-
-                    datetime.datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-
+                    uuid_arqueo,
+                    fecha_str,
                     self.apertura.value(),
-
                     self.esperado,
-
                     self.real.value(),
-
                     self.real.value()
                     -
                     self.esperado,
-
                     "Administrador",
-
                     self.obs.text(),
-
                     self.total_ventas,
-
                     self.efectivo_ventas,
-
                     self.cantidad_ventas
 
                 )
@@ -1292,13 +1283,45 @@ $ {self.real.value():,.2f}
 
             con.close()
 
+            # Registrar sincronización para notificar a las demás PCs el cierre y archivado
+            hoy_str = self.fecha_hoy()
+            datos_sync = {"fecha": hoy_str, "accion": "archivar_hoy"}
+            registrar_sincronizacion("ventas", nuevo_uuid(), "archivar_hoy", datos_sync)
+
+            # Sincronización saliente hacia la nube/backend para que se refleje en todas las PCs
+            try:
+                datos_arqueo = {
+                    "uuid": uuid_arqueo,
+                    "fecha": fecha_str,
+                    "apertura": self.apertura.value(),
+                    "esperado": self.esperado,
+                    "real": self.real.value(),
+                    "diferencia": self.real.value() - self.esperado,
+                    "usuario": "Administrador",
+                    "observaciones": self.obs.text(),
+                    "ventas_total": self.total_ventas,
+                    "ventas_efectivo": self.efectivo_ventas,
+                    "cantidad_ventas": self.cantidad_ventas
+                }
+                api_url = get_setting('api_url', 'http://localhost:5000')
+                requests.post(f"{api_url}/arqueos", json=datos_arqueo, timeout=5)
+                # Notificar también la acción de sincronización de cierre al backend
+                requests.post(f"{api_url}/sincronizar", json={
+                    "tabla": "ventas",
+                    "registro_uuid": nuevo_uuid(),
+                    "accion": "archivar_hoy",
+                    "datos": datos_sync
+                }, timeout=2)
+            except Exception as sync_err:
+                print("El arqueo se guardó localmente, error al sincronizar con la nube:", sync_err)
+
 
 
             if self.archivar.isChecked():
 
 
                 archivar_ventas(
-                    fecha=self.fecha_hoy()
+                    fecha=hoy_str
                 )
 
 
@@ -1450,20 +1473,6 @@ $ {self.real.value():,.2f}
 
             self.foco_inicio()
 
-
-
-        except Exception as e:
-
-
-            DialogoAviso(
-
-                "Error al cerrar caja",
-
-                str(e),
-
-                self
-
-            ).exec()
 
 
     # ==========================

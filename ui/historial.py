@@ -1,10 +1,11 @@
 import sqlite3
 import os
+import requests
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt
 
-from ui.db import BASE_DATOS, init_db
+from ui.db import BASE_DATOS, init_db, get_setting
 from ui.ticket import generar_ticket, imprimir_ticket, guardar_pdf
 
 
@@ -95,7 +96,9 @@ class Historial(QWidget):
 
         QToolButton{
             font-size:20px;
-            padding:2px
+            padding:2px;
+            background:transparent;
+            border:none;
         }
 
         """)
@@ -312,7 +315,7 @@ class Historial(QWidget):
 
 
         self.tabla.cellDoubleClicked.connect(
-            lambda r,c:self.ver_ticket(r)
+            lambda r,c: self.ver_ticket(r) if self.tabla.item(r,0) and self.tabla.item(r,0).text()=="Venta diaria" else self.ver_arqueo(r)
         )
 
 
@@ -334,6 +337,63 @@ class Historial(QWidget):
         super().showEvent(event)
 
         self.cargar_historial()
+
+
+
+    # ==========================================
+    # SINCRONIZAR ARQUEOS DESDE LA NUBE
+    # ==========================================
+
+    def sincronizar_arqueos_nube(self):
+        try:
+            api_url = get_setting('api_url', 'http://localhost:5000')
+            response = requests.get(f"{api_url}/caja/arqueos", timeout=3)
+            if response.status_code == 200:
+                arqueos_remotos = response.json()
+                con = sqlite3.connect(BASE_DATOS)
+                cur = con.cursor()
+                
+                # Asegurar que la tabla tenga columna uuid por seguridad
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS arqueos (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        uuid TEXT UNIQUE,
+                        fecha TEXT,
+                        apertura REAL,
+                        esperado REAL,
+                        real REAL,
+                        diferencia REAL,
+                        usuario TEXT,
+                        observaciones TEXT,
+                        ventas_total REAL,
+                        ventas_efectivo REAL,
+                        cantidad_ventas INTEGER
+                    )
+                """)
+
+                for arq in arqueos_remotos:
+                    cur.execute("""
+                        INSERT OR IGNORE INTO arqueos (
+                            uuid, fecha, apertura, esperado, real, diferencia, 
+                            usuario, observaciones, ventas_total, ventas_efectivo, cantidad_ventas
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        arq.get('uuid'),
+                        arq.get('fecha'),
+                        arq.get('apertura'),
+                        arq.get('esperado'),
+                        arq.get('real'),
+                        arq.get('diferencia'),
+                        arq.get('usuario'),
+                        arq.get('observaciones'),
+                        arq.get('ventas_total'),
+                        arq.get('ventas_efectivo'),
+                        arq.get('cantidad_ventas')
+                    ))
+                con.commit()
+                con.close()
+        except Exception as e:
+            print("No se pudieron sincronizar los arqueos desde la nube:", e)
 
 
 
@@ -383,6 +443,8 @@ class Historial(QWidget):
     def cargar_historial(self):
 
         try:
+            # Sincronizamos arqueos de la nube antes de pintar la tabla
+            self.sincronizar_arqueos_nube()
 
             c = sqlite3.connect(
                 BASE_DATOS
@@ -674,6 +736,53 @@ class Historial(QWidget):
                         j,
                         item
                     )
+
+
+                # ==========================================
+                # ACCIONES EN LA ÚLTIMA COLUMNA (ÍNDICE 7)
+                # ==========================================
+                widget_acciones = QWidget()
+                layout_acciones = QHBoxLayout(widget_acciones)
+                layout_acciones.setContentsMargins(4, 2, 4, 2)
+                layout_acciones.setSpacing(4)
+                layout_acciones.setAlignment(Qt.AlignCenter)
+
+                if fila[0] == "Venta diaria":
+                    btn_ver = QToolButton()
+                    btn_ver.setText("👁")
+                    btn_ver.setToolTip("Ver ticket")
+                    btn_ver.clicked.connect(lambda checked, r=i: self.ver_ticket(r))
+
+                    btn_pdf = QToolButton()
+                    btn_pdf.setText("💾")
+                    btn_pdf.setToolTip("Guardar PDF")
+                    btn_pdf.clicked.connect(lambda checked, r=i: self.pdf_ticket(r))
+
+                    btn_print = QToolButton()
+                    btn_print.setText("🖨️")
+                    btn_print.setToolTip("Imprimir ticket")
+                    btn_print.clicked.connect(lambda checked, r=i: self.imprimir(r))
+                else:
+                    btn_ver = QToolButton()
+                    btn_ver.setText("👁")
+                    btn_ver.setToolTip("Ver arqueo")
+                    btn_ver.clicked.connect(lambda checked, r=i: self.ver_arqueo(r))
+
+                    btn_pdf = QToolButton()
+                    btn_pdf.setText("💾")
+                    btn_pdf.setToolTip("Guardar arqueo PDF")
+                    btn_pdf.clicked.connect(lambda checked, r=i: self.pdf_arqueo(r))
+
+                    btn_print = QToolButton()
+                    btn_print.setText("🖨️")
+                    btn_print.setToolTip("Imprimir arqueo")
+                    btn_print.clicked.connect(lambda checked, r=i: self.imprimir_arqueo(r))
+
+                layout_acciones.addWidget(btn_ver)
+                layout_acciones.addWidget(btn_pdf)
+                layout_acciones.addWidget(btn_print)
+
+                self.tabla.setCellWidget(i, 7, widget_acciones)
 
 
                 total += float(

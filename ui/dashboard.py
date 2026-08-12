@@ -1,10 +1,11 @@
 import sqlite3
 import datetime
+import requests
 from core.version import obtener_version_actual
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Qt
 
-from ui.db import BASE_DATOS, init_db, archivar_ventas, get_setting
+from ui.db import BASE_DATOS, init_db, archivar_ventas, get_setting, registrar_sincronizacion, nuevo_uuid
 from ui.productos import Productos
 from ui.ventas import Ventas
 from ui.clientes import Clientes
@@ -156,6 +157,7 @@ class Dashboard(QMainWindow):
             self.showMaximized()
 
         self.actualizar()
+
     def actualizar_nombre_negocio(self):
         self.nombre_negocio = get_setting(
             'nombre_negocio',
@@ -238,7 +240,33 @@ class Dashboard(QMainWindow):
         panel.addLayout(b)
         panel.addStretch()
 
+    def verificar_sincronizacion_remota(self):
+        """Consulta al backend si alguna otra terminal realizó un cierre/arqueo de ventas."""
+        try:
+            api_url = get_setting('api_url', 'http://localhost:5000')
+            response = requests.get(f"{api_url}/sincronizacion/pendientes", timeout=2)
+            
+            if response.status_code == 200:
+                eventos = response.json()
+                hoy = datetime.datetime.now().strftime('%Y-%m-%d')
+                hubo_cambios = False
+
+                for ev in eventos:
+                    # Si el evento indica archivar el día, lo aplicamos localmente
+                    if ev.get("accion") == "archivar_hoy":
+                        archivar_ventas(fecha=hoy)
+                        hubo_cambios = True
+
+                return hubo_cambios
+        except Exception:
+            # Si no hay red o el servidor no responde, no rompe la app local
+            pass
+        return False
+
     def actualizar(self):
+        # Verificar si hay eventos pendientes en la red antes de calcular
+        self.verificar_sincronizacion_remota()
+
         hoy = datetime.datetime.now().strftime('%Y-%m-%d')
 
         c = sqlite3.connect(BASE_DATOS)
@@ -296,6 +324,21 @@ class Dashboard(QMainWindow):
             return
 
         archivar_ventas(fecha=hoy)
+        
+        # Registrar y notificar al backend la acción manual de reinicio
+        try:
+            datos_sync = {"fecha": hoy, "accion": "archivar_hoy"}
+            registrar_sincronizacion("ventas", nuevo_uuid(), "archivar_hoy", datos_sync)
+            api_url = get_setting('api_url', 'http://localhost:5000')
+            requests.post(f"{api_url}/sincronizar", json={
+                "tabla": "ventas",
+                "registro_uuid": nuevo_uuid(),
+                "accion": "archivar_hoy",
+                "datos": datos_sync
+            }, timeout=2)
+        except Exception as e:
+            print("Se archivó localmente, error al sincronizar reinicio:", e)
+
         self.actualizar()
         QMessageBox.information(self, 'Listo', 'Las ventas de hoy fueron archivadas. El inicio quedó en cero.')
 
