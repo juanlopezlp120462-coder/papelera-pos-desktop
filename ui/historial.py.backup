@@ -348,25 +348,17 @@ class Historial(QWidget):
     # SINCRONIZAR VENTAS Y DETALLES DESDE NUBE
     # ==========================================
 
-    # ==========================================
-    # SINCRONIZAR VENTAS DESDE LA NUBE
-    # ==========================================
-
     def sincronizar_ventas_nube(self):
-        con = None
 
         try:
+
             api_url = get_setting(
                 'api_url',
                 'https://papelera-pos-backend-production.up.railway.app'
-            ).rstrip("/")
-
-            print("========================================")
-            print("SINCRONIZANDO VENTAS DESDE LA NUBE")
-            print("SERVIDOR:", api_url)
+            )
 
             # ------------------------------------------
-            # 1. OBTENER TODAS LAS VENTAS REMOTAS
+            # 1. DESCARGAR VENTAS
             # ------------------------------------------
 
             response = requests.get(
@@ -376,362 +368,293 @@ class Historial(QWidget):
 
             if response.status_code != 200:
                 print(
-                    "ERROR OBTENIENDO VENTAS:",
-                    response.status_code,
-                    response.text[:500]
+                    "Error descargando ventas:",
+                    response.status_code
                 )
                 return
 
             ventas_remotas = response.json()
 
-            if not isinstance(ventas_remotas, list):
-                print("ERROR: respuesta de ventas no es una lista")
-                return
-
-            print(
-                "VENTAS REMOTAS:",
-                len(ventas_remotas)
+            con = sqlite3.connect(
+                BASE_DATOS
             )
 
-            # ------------------------------------------
-            # 2. ABRIR SQLITE
-            # ------------------------------------------
-
-            con = sqlite3.connect(BASE_DATOS)
             cur = con.cursor()
 
+
             # ------------------------------------------
-            # 3. ASEGURAR COLUMNAS NECESARIAS
+            # 2. ASEGURAR COLUMNAS NECESARIAS
             # ------------------------------------------
 
             columnas = [
-                row[1]
-                for row in cur.execute(
+                ("uuid", "TEXT"),
+                ("cliente_id", "INTEGER DEFAULT 0"),
+                ("forma_pago", "TEXT"),
+                ("total", "REAL DEFAULT 0"),
+                ("estado", "TEXT DEFAULT 'ACTIVA'"),
+                ("descuento", "REAL DEFAULT 0"),
+                ("usuario", "TEXT"),
+                ("pago_efectivo", "REAL DEFAULT 0"),
+                ("pago_transferencia", "REAL DEFAULT 0"),
+                ("pago_tarjeta", "REAL DEFAULT 0"),
+                ("pago_cuenta", "REAL DEFAULT 0")
+            ]
+
+
+            existentes = {
+                fila[1]
+                for fila in cur.execute(
                     "PRAGMA table_info(ventas)"
                 ).fetchall()
-            ]
+            }
 
-            if "uuid" not in columnas:
-                cur.execute(
-                    "ALTER TABLE ventas ADD COLUMN uuid TEXT"
-                )
 
-            columnas_detalle = [
-                row[1]
-                for row in cur.execute(
-                    "PRAGMA table_info(detalle_ventas)"
-                ).fetchall()
-            ]
+            for columna, definicion in columnas:
 
-            if "codigo" not in columnas_detalle:
-                cur.execute(
-                    "ALTER TABLE detalle_ventas ADD COLUMN codigo TEXT"
-                )
+                if columna not in existentes:
 
-            con.commit()
+                    try:
+
+                        cur.execute(
+                            f"""
+                            ALTER TABLE ventas
+                            ADD COLUMN {columna} {definicion}
+                            """
+                        )
+
+                    except Exception as e:
+
+                        print(
+                            f"No se pudo agregar columna {columna}:",
+                            e
+                        )
+
 
             # ------------------------------------------
-            # 4. SINCRONIZAR CADA VENTA
+            # 3. PROCESAR CADA VENTA REMOTA
             # ------------------------------------------
 
-            ventas_nuevas = 0
-            ventas_actualizadas = 0
-            detalles_nuevos = 0
-            detalles_actualizados = 0
-            errores_detalle = 0
+            for venta in ventas_remotas:
 
-            for v in ventas_remotas:
-
-                uuid_venta = v.get("uuid")
+                uuid_venta = venta.get("uuid")
 
                 if not uuid_venta:
-                    print(
-                        "VENTA REMOTA SIN UUID:",
-                        v
-                    )
                     continue
 
+
                 # --------------------------------------
-                # BUSCAR POR UUID
+                # BUSCAR SI YA EXISTE LOCALMENTE
+                # POR UUID
                 # --------------------------------------
 
-                venta_local = cur.execute(
+                existente = cur.execute(
                     """
                     SELECT id
                     FROM ventas
-                    WHERE uuid = ?
+                    WHERE uuid=?
                     LIMIT 1
                     """,
                     (uuid_venta,)
                 ).fetchone()
 
-                datos_venta = (
-                    v.get("fecha"),
-                    v.get("total", 0),
-                    v.get("forma_pago", ""),
-                    v.get("cliente_id", 0),
-                    v.get("estado", "ACTIVA"),
-                    v.get("pago_efectivo", 0),
-                    v.get("pago_transferencia", 0),
-                    v.get("pago_tarjeta", 0),
-                    v.get("pago_cuenta", 0),
-                    uuid_venta
-                )
 
-                # --------------------------------------
-                # VENTA EXISTE LOCALMENTE
-                # --------------------------------------
+                if existente:
 
-                if venta_local:
+                    # ----------------------------------
+                    # ACTUALIZAR VENTA EXISTENTE
+                    # ----------------------------------
 
-                    venta_id_local = venta_local[0]
+                    venta_id_local = existente[0]
 
                     cur.execute(
                         """
                         UPDATE ventas
                         SET
-                            fecha = ?,
-                            total = ?,
-                            forma_pago = ?,
-                            cliente_id = ?,
-                            estado = ?,
-                            pago_efectivo = ?,
-                            pago_transferencia = ?,
-                            pago_tarjeta = ?,
-                            pago_cuenta = ?
-                        WHERE id = ?
+                            fecha=?,
+                            cliente_id=?,
+                            forma_pago=?,
+                            total=?,
+                            estado=?,
+                            descuento=?,
+                            usuario=?,
+                            pago_efectivo=?,
+                            pago_transferencia=?,
+                            pago_tarjeta=?,
+                            pago_cuenta=?
+                        WHERE id=?
                         """,
                         (
-                            v.get("fecha"),
-                            v.get("total", 0),
-                            v.get("forma_pago", ""),
-                            v.get("cliente_id", 0),
-                            v.get("estado", "ACTIVA"),
-                            v.get("pago_efectivo", 0),
-                            v.get("pago_transferencia", 0),
-                            v.get("pago_tarjeta", 0),
-                            v.get("pago_cuenta", 0),
+                            venta.get("fecha"),
+                            venta.get("cliente_id") or 0,
+                            venta.get("forma_pago") or "",
+                            venta.get("total") or 0,
+                            venta.get("estado") or "ACTIVA",
+                            venta.get("descuento") or 0,
+                            venta.get("usuario") or "Administrador",
+                            venta.get("pago_efectivo") or 0,
+                            venta.get("pago_transferencia") or 0,
+                            venta.get("pago_tarjeta") or 0,
+                            venta.get("pago_cuenta") or 0,
                             venta_id_local
                         )
                     )
 
-                    ventas_actualizadas += 1
-
-                # --------------------------------------
-                # VENTA NO EXISTE LOCALMENTE
-                # --------------------------------------
-
                 else:
+
+                    # ----------------------------------
+                    # INSERTAR NUEVA VENTA
+                    # ----------------------------------
 
                     cur.execute(
                         """
                         INSERT INTO ventas (
                             uuid,
                             fecha,
-                            total,
-                            forma_pago,
                             cliente_id,
+                            forma_pago,
+                            total,
                             estado,
+                            descuento,
+                            usuario,
                             pago_efectivo,
                             pago_transferencia,
                             pago_tarjeta,
                             pago_cuenta
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             uuid_venta,
-                            v.get("fecha"),
-                            v.get("total", 0),
-                            v.get("forma_pago", ""),
-                            v.get("cliente_id", 0),
-                            v.get("estado", "ACTIVA"),
-                            v.get("pago_efectivo", 0),
-                            v.get("pago_transferencia", 0),
-                            v.get("pago_tarjeta", 0),
-                            v.get("pago_cuenta", 0)
+                            venta.get("fecha"),
+                            venta.get("cliente_id") or 0,
+                            venta.get("forma_pago") or "",
+                            venta.get("total") or 0,
+                            venta.get("estado") or "ACTIVA",
+                            venta.get("descuento") or 0,
+                            venta.get("usuario") or "Administrador",
+                            venta.get("pago_efectivo") or 0,
+                            venta.get("pago_transferencia") or 0,
+                            venta.get("pago_tarjeta") or 0,
+                            venta.get("pago_cuenta") or 0
                         )
                     )
 
                     venta_id_local = cur.lastrowid
 
-                    ventas_nuevas += 1
 
-                # --------------------------------------
-                # 5. OBTENER DETALLE DE LA VENTA
-                # --------------------------------------
+                # ------------------------------------------
+                # 4. DESCARGAR DETALLES DE ESTA VENTA
+                # ------------------------------------------
 
-                id_venta_remota = v.get("id")
+                id_remoto = venta.get("id")
 
-                if not id_venta_remota:
-                    print(
-                        "VENTA SIN ID REMOTO:",
-                        uuid_venta
-                    )
+                if not id_remoto:
                     continue
+
 
                 try:
 
                     detalle_response = requests.get(
-                        f"{api_url}/ventas/{id_venta_remota}/detalle",
+                        f"{api_url}/ventas/{id_remoto}/detalle",
                         timeout=10
                     )
 
+
                     if detalle_response.status_code != 200:
+
                         print(
-                            "ERROR DETALLE VENTA",
-                            id_venta_remota,
-                            ":",
+                            "No se pudo descargar detalle de venta:",
+                            id_remoto,
                             detalle_response.status_code
                         )
 
-                        errores_detalle += 1
                         continue
 
-                    detalles_remotos = detalle_response.json()
 
-                    if not isinstance(
-                        detalles_remotos,
-                        list
-                    ):
-                        continue
+                    detalles = detalle_response.json()
 
-                    # ----------------------------------
-                    # ELIMINAR DETALLE ACTUAL
-                    #
-                    # La venta remota es la fuente de verdad.
-                    # ----------------------------------
-
-                    cur.execute(
-                        """
-                        DELETE FROM detalle_ventas
-                        WHERE venta_id = ?
-                        """,
-                        (venta_id_local,)
-                    )
-
-                    # ----------------------------------
-                    # INSERTAR DETALLES REMOTOS
-                    # ----------------------------------
-
-                    for d in detalles_remotos:
-
-                        producto = d.get(
-                            "producto",
-                            ""
-                        )
-
-                        cantidad = d.get(
-                            "cantidad",
-                            0
-                        )
-
-                        precio = d.get(
-                            "precio",
-                            0
-                        )
-
-                        subtotal = d.get(
-                            "subtotal",
-                            0
-                        )
-
-                        codigo = d.get(
-                            "codigo"
-                        )
-
-                        cur.execute(
-                            """
-                            INSERT INTO detalle_ventas (
-                                venta_id,
-                                producto,
-                                cantidad,
-                                precio,
-                                subtotal,
-                                codigo
-                            )
-                            VALUES (?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                venta_id_local,
-                                str(producto),
-                                cantidad,
-                                precio,
-                                subtotal,
-                                codigo
-                            )
-                        )
-
-                        detalles_nuevos += 1
 
                 except Exception as e:
 
-                    errores_detalle += 1
-
                     print(
-                        "ERROR SINCRONIZANDO DETALLE:",
-                        id_venta_remota,
+                        "Error descargando detalle:",
+                        id_remoto,
                         e
                     )
 
+                    continue
+
+
+                # ------------------------------------------
+                # 5. ELIMINAR DETALLES ANTERIORES
+                #    PARA EVITAR DUPLICADOS
+                # ------------------------------------------
+
+                cur.execute(
+                    """
+                    DELETE FROM detalle_ventas
+                    WHERE venta_id=?
+                    """,
+                    (venta_id_local,)
+                )
+
+
+                # ------------------------------------------
+                # 6. INSERTAR DETALLES ACTUALIZADOS
+                # ------------------------------------------
+
+                for detalle in detalles:
+
+                    cur.execute(
+                        """
+                        INSERT INTO detalle_ventas (
+                            venta_id,
+                            producto,
+                            cantidad,
+                            precio,
+                            subtotal,
+                            codigo
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            venta_id_local,
+                            detalle.get("producto") or "",
+                            detalle.get("cantidad") or 0,
+                            detalle.get("precio") or 0,
+                            detalle.get("subtotal") or 0,
+                            detalle.get("codigo")
+                        )
+                    )
+
+
             # ------------------------------------------
-            # 6. GUARDAR TODO
+            # 7. GUARDAR TODO
             # ------------------------------------------
 
             con.commit()
 
-            print("----------------------------------------")
-            print(
-                "VENTAS NUEVAS:",
-                ventas_nuevas
-            )
+            con.close()
+
 
             print(
-                "VENTAS ACTUALIZADAS:",
-                ventas_actualizadas
+                "Sincronización de ventas y detalles OK:",
+                len(ventas_remotas),
+                "ventas"
             )
 
-            print(
-                "DETALLES SINCRONIZADOS:",
-                detalles_nuevos
-            )
-
-            print(
-                "ERRORES DETALLE:",
-                errores_detalle
-            )
-
-            print(
-                "TOTAL VENTAS LOCALES:",
-                cur.execute(
-                    "SELECT COUNT(*) FROM ventas"
-                ).fetchone()[0]
-            )
-
-            print(
-                "TOTAL DETALLES LOCALES:",
-                cur.execute(
-                    "SELECT COUNT(*) FROM detalle_ventas"
-                ).fetchone()[0]
-            )
-
-            print("SINCRONIZACION DE VENTAS OK")
-            print("========================================")
 
         except Exception as e:
 
-            if con:
-                con.rollback()
-
             print(
-                "ERROR AL SINCRONIZAR VENTAS:",
-                repr(e)
+                "Error al sincronizar ventas:",
+                e
             )
 
-        finally:
-
-            if con:
+            try:
                 con.close()
+            except:
+                pass
 
     def sincronizar_arqueos_nube(self):
         try:

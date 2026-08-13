@@ -2505,6 +2505,10 @@ class Ventas(QWidget):
 
 
         venta_id = cursor.lastrowid
+        
+        print("DEBUG VENTA ID:", venta_id)
+        print("DEBUG ITEMS:", venta["items"])
+        print("DEBUG UUID:", venta_uuid)
 
 
 
@@ -2593,7 +2597,7 @@ class Ventas(QWidget):
             fecha,
             0
         ))
-
+        print("DEBUG SYNC INSERTADA:", cursor.rowcount)
 
         conexion.commit()
         conexion.close()

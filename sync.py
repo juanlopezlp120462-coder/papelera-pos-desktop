@@ -337,41 +337,183 @@ def descargar_ventas():
         return 0
 
     try:
-        respuesta = requests.get(f"{SERVIDOR}/ventas", timeout=15)
-        if respuesta.status_code == 200:
-            ventas_remotas = respuesta.json()
-            conexion = create_connection()
-            cursor = conexion.cursor()
+        respuesta = requests.get(
+            f"{SERVIDOR}/ventas/",
+            timeout=15
+        )
 
-            actualizadas = 0
-            for venta in ventas_remotas:
-                uuid_venta = venta.get("uuid")
-                fecha = venta.get("fecha")
-                total = venta.get("total", 0)
-                forma_pago = venta.get("forma_pago", "EFECTIVO")
-                cliente_id = venta.get("cliente_id")
-                descuento = venta.get("descuento", 0)
-                usuario = venta.get("usuario", "Administrador")
+        if respuesta.status_code != 200:
+            print("Error descargando ventas:", respuesta.status_code)
+            return 0
 
-                if uuid_venta:
-                    cursor.execute("SELECT id FROM ventas WHERE uuid=?", (uuid_venta,))
-                    existente = cursor.fetchone()
+        ventas_remotas = respuesta.json()
 
-                    if not existente:
-                        cursor.execute("""
-                            INSERT INTO ventas (uuid, fecha, total, forma_pago, cliente_id, descuento, usuario)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (uuid_venta, fecha, total, forma_pago, cliente_id, descuento, usuario))
-                        actualizadas += 1
+        conexion = create_connection()
+        cursor = conexion.cursor()
 
-            conexion.commit()
-            conexion.close()
-            return actualizadas
-        return 0
+        actualizadas = 0
+
+        for venta in ventas_remotas:
+
+            uuid_venta = venta.get("uuid")
+
+            if not uuid_venta:
+                continue
+
+            # Buscar venta local por UUID
+            cursor.execute(
+                "SELECT id FROM ventas WHERE uuid=?",
+                (uuid_venta,)
+            )
+
+            existente = cursor.fetchone()
+
+            if existente:
+
+                venta_id = existente[0]
+
+                # Actualizar cabecera de la venta
+                cursor.execute("""
+                    UPDATE ventas
+                    SET
+                        fecha=?,
+                        total=?,
+                        forma_pago=?,
+                        cliente_id=?,
+                        estado=?,
+                        descuento=?,
+                        usuario=?,
+                        pago_efectivo=?,
+                        pago_transferencia=?,
+                        pago_tarjeta=?,
+                        pago_cuenta=?
+                    WHERE id=?
+                """, (
+                    venta.get("fecha"),
+                    venta.get("total", 0),
+                    venta.get("forma_pago", "EFECTIVO"),
+                    venta.get("cliente_id"),
+                    venta.get("estado", "ACTIVA"),
+                    venta.get("descuento", 0),
+                    venta.get("usuario", "Administrador"),
+                    venta.get("pago_efectivo", 0),
+                    venta.get("pago_transferencia", 0),
+                    venta.get("pago_tarjeta", 0),
+                    venta.get("pago_cuenta", 0),
+                    venta_id
+                ))
+
+            else:
+
+                # Crear cabecera local
+                cursor.execute("""
+                    INSERT INTO ventas (
+                        uuid,
+                        fecha,
+                        total,
+                        forma_pago,
+                        cliente_id,
+                        estado,
+                        descuento,
+                        usuario,
+                        pago_efectivo,
+                        pago_transferencia,
+                        pago_tarjeta,
+                        pago_cuenta
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    uuid_venta,
+                    venta.get("fecha"),
+                    venta.get("total", 0),
+                    venta.get("forma_pago", "EFECTIVO"),
+                    venta.get("cliente_id"),
+                    venta.get("estado", "ACTIVA"),
+                    venta.get("descuento", 0),
+                    venta.get("usuario", "Administrador"),
+                    venta.get("pago_efectivo", 0),
+                    venta.get("pago_transferencia", 0),
+                    venta.get("pago_tarjeta", 0),
+                    venta.get("pago_cuenta", 0)
+                ))
+
+                venta_id = cursor.lastrowid
+
+            # ==========================================
+            # DESCARGAR DETALLES
+            # ==========================================
+
+            try:
+                detalle_respuesta = requests.get(
+                    f"{SERVIDOR}/ventas/{venta['id']}/detalle",
+                    timeout=15
+                )
+
+                if detalle_respuesta.status_code != 200:
+                    print(
+                        "Error descargando detalle venta:",
+                        uuid_venta,
+                        detalle_respuesta.status_code
+                    )
+                    continue
+
+                detalles = detalle_respuesta.json()
+
+            except Exception as e:
+                print(
+                    "Error consultando detalles:",
+                    uuid_venta,
+                    e
+                )
+                continue
+
+            # Evitar duplicar detalles
+            cursor.execute(
+                "DELETE FROM detalle_ventas WHERE venta_id=?",
+                (venta_id,)
+            )
+
+            for item in detalles:
+
+                cursor.execute("""
+                    INSERT INTO detalle_ventas (
+                        venta_id,
+                        producto,
+                        cantidad,
+                        precio,
+                        subtotal,
+                        codigo
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    venta_id,
+                    item.get("producto", ""),
+                    item.get("cantidad", 0),
+                    item.get("precio", 0),
+                    item.get("subtotal", 0),
+                    item.get("codigo", "")
+                ))
+
+            actualizadas += 1
+
+        conexion.commit()
+        conexion.close()
+
+        print(
+            "Ventas descargadas con detalles:",
+            actualizadas
+        )
+
+        return actualizadas
+
     except Exception as e:
-        print("Error descargando ventas:", e)
-        return 0
 
+        print(
+            "Error descargando ventas:",
+            e
+        )
+
+        return 0
 
 # ==========================================
 # FUNCIÓN PRINCIPAL DE SINCRONIZACIÓN

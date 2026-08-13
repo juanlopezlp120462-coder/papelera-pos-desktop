@@ -36,8 +36,28 @@ else:
 # ============================================================
 
 def obtener_version_actual():
-    # Versión fija de respaldo por si el archivo de texto no existe o falla
+
     version_por_defecto = "1.0.1"
+
+    print(
+        "DEBUG FROZEN:",
+        getattr(sys, "frozen", False)
+    )
+
+    print(
+        "DEBUG SYS.EXECUTABLE:",
+        sys.executable
+    )
+
+    print(
+        "DEBUG VERSION_FILE:",
+        VERSION_FILE
+    )
+
+    print(
+        "DEBUG EXISTE VERSION_FILE:",
+        os.path.exists(VERSION_FILE)
+    )
 
     try:
 
