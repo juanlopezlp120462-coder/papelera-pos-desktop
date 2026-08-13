@@ -1,7 +1,11 @@
 import json
 import requests
 
-from ui.db import create_connection, init_db
+from ui.db import (
+    create_connection,
+    init_db,
+    archivar_ventas
+)
 
 
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
@@ -766,6 +770,34 @@ def descargar_ventas():
         conexion = create_connection()
         cursor = conexion.cursor()
 
+        # ==========================================
+        # OBTENER FECHAS QUE YA TIENEN ARQUEO
+        # ==========================================
+
+        fechas_cerradas = set()
+
+        filas_arqueos = cursor.execute(
+            """
+            SELECT fecha
+            FROM arqueos
+            WHERE fecha IS NOT NULL
+            """
+        ).fetchall()
+
+        for fila in filas_arqueos:
+
+            fecha_arqueo = fila[0]
+
+            if fecha_arqueo:
+
+                fecha_dia = str(
+                    fecha_arqueo
+                )[:10]
+
+                fechas_cerradas.add(
+                    fecha_dia
+                )
+
         actualizadas = 0
 
         for venta in ventas_remotas:
@@ -777,14 +809,59 @@ def descargar_ventas():
             if not uuid_venta:
                 continue
 
+            fecha_venta = venta.get(
+                "fecha"
+            )
+
+            fecha_dia_venta = ""
+
+            if fecha_venta:
+
+                fecha_dia_venta = str(
+                    fecha_venta
+                )[:10]
+
+            # ==========================================
+            # COMPROBAR SI YA EXISTE LOCALMENTE
+            # ==========================================
+
             existente = cursor.execute(
                 """
-                SELECT id
+                SELECT id, estado
                 FROM ventas
                 WHERE uuid=?
                 """,
                 (uuid_venta,)
             ).fetchone()
+
+            # ==========================================
+            # DETERMINAR ESTADO CORRECTO
+            # ==========================================
+
+            estado_remoto = venta.get(
+                "estado",
+                "ACTIVA"
+            )
+
+            # Si el día ya tiene arqueo,
+            # la venta DEBE permanecer archivada.
+            if fecha_dia_venta in fechas_cerradas:
+
+                estado_final = "ARCHIVADA"
+
+            elif existente and existente[1] == "ARCHIVADA":
+
+                # Nunca reactivar una venta que ya fue
+                # archivada localmente.
+                estado_final = "ARCHIVADA"
+
+            else:
+
+                estado_final = estado_remoto
+
+            # ==========================================
+            # ACTUALIZAR VENTA EXISTENTE
+            # ==========================================
 
             if existente:
 
@@ -808,17 +885,19 @@ def descargar_ventas():
                     WHERE id=?
                     """,
                     (
-                        venta.get("fecha"),
-                        venta.get("total", 0),
+                        fecha_venta,
+                        venta.get(
+                            "total",
+                            0
+                        ),
                         venta.get(
                             "forma_pago",
                             "EFECTIVO"
                         ),
-                        venta.get("cliente_id"),
                         venta.get(
-                            "estado",
-                            "ACTIVA"
+                            "cliente_id"
                         ),
+                        estado_final,
                         venta.get(
                             "descuento",
                             0
@@ -847,6 +926,10 @@ def descargar_ventas():
                     )
                 )
 
+            # ==========================================
+            # INSERTAR VENTA NUEVA
+            # ==========================================
+
             else:
 
                 cursor.execute(
@@ -871,17 +954,19 @@ def descargar_ventas():
                     """,
                     (
                         uuid_venta,
-                        venta.get("fecha"),
-                        venta.get("total", 0),
+                        fecha_venta,
+                        venta.get(
+                            "total",
+                            0
+                        ),
                         venta.get(
                             "forma_pago",
                             "EFECTIVO"
                         ),
-                        venta.get("cliente_id"),
                         venta.get(
-                            "estado",
-                            "ACTIVA"
+                            "cliente_id"
                         ),
+                        estado_final,
                         venta.get(
                             "descuento",
                             0
@@ -965,12 +1050,11 @@ def descargar_arqueos():
         cursor = conexion.cursor()
 
         descargados = 0
+        fechas_para_archivar = []
 
         for arqueo in arqueos_remotos:
 
-            arqueo_uuid = arqueo.get(
-                "uuid"
-            )
+            arqueo_uuid = arqueo.get("uuid")
 
             if not arqueo_uuid:
                 continue
@@ -984,8 +1068,16 @@ def descargar_arqueos():
                 (arqueo_uuid,)
             ).fetchone()
 
+            # ==========================================
+            # SI YA EXISTE, NO HACER NADA
+            # ==========================================
+
             if existente:
                 continue
+
+            # ==========================================
+            # GUARDAR ARQUEO LOCAL
+            # ==========================================
 
             cursor.execute(
                 """
@@ -1012,22 +1104,10 @@ def descargar_arqueos():
                 (
                     arqueo_uuid,
                     arqueo.get("fecha"),
-                    arqueo.get(
-                        "apertura",
-                        0
-                    ),
-                    arqueo.get(
-                        "esperado",
-                        0
-                    ),
-                    arqueo.get(
-                        "real",
-                        0
-                    ),
-                    arqueo.get(
-                        "diferencia",
-                        0
-                    ),
+                    arqueo.get("apertura", 0),
+                    arqueo.get("esperado", 0),
+                    arqueo.get("real", 0),
+                    arqueo.get("diferencia", 0),
                     arqueo.get(
                         "usuario",
                         "Administrador"
@@ -1065,8 +1145,58 @@ def descargar_arqueos():
 
             descargados += 1
 
+            # ==========================================
+            # GUARDAR FECHA PARA ARCHIVAR DESPUÉS
+            # ==========================================
+
+            fecha_arqueo = arqueo.get("fecha")
+
+            if fecha_arqueo:
+
+                fecha_dia = str(
+                    fecha_arqueo
+                )[:10]
+
+                fechas_para_archivar.append(
+                    fecha_dia
+                )
+
+        # ==========================================
+        # GUARDAR ARQUEOS
+        # ==========================================
+
         conexion.commit()
+
+        # ==========================================
+        # CERRAR SQLITE ANTES DE ARCHIVAR VENTAS
+        # ==========================================
+
         conexion.close()
+
+        # ==========================================
+        # ARCHIVAR VENTAS DESPUÉS DE CERRAR
+        # LA CONEXIÓN ANTERIOR
+        # ==========================================
+
+        for fecha_dia in fechas_para_archivar:
+
+            try:
+
+                archivar_ventas(
+                    fecha=fecha_dia
+                )
+
+                print(
+                    "Ventas archivadas por arqueo remoto:",
+                    fecha_dia
+                )
+
+            except Exception as e:
+
+                print(
+                    "Error archivando ventas:",
+                    e
+                )
 
         print(
             "Arqueos descargados:",
