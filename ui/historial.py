@@ -431,13 +431,45 @@ class Historial(QWidget):
             con.commit()
 
             # ------------------------------------------
-            # 4. SINCRONIZAR CADA VENTA
+            # 4. OBTENER FECHAS QUE YA TIENEN ARQUEO
+            # ------------------------------------------
+
+            fechas_cerradas = set()
+
+            filas_arqueos = cur.execute(
+                """
+                SELECT fecha
+                FROM arqueos
+                WHERE fecha IS NOT NULL
+                """
+            ).fetchall()
+
+            for fila in filas_arqueos:
+
+                fecha_arqueo = fila[0]
+
+                if fecha_arqueo:
+
+                    fecha_dia = str(
+                        fecha_arqueo
+                    )[:10]
+
+                    fechas_cerradas.add(
+                        fecha_dia
+                    )
+
+            print(
+                "FECHAS CERRADAS:",
+                sorted(fechas_cerradas)
+            )
+
+            # ------------------------------------------
+            # 5. SINCRONIZAR CADA VENTA
             # ------------------------------------------
 
             ventas_nuevas = 0
             ventas_actualizadas = 0
             detalles_nuevos = 0
-            detalles_actualizados = 0
             errores_detalle = 0
 
             for v in ventas_remotas:
@@ -451,13 +483,27 @@ class Historial(QWidget):
                     )
                     continue
 
+                fecha_venta = v.get("fecha")
+
                 # --------------------------------------
-                # BUSCAR POR UUID
+                # FECHA DEL DIA DE LA VENTA
+                # --------------------------------------
+
+                fecha_dia_venta = ""
+
+                if fecha_venta:
+
+                    fecha_dia_venta = str(
+                        fecha_venta
+                    )[:10]
+
+                # --------------------------------------
+                # BUSCAR VENTA LOCAL
                 # --------------------------------------
 
                 venta_local = cur.execute(
                     """
-                    SELECT id
+                    SELECT id, estado
                     FROM ventas
                     WHERE uuid = ?
                     LIMIT 1
@@ -465,18 +511,37 @@ class Historial(QWidget):
                     (uuid_venta,)
                 ).fetchone()
 
-                datos_venta = (
-                    v.get("fecha"),
-                    v.get("total", 0),
-                    v.get("forma_pago", ""),
-                    v.get("cliente_id", 0),
-                    v.get("estado", "ACTIVA"),
-                    v.get("pago_efectivo", 0),
-                    v.get("pago_transferencia", 0),
-                    v.get("pago_tarjeta", 0),
-                    v.get("pago_cuenta", 0),
-                    uuid_venta
+                # --------------------------------------
+                # ESTADO REMOTO
+                # --------------------------------------
+
+                estado_remoto = v.get(
+                    "estado",
+                    "ACTIVA"
                 )
+
+                # --------------------------------------
+                # DETERMINAR ESTADO FINAL
+                #
+                # IMPORTANTE:
+                #
+                # ARCHIVADA NUNCA VUELVE A ACTIVA
+                #
+                # Si existe arqueo para ese día,
+                # toda venta de ese día queda archivada.
+                # --------------------------------------
+
+                if fecha_dia_venta in fechas_cerradas:
+
+                    estado_final = "ARCHIVADA"
+
+                elif venta_local and venta_local[1] == "ARCHIVADA":
+
+                    estado_final = "ARCHIVADA"
+
+                else:
+
+                    estado_final = estado_remoto
 
                 # --------------------------------------
                 # VENTA EXISTE LOCALMENTE
@@ -502,15 +567,45 @@ class Historial(QWidget):
                         WHERE id = ?
                         """,
                         (
-                            v.get("fecha"),
-                            v.get("total", 0),
-                            v.get("forma_pago", ""),
-                            v.get("cliente_id", 0),
-                            v.get("estado", "ACTIVA"),
-                            v.get("pago_efectivo", 0),
-                            v.get("pago_transferencia", 0),
-                            v.get("pago_tarjeta", 0),
-                            v.get("pago_cuenta", 0),
+                            fecha_venta,
+
+                            v.get(
+                                "total",
+                                0
+                            ),
+
+                            v.get(
+                                "forma_pago",
+                                ""
+                            ),
+
+                            v.get(
+                                "cliente_id",
+                                0
+                            ),
+
+                            estado_final,
+
+                            v.get(
+                                "pago_efectivo",
+                                0
+                            ),
+
+                            v.get(
+                                "pago_transferencia",
+                                0
+                            ),
+
+                            v.get(
+                                "pago_tarjeta",
+                                0
+                            ),
+
+                            v.get(
+                                "pago_cuenta",
+                                0
+                            ),
+
                             venta_id_local
                         )
                     )
@@ -518,7 +613,7 @@ class Historial(QWidget):
                     ventas_actualizadas += 1
 
                 # --------------------------------------
-                # VENTA NO EXISTE LOCALMENTE
+                # VENTA NUEVA
                 # --------------------------------------
 
                 else:
@@ -541,15 +636,45 @@ class Historial(QWidget):
                         """,
                         (
                             uuid_venta,
-                            v.get("fecha"),
-                            v.get("total", 0),
-                            v.get("forma_pago", ""),
-                            v.get("cliente_id", 0),
-                            v.get("estado", "ACTIVA"),
-                            v.get("pago_efectivo", 0),
-                            v.get("pago_transferencia", 0),
-                            v.get("pago_tarjeta", 0),
-                            v.get("pago_cuenta", 0)
+
+                            fecha_venta,
+
+                            v.get(
+                                "total",
+                                0
+                            ),
+
+                            v.get(
+                                "forma_pago",
+                                ""
+                            ),
+
+                            v.get(
+                                "cliente_id",
+                                0
+                            ),
+
+                            estado_final,
+
+                            v.get(
+                                "pago_efectivo",
+                                0
+                            ),
+
+                            v.get(
+                                "pago_transferencia",
+                                0
+                            ),
+
+                            v.get(
+                                "pago_tarjeta",
+                                0
+                            ),
+
+                            v.get(
+                                "pago_cuenta",
+                                0
+                            )
                         )
                     )
 
@@ -557,17 +682,19 @@ class Historial(QWidget):
 
                     ventas_nuevas += 1
 
-                # --------------------------------------
-                # 5. OBTENER DETALLE DE LA VENTA
-                # --------------------------------------
+                # ------------------------------------------
+                # 6. OBTENER DETALLE DE LA VENTA
+                # ------------------------------------------
 
                 id_venta_remota = v.get("id")
 
                 if not id_venta_remota:
+
                     print(
                         "VENTA SIN ID REMOTO:",
                         uuid_venta
                     )
+
                     continue
 
                 try:
@@ -578,6 +705,7 @@ class Historial(QWidget):
                     )
 
                     if detalle_response.status_code != 200:
+
                         print(
                             "ERROR DETALLE VENTA",
                             id_venta_remota,
@@ -586,6 +714,7 @@ class Historial(QWidget):
                         )
 
                         errores_detalle += 1
+
                         continue
 
                     detalles_remotos = detalle_response.json()
@@ -594,12 +723,11 @@ class Historial(QWidget):
                         detalles_remotos,
                         list
                     ):
+
                         continue
 
                     # ----------------------------------
                     # ELIMINAR DETALLE ACTUAL
-                    #
-                    # La venta remota es la fuente de verdad.
                     # ----------------------------------
 
                     cur.execute(
@@ -675,12 +803,13 @@ class Historial(QWidget):
                     )
 
             # ------------------------------------------
-            # 6. GUARDAR TODO
+            # 7. GUARDAR TODO
             # ------------------------------------------
 
             con.commit()
 
             print("----------------------------------------")
+
             print(
                 "VENTAS NUEVAS:",
                 ventas_nuevas
@@ -702,16 +831,24 @@ class Historial(QWidget):
             )
 
             print(
-                "TOTAL VENTAS LOCALES:",
+                "VENTAS ACTIVAS LOCALES:",
                 cur.execute(
-                    "SELECT COUNT(*) FROM ventas"
+                    """
+                    SELECT COUNT(*)
+                    FROM ventas
+                    WHERE COALESCE(estado,'ACTIVA')='ACTIVA'
+                    """
                 ).fetchone()[0]
             )
 
             print(
-                "TOTAL DETALLES LOCALES:",
+                "VENTAS ARCHIVADAS LOCALES:",
                 cur.execute(
-                    "SELECT COUNT(*) FROM detalle_ventas"
+                    """
+                    SELECT COUNT(*)
+                    FROM ventas
+                    WHERE estado='ARCHIVADA'
+                    """
                 ).fetchone()[0]
             )
 
@@ -731,7 +868,11 @@ class Historial(QWidget):
         finally:
 
             if con:
-                con.close()
+
+                try:
+                    con.close()
+                except Exception:
+                    pass
 
     def sincronizar_arqueos_nube(self):
         try:
