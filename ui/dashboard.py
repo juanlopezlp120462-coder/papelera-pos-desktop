@@ -359,6 +359,9 @@ class Dashboard(QMainWindow):
             self.stack.addWidget(w)
             self._module_cache[cls] = w
 
+            if cls is Ventas:
+                w.venta_realizada.connect(self.actualizar)
+
         self.stack.setCurrentWidget(w)
 
         if cls is Ventas:

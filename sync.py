@@ -749,6 +749,8 @@ def descargar_ventas():
     if not hay_internet():
         return 0
 
+    conexion = None
+
     try:
 
         respuesta = requests.get(
@@ -768,20 +770,29 @@ def descargar_ventas():
 
         ventas_remotas = respuesta.json()
 
+        if not isinstance(ventas_remotas, list):
+
+            print(
+                "Error: respuesta de ventas no es una lista"
+            )
+
+            return 0
+
         conexion = create_connection()
         cursor = conexion.cursor()
 
         # ==========================================
-        # OBTENER FECHAS QUE YA TIENEN ARQUEO
+        # OBTENER EL ÚLTIMO ARQUEO DE CADA DÍA
         # ==========================================
 
-        fechas_cerradas = set()
+        ultimos_arqueos = {}
 
         filas_arqueos = cursor.execute(
             """
             SELECT fecha
             FROM arqueos
             WHERE fecha IS NOT NULL
+            ORDER BY fecha ASC
             """
         ).fetchall()
 
@@ -789,21 +800,27 @@ def descargar_ventas():
 
             fecha_arqueo = fila[0]
 
-            if fecha_arqueo:
+            if not fecha_arqueo:
+                continue
 
-                fecha_dia = str(
-                    fecha_arqueo
-                )[:10]
+            fecha_arqueo = str(
+                fecha_arqueo
+            )
 
-                fechas_cerradas.add(
-                    fecha_dia
-                )
+            fecha_dia = fecha_arqueo[:10]
 
-        actualizadas = 0
+            ultimos_arqueos[fecha_dia] = fecha_arqueo
+
+        print(
+            "ULTIMOS ARQUEOS:",
+            ultimos_arqueos
+        )
 
         # ==========================================
         # RECORRER VENTAS REMOTAS
         # ==========================================
+
+        actualizadas = 0
 
         for venta in ventas_remotas:
 
@@ -818,16 +835,84 @@ def descargar_ventas():
                 "fecha"
             )
 
-            fecha_dia_venta = ""
+            if not fecha_venta:
+                continue
 
-            if fecha_venta:
+            fecha_venta = str(
+                fecha_venta
+            )
 
-                fecha_dia_venta = str(
-                    fecha_venta
-                )[:10]
+            fecha_dia_venta = fecha_venta[:10]
 
             # ==========================================
-            # BUSCAR VENTA LOCAL
+            # CONVERTIR FECHA DE VENTA A DATETIME
+            # ==========================================
+
+            try:
+
+                from datetime import datetime
+
+                fecha_venta_dt = datetime.fromisoformat(
+                    fecha_venta.replace(
+                        "Z",
+                        ""
+                    )
+                )
+
+            except Exception:
+
+                fecha_venta_dt = None
+
+            # ==========================================
+            # DETERMINAR SI LA VENTA ESTÁ CERRADA
+            # ==========================================
+
+            arqueo_fecha = ultimos_arqueos.get(
+                fecha_dia_venta
+            )
+
+            estado_remoto = venta.get(
+                "estado",
+                "ACTIVA"
+            )
+
+            estado_final = estado_remoto
+
+            if arqueo_fecha:
+
+                try:
+
+                    from datetime import datetime
+
+                    fecha_arqueo_dt = datetime.fromisoformat(
+                        str(arqueo_fecha).replace(
+                            "T",
+                            " "
+                        )
+                    )
+
+                    if (
+                        fecha_venta_dt
+                        and fecha_venta_dt <= fecha_arqueo_dt
+                    ):
+
+                        estado_final = "ARCHIVADA"
+
+                    else:
+
+                        estado_final = "ACTIVA"
+
+                except Exception as e:
+
+                    print(
+                        "Error comparando fechas:",
+                        e
+                    )
+
+                    estado_final = estado_remoto
+
+            # ==========================================
+            # BUSCAR VENTA LOCAL POR UUID
             # ==========================================
 
             existente = cursor.execute(
@@ -840,41 +925,19 @@ def descargar_ventas():
             ).fetchone()
 
             # ==========================================
-            # ESTADO REMOTO
-            # ==========================================
-
-            estado_remoto = venta.get(
-                "estado",
-                "ACTIVA"
-            )
-
-            # ==========================================
-            # DETERMINAR ESTADO FINAL
-            # ==========================================
-
-            if fecha_dia_venta in fechas_cerradas:
-
-                # Si ese día ya tiene arqueo,
-                # la venta queda archivada.
-                estado_final = "ARCHIVADA"
-
-            elif existente and existente[1] == "ARCHIVADA":
-
-                # Nunca reactivar una venta
-                # archivada localmente.
-                estado_final = "ARCHIVADA"
-
-            else:
-
-                estado_final = estado_remoto
-
-            # ==========================================
-            # ACTUALIZAR VENTA EXISTENTE
+            # SI YA EXISTE
             # ==========================================
 
             if existente:
 
                 venta_id = existente[0]
+
+                # Nunca reactivar una venta que ya fue
+                # archivada por un arqueo anterior.
+                #
+                # EXCEPCIÓN:
+                # si la venta es posterior al último
+                # arqueo, debe quedar ACTIVA.
 
                 cursor.execute(
                     """
@@ -894,9 +957,7 @@ def descargar_ventas():
                     WHERE id=?
                     """,
                     (
-                        venta.get(
-                            "fecha"
-                        ),
+                        fecha_venta,
 
                         venta.get(
                             "total",
@@ -951,7 +1012,7 @@ def descargar_ventas():
                 actualizadas += 1
 
             # ==========================================
-            # INSERTAR VENTA NUEVA
+            # VENTA NUEVA
             # ==========================================
 
             else:
@@ -1032,24 +1093,68 @@ def descargar_ventas():
                 actualizadas += 1
 
         # ==========================================
-        # GUARDAR CAMBIOS
+        # GUARDAR
         # ==========================================
 
         conexion.commit()
-        conexion.close()
 
         print(
             "Ventas descargadas:",
             actualizadas
         )
 
+        # ==========================================
+        # MOSTRAR CUÁNTAS QUEDAN ACTIVAS
+        # ==========================================
+
+        activas = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM ventas
+            WHERE estado='ACTIVA'
+            """
+        ).fetchone()[0]
+
+        archivadas = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM ventas
+            WHERE estado='ARCHIVADA'
+            """
+        ).fetchone()[0]
+
+        print(
+            "VENTAS ACTIVAS:",
+            activas
+        )
+
+        print(
+            "VENTAS ARCHIVADAS:",
+            archivadas
+        )
+
+        print(
+            "DESCARGA DE VENTAS OK"
+        )
+
+        conexion.close()
+        conexion = None
+
         return actualizadas
 
     except Exception as e:
 
+        if conexion:
+
+            try:
+                conexion.rollback()
+                conexion.close()
+            except:
+                pass
+
         print(
             "Error descargando ventas:",
-            e
+            repr(e)
         )
 
         return 0
@@ -1385,9 +1490,9 @@ def sincronizar():
 
     productos_bajados = descargar_productos()
 
-    ventas_bajadas = descargar_ventas()
-
     arqueos_bajados = descargar_arqueos()
+
+    ventas_bajadas = descargar_ventas()
 
     movimientos_bajados = descargar_movimientos_caja()
 

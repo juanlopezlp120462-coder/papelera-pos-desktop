@@ -1015,7 +1015,7 @@ class DialogoPagoMixto(QDialog):
 
         return valores
 class Ventas(QWidget):
-
+    venta_realizada = Signal()
     def __init__(self):
         super().__init__()
 
@@ -2659,6 +2659,7 @@ class Ventas(QWidget):
 
 
             venta_id = self.guardar_venta_local(venta)
+            self.venta_realizada.emit()
 
 
             detalle_pago = f"""
