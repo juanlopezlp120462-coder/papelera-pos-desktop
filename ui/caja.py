@@ -403,6 +403,103 @@ class Caja(QWidget):
         root.addWidget(
             form
         )
+        
+        # ==========================
+        # MOVIMIENTOS DE CAJA
+        # ==========================
+
+        movimientos_card = QFrame()
+
+        movimientos_card.setObjectName(
+            "card"
+        )
+
+        movimientos_layout = QVBoxLayout(
+            movimientos_card
+        )
+
+        titulo_movimientos = QLabel(
+            "💰 Movimientos de caja"
+        )
+
+        titulo_movimientos.setStyleSheet(
+            "font-size:18px;font-weight:900;"
+        )
+
+        movimientos_layout.addWidget(
+            titulo_movimientos
+        )
+
+        fila_movimiento = QHBoxLayout()
+
+        self.mov_tipo = QComboBox()
+
+        self.mov_tipo.addItems([
+            "INGRESO",
+            "EGRESO"
+        ])
+
+        self.mov_importe = QDoubleSpinBox()
+
+        setup_numeric(
+            self.mov_importe,
+            2
+        )
+
+        self.configurar_numero(
+            self.mov_importe
+        )
+
+        self.mov_importe.setMinimum(
+            0
+        )
+
+        self.mov_concepto = QLineEdit()
+
+        self.mov_concepto.setPlaceholderText(
+            "Concepto del movimiento"
+        )
+
+        self.btn_movimiento = QPushButton(
+            "Registrar movimiento"
+        )
+
+        self.btn_movimiento.clicked.connect(
+            self.registrar_movimiento_caja
+        )
+
+        fila_movimiento.addWidget(
+            QLabel("Tipo:")
+        )
+
+        fila_movimiento.addWidget(
+            self.mov_tipo
+        )
+
+        fila_movimiento.addWidget(
+            QLabel("Importe:")
+        )
+
+        fila_movimiento.addWidget(
+            self.mov_importe
+        )
+
+        fila_movimiento.addWidget(
+            self.mov_concepto
+        )
+
+        fila_movimiento.addWidget(
+            self.btn_movimiento
+        )
+
+        movimientos_layout.addLayout(
+            fila_movimiento
+        )
+
+        root.addWidget(
+            movimientos_card
+        )
+        
         # ==========================
         # RESULTADO
         # ==========================
@@ -876,7 +973,124 @@ class Caja(QWidget):
 
         self.calcular()
 
+    # ==========================
+    # REGISTRAR MOVIMIENTO
+    # ==========================
 
+    def registrar_movimiento_caja(self):
+
+        self.mov_importe.interpretText()
+
+        importe = float(
+            self.mov_importe.value()
+        )
+
+        tipo = self.mov_tipo.currentText()
+
+        concepto = self.mov_concepto.text().strip()
+
+        if importe <= 0:
+
+            QMessageBox.warning(
+                self,
+                "Movimiento de caja",
+                "Ingresá un importe mayor a cero."
+            )
+
+            self.mov_importe.setFocus()
+
+            return
+
+        if not concepto:
+
+            QMessageBox.warning(
+                self,
+                "Movimiento de caja",
+                "Ingresá un concepto."
+            )
+
+            self.mov_concepto.setFocus()
+
+            return
+
+        try:
+
+            movimiento_uuid = str(
+                uuid.uuid4()
+            )
+
+            fecha_str = datetime.datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+
+            con = sqlite3.connect(
+                BASE_DATOS
+            )
+
+            con.execute(
+                """
+                INSERT INTO movimientos_caja
+                (
+                    fecha,
+                    tipo,
+                    importe,
+                    concepto,
+                    usuario,
+                    uuid
+                )
+                VALUES
+                (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    fecha_str,
+                    tipo,
+                    importe,
+                    concepto,
+                    "Administrador",
+                    movimiento_uuid
+                )
+            )
+
+            con.commit()
+            con.close()
+
+            datos_movimiento = {
+                "uuid": movimiento_uuid,
+                "fecha": fecha_str,
+                "tipo": tipo,
+                "importe": importe,
+                "concepto": concepto,
+                "usuario": "Administrador"
+            }
+
+            registrar_sincronizacion(
+                "movimientos_caja",
+                movimiento_uuid,
+                "crear",
+                datos_movimiento
+            )
+
+            self.mov_importe.setValue(
+                0
+            )
+
+            self.mov_concepto.clear()
+
+            self.mov_concepto.setFocus()
+
+            QMessageBox.information(
+                self,
+                "Movimiento registrado",
+                f"{tipo} registrado correctamente."
+            )
+
+        except Exception as e:
+
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"No se pudo registrar el movimiento:\n\n{e}"
+            )
 
     # ==========================
     # CALCULAR ARQUEO
@@ -1283,13 +1497,51 @@ $ {self.real.value():,.2f}
 
             con.close()
 
-            # Registrar sincronización para notificar a las demás PCs el cierre y archivado
-            hoy_str = self.fecha_hoy()
-            datos_sync = {"fecha": hoy_str, "accion": "archivar_hoy"}
-            registrar_sincronizacion("ventas", nuevo_uuid(), "archivar_hoy", datos_sync)
+            # ==========================================
+            # REGISTRAR ARQUEO PARA SINCRONIZACIÓN
+            # ==========================================
 
-            # Sincronización saliente hacia la nube/backend para que se refleje en todas las PCs
-# Sincronización saliente hacia la nube/backend para que se refleje en todas las PCs
+            datos_arqueo_sync = {
+                "uuid": uuid_arqueo,
+                "fecha": fecha_str,
+                "apertura": self.apertura.value(),
+                "esperado": self.esperado,
+                "real": self.real.value(),
+                "diferencia": self.real.value() - self.esperado,
+                "usuario": "Administrador",
+                "observaciones": self.obs.text(),
+                "ventas_total": self.total_ventas,
+                "ventas_efectivo": self.efectivo_ventas,
+                "ventas_transferencia": 0,
+                "ventas_tarjeta": 0,
+                "ventas_cuenta": 0,
+                "cantidad_ventas": self.cantidad_ventas
+            }
+
+            registrar_sincronizacion(
+                "arqueos",
+                uuid_arqueo,
+                "crear",
+                datos_arqueo_sync
+            )
+
+            # ==========================================
+            # REGISTRAR CIERRE/ARCHIVADO DE VENTAS
+            # ==========================================
+
+            hoy_str = self.fecha_hoy()
+
+            datos_sync = {
+                "fecha": hoy_str,
+                "accion": "archivar_hoy"
+            }
+
+            registrar_sincronizacion(
+                "ventas",
+                nuevo_uuid(),
+                "archivar_hoy",
+                datos_sync
+            )
             try:
                 datos_arqueo = {
                     "uuid": uuid_arqueo,

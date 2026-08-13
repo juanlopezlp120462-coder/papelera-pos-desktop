@@ -247,6 +247,7 @@ def init_db():
     x.execute("""
     CREATE TABLE IF NOT EXISTS movimientos_caja(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
         fecha TEXT,
         tipo TEXT,
         importe REAL,
@@ -254,6 +255,24 @@ def init_db():
         usuario TEXT DEFAULT 'Administrador'
     )
     """)
+
+    # ==========================================
+    # MIGRACIÓN: UUID EN MOVIMIENTOS DE CAJA
+    # ==========================================
+
+    columnas_movimientos = [
+        fila[1]
+        for fila in x.execute(
+            "PRAGMA table_info(movimientos_caja)"
+        ).fetchall()
+    ]
+
+    if "uuid" not in columnas_movimientos:
+        x.execute("""
+            ALTER TABLE movimientos_caja
+            ADD COLUMN uuid TEXT
+        """)
+
 
     x.execute("""
     CREATE TABLE IF NOT EXISTS arqueos(
