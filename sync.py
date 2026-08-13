@@ -760,7 +760,8 @@ def descargar_ventas():
 
             print(
                 "Error descargando ventas:",
-                respuesta.status_code
+                respuesta.status_code,
+                respuesta.text
             )
 
             return 0
@@ -800,6 +801,10 @@ def descargar_ventas():
 
         actualizadas = 0
 
+        # ==========================================
+        # RECORRER VENTAS REMOTAS
+        # ==========================================
+
         for venta in ventas_remotas:
 
             uuid_venta = venta.get(
@@ -822,7 +827,7 @@ def descargar_ventas():
                 )[:10]
 
             # ==========================================
-            # COMPROBAR SI YA EXISTE LOCALMENTE
+            # BUSCAR VENTA LOCAL
             # ==========================================
 
             existente = cursor.execute(
@@ -835,7 +840,7 @@ def descargar_ventas():
             ).fetchone()
 
             # ==========================================
-            # DETERMINAR ESTADO CORRECTO
+            # ESTADO REMOTO
             # ==========================================
 
             estado_remoto = venta.get(
@@ -843,15 +848,19 @@ def descargar_ventas():
                 "ACTIVA"
             )
 
-            # Si el día ya tiene arqueo,
-            # la venta DEBE permanecer archivada.
+            # ==========================================
+            # DETERMINAR ESTADO FINAL
+            # ==========================================
+
             if fecha_dia_venta in fechas_cerradas:
 
+                # Si ese día ya tiene arqueo,
+                # la venta queda archivada.
                 estado_final = "ARCHIVADA"
 
             elif existente and existente[1] == "ARCHIVADA":
 
-                # Nunca reactivar una venta que ya fue
+                # Nunca reactivar una venta
                 # archivada localmente.
                 estado_final = "ARCHIVADA"
 
@@ -885,46 +894,61 @@ def descargar_ventas():
                     WHERE id=?
                     """,
                     (
-                        fecha_venta,
+                        venta.get(
+                            "fecha"
+                        ),
+
                         venta.get(
                             "total",
                             0
                         ),
+
                         venta.get(
                             "forma_pago",
                             "EFECTIVO"
                         ),
+
                         venta.get(
                             "cliente_id"
                         ),
+
                         estado_final,
+
                         venta.get(
                             "descuento",
                             0
                         ),
+
                         venta.get(
                             "usuario",
                             "Administrador"
                         ),
+
                         venta.get(
                             "pago_efectivo",
                             0
                         ),
+
                         venta.get(
                             "pago_transferencia",
                             0
                         ),
+
                         venta.get(
                             "pago_tarjeta",
                             0
                         ),
+
                         venta.get(
                             "pago_cuenta",
                             0
                         ),
+
                         venta_id
                     )
                 )
+
+                actualizadas += 1
 
             # ==========================================
             # INSERTAR VENTA NUEVA
@@ -954,39 +978,50 @@ def descargar_ventas():
                     """,
                     (
                         uuid_venta,
+
                         fecha_venta,
+
                         venta.get(
                             "total",
                             0
                         ),
+
                         venta.get(
                             "forma_pago",
                             "EFECTIVO"
                         ),
+
                         venta.get(
                             "cliente_id"
                         ),
+
                         estado_final,
+
                         venta.get(
                             "descuento",
                             0
                         ),
+
                         venta.get(
                             "usuario",
                             "Administrador"
                         ),
+
                         venta.get(
                             "pago_efectivo",
                             0
                         ),
+
                         venta.get(
                             "pago_transferencia",
                             0
                         ),
+
                         venta.get(
                             "pago_tarjeta",
                             0
                         ),
+
                         venta.get(
                             "pago_cuenta",
                             0
@@ -994,13 +1029,17 @@ def descargar_ventas():
                     )
                 )
 
-            actualizadas += 1
+                actualizadas += 1
+
+        # ==========================================
+        # GUARDAR CAMBIOS
+        # ==========================================
 
         conexion.commit()
         conexion.close()
 
         print(
-            "Ventas descargadas con detalles:",
+            "Ventas descargadas:",
             actualizadas
         )
 
@@ -1014,7 +1053,6 @@ def descargar_ventas():
         )
 
         return 0
-
 
 # ==========================================
 # 7. DESCARGA DE ARQUEOS
@@ -1059,6 +1097,10 @@ def descargar_arqueos():
             if not arqueo_uuid:
                 continue
 
+            # ==========================================
+            # VERIFICAR SI EL ARQUEO YA EXISTE
+            # ==========================================
+
             existente = cursor.execute(
                 """
                 SELECT id
@@ -1067,10 +1109,6 @@ def descargar_arqueos():
                 """,
                 (arqueo_uuid,)
             ).fetchone()
-
-            # ==========================================
-            # SI YA EXISTE, NO HACER NADA
-            # ==========================================
 
             if existente:
                 continue
