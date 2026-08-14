@@ -11,7 +11,12 @@ from PySide6.QtWidgets import (
     QProgressDialog
 )
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import (
+    QTimer,
+    QObject,
+    Signal
+)
+
 from PySide6.QtGui import QGuiApplication
 
 from ui.keyboard import KeyboardAndNumberFilter
@@ -29,9 +34,20 @@ from sync import sincronizar
 sync_en_curso = False
 sync_lock = threading.Lock()
 
-# Referencia global al Dashboard.
-# Se asigna cuando se crea la ventana principal.
+# Referencia global al Dashboard
 dashboard = None
+
+
+# =========================================================
+# SEÑAL PARA ACTUALIZAR EL DASHBOARD
+# =========================================================
+
+class SyncSignals(QObject):
+
+    sincronizacion_terminada = Signal()
+
+
+sync_signals = SyncSignals()
 
 
 # =========================================================
@@ -57,6 +73,7 @@ def ejecutar_sincronizacion():
     with sync_lock:
 
         if sync_en_curso:
+
             return
 
         sync_en_curso = True
@@ -64,7 +81,7 @@ def ejecutar_sincronizacion():
     try:
 
         # -------------------------------------------------
-        # SINCRONIZAR
+        # EJECUTAR SINCRONIZACIÓN
         # -------------------------------------------------
 
         resultado = sincronizar()
@@ -75,22 +92,26 @@ def ejecutar_sincronizacion():
         )
 
         # -------------------------------------------------
-        # ACTUALIZAR INICIO
+        # AVISAR AL DASHBOARD
         #
         # IMPORTANTE:
-        # No modificamos widgets desde este hilo.
         #
-        # Usamos QTimer.singleShot(0, ...) para que
-        # Dashboard.actualizar() se ejecute en el hilo
+        # No hacemos:
+        #
+        # dashboard.actualizar()
+        #
+        # directamente porque esta función está ejecutándose
+        # en un hilo secundario.
+        #
+        # Emitimos una señal Qt.
+        #
+        # Dashboard.actualizar() se ejecutará en el hilo
         # principal de Qt.
         # -------------------------------------------------
 
         if dashboard is not None:
 
-            QTimer.singleShot(
-                0,
-                dashboard.actualizar
-            )
+            sync_signals.sincronizacion_terminada.emit()
 
     except Exception as e:
 
@@ -126,49 +147,59 @@ def iniciar_sincronizacion_hilo():
 
 if __name__ == "__main__":
 
+    # =====================================================
+    # CREAR APLICACIÓN QT
+    # =====================================================
+
     app = QApplication(sys.argv)
 
     # =====================================================
     # ESCALA DE PANTALLA
     # =====================================================
 
-    screen = QGuiApplication.primaryScreen().availableGeometry()
+    screen = (
+        QGuiApplication
+        .primaryScreen()
+        .availableGeometry()
+    )
 
     factor = min(
         screen.width() / 1920,
         screen.height() / 1080
     )
 
-    app.setStyleSheet(f"""
-    QWidget {{
-        font-size: {int(14 * factor)}px;
-    }}
+    app.setStyleSheet(
+        f"""
+        QWidget {{
+            font-size: {int(14 * factor)}px;
+        }}
 
-    QMessageBox {{
-        background: #ffffff;
-    }}
+        QMessageBox {{
+            background: #ffffff;
+        }}
 
-    QMessageBox QLabel {{
-        color: #0f172a;
-        font-size: 14px;
-    }}
+        QMessageBox QLabel {{
+            color: #0f172a;
+            font-size: 14px;
+        }}
 
-    QMessageBox QPushButton {{
-        background: #0ea5e9;
-        color: white;
-        border: 0;
-        border-radius: 8px;
-        padding: 8px 18px;
-        font-weight: 700;
-    }}
+        QMessageBox QPushButton {{
+            background: #0ea5e9;
+            color: white;
+            border: 0;
+            border-radius: 8px;
+            padding: 8px 18px;
+            font-weight: 700;
+        }}
 
-    QDialog {{
-        background: #ffffff;
-    }}
-    """)
+        QDialog {{
+            background: #ffffff;
+        }}
+        """
+    )
 
     # =====================================================
-    # VERSION
+    # VERSIÓN
     # =====================================================
 
     version = obtener_version_actual()
@@ -209,9 +240,11 @@ if __name__ == "__main__":
     try:
 
         ruta_diagnostico = os.path.join(
-            os.path.dirname(sys.executable)
-            if getattr(sys, "frozen", False)
-            else os.getcwd(),
+            (
+                os.path.dirname(sys.executable)
+                if getattr(sys, "frozen", False)
+                else os.getcwd()
+            ),
             "diagnostico_actualizacion.txt"
         )
 
@@ -247,7 +280,8 @@ if __name__ == "__main__":
     if actualizar:
 
         print(
-            f"Hay una nueva versión disponible: {nueva_version}"
+            f"Hay una nueva versión disponible: "
+            f"{nueva_version}"
         )
 
         respuesta = QMessageBox.question(
@@ -304,10 +338,13 @@ if __name__ == "__main__":
 
             def actualizar_progreso(valor):
 
-                progreso.setValue(valor)
+                progreso.setValue(
+                    valor
+                )
 
                 progreso.setLabelText(
-                    f"Descargando actualización... {valor}%"
+                    f"Descargando actualización... "
+                    f"{valor}%"
                 )
 
                 QApplication.processEvents()
@@ -346,10 +383,13 @@ if __name__ == "__main__":
                     )
 
                     progreso.setLabelText(
-                        "Actualización instalada. Reiniciando..."
+                        "Actualización instalada. "
+                        "Reiniciando..."
                     )
 
-                    progreso.setValue(100)
+                    progreso.setValue(
+                        100
+                    )
 
                     QApplication.processEvents()
 
@@ -368,7 +408,8 @@ if __name__ == "__main__":
                 else:
 
                     print(
-                        "ERROR: No se pudo instalar la actualización."
+                        "ERROR: No se pudo instalar "
+                        "la actualización."
                     )
 
                     progreso.close()
@@ -377,15 +418,18 @@ if __name__ == "__main__":
                         None,
                         "Error",
                         (
-                            "No se pudo instalar la actualización.\n\n"
-                            "El programa continuará con la versión actual."
+                            "No se pudo instalar "
+                            "la actualización.\n\n"
+                            "El programa continuará "
+                            "con la versión actual."
                         )
                     )
 
             else:
 
                 print(
-                    "ERROR: No se pudo descargar la actualización."
+                    "ERROR: No se pudo descargar "
+                    "la actualización."
                 )
 
                 progreso.close()
@@ -394,7 +438,8 @@ if __name__ == "__main__":
                     None,
                     "Error",
                     (
-                        "No se pudo descargar la actualización.\n\n"
+                        "No se pudo descargar "
+                        "la actualización.\n\n"
                         "Verifique la conexión a Internet."
                     )
                 )
@@ -451,10 +496,32 @@ if __name__ == "__main__":
     dashboard.showMaximized()
 
     # =====================================================
+    # CONECTAR SEÑAL DE SINCRONIZACIÓN
+    # =====================================================
+    #
+    # Cuando termina una sincronización:
+    #
+    #   hilo secundario
+    #          ↓
+    #   sincronizacion_terminada.emit()
+    #          ↓
+    #   hilo principal de Qt
+    #          ↓
+    #   dashboard.actualizar()
+    #
+    # Esto permite que Inicio se actualice
+    # automáticamente sin reiniciar.
+    # =====================================================
+
+    sync_signals.sincronizacion_terminada.connect(
+        dashboard.actualizar
+    )
+
+    # =====================================================
     # SINCRONIZACIÓN INICIAL
     #
     # Esperamos 2 segundos para que el Dashboard
-    # termine de aparecer antes de sincronizar.
+    # termine de aparecer.
     # =====================================================
 
     QTimer.singleShot(
@@ -468,8 +535,8 @@ if __name__ == "__main__":
     # Cada 30 segundos.
     #
     # Se ejecuta en segundo plano.
-    # Cuando termina, actualiza Inicio mediante
-    # dashboard.actualizar() en el hilo principal.
+    #
+    # Al terminar, actualiza Inicio automáticamente.
     # =====================================================
 
     timer_sync = QTimer()
@@ -489,3 +556,4 @@ if __name__ == "__main__":
     sys.exit(
         app.exec()
     )
+
