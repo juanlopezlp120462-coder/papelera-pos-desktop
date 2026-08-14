@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 
 
@@ -1292,6 +1292,16 @@ class Productos(QWidget):
 
 
         self.cargar_productos()
+    def showEvent(self, event):
+        super().showEvent(event)
+
+        # Cada vez que volvemos al módulo Productos,
+        # recargamos el stock directamente desde SQLite.
+        QTimer.singleShot(
+            0,
+            self.cargar_productos
+        )
+        
     # =================================
     # CARGAR PRODUCTOS
     # =================================

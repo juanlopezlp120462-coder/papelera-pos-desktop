@@ -1626,11 +1626,17 @@ class Ventas(QWidget):
 
         if producto:
             self.agregar_carrito({
-                "codigo": producto[1] if producto[1] else "SIN_COD",
-                "nombre": producto[2],
-                "precio": producto[5],
+                "producto_id": producto.get("id", 0),
+                "producto_uuid": producto.get("uuid"),
+                "codigo": producto.get("codigo_barras") or "SIN_COD",
+                "nombre": producto["nombre"],
+                "precio": float(producto["precio_venta"]),
                 "cantidad": 1
             })
+
+            self.buscar.clear()
+            self.buscar.setFocus()
+            return
 
             self.buscar.clear()
             self.buscar.setFocus()
@@ -1666,9 +1672,11 @@ class Ventas(QWidget):
             if producto:
 
                 producto_carrito = {
-                    "codigo": producto[1] if producto[1] else "SIN_COD",
-                    "nombre": producto[2],
-                    "precio": float(producto[5]),
+                    "producto_id": producto[0],
+                    "producto_uuid": producto[1],
+                    "codigo": producto[2] if producto[2] else "",
+                    "nombre": producto[3],
+                    "precio": float(producto[6]),
                     "cantidad": 1
                 }
 
@@ -1938,11 +1946,18 @@ class Ventas(QWidget):
                 producto = encontrados[0]
 
                 self.agregar_carrito({
-                    "codigo": producto.get("codigo_barras") or "SIN_COD",
+                    "producto_uuid": producto.get("uuid"),
+                    "producto_id": producto.get("id"),
+                    "codigo": producto.get("codigo_barras") or "",
                     "nombre": producto["nombre"],
                     "precio": float(producto["precio_venta"]),
                     "cantidad": 1
                 })
+
+                print(
+                    "PRODUCTO AGREGADO AL CARRITO:",
+                    producto
+                )
 
                 self.buscar.clear()
                 self.buscar.setFocus()
@@ -2111,8 +2126,9 @@ class Ventas(QWidget):
         for item in self.carrito:
 
             if (
-                item["codigo"] == prod_dict["codigo"]
-                and item["nombre"] == prod_dict["nombre"]
+                item.get("producto_uuid")
+                and prod_dict.get("producto_uuid")
+                and item["producto_uuid"] == prod_dict["producto_uuid"]
             ):
 
                 self.actualizar_tabla()
@@ -2558,19 +2574,136 @@ class Ventas(QWidget):
 
             # descontar stock local
 
-            if item["codigo"] != "LIBRE":
+            producto_uuid = item.get("producto_uuid")
+            producto_id = item.get("producto_id")
 
-                cursor.execute("""
+            filas_actualizadas = 0
+
+            if producto_uuid:
+
+                cursor.execute(
+                    """
                     UPDATE productos
                     SET stock = stock - ?
-                    WHERE codigo_barras = ?
+                    WHERE uuid = ?
+                    """,
+                    (
+                        item["cantidad"],
+                        producto_uuid
+                    )
+                )
+
+                filas_actualizadas = cursor.rowcount
+
+            else:
+
+                cursor.execute(
+                    """
+                    UPDATE productos
+                    SET stock = stock - ?
+                    WHERE id = ?
+                    """,
+                    (
+                        item["cantidad"],
+                        producto_id
+                    )
+                )
+
+                filas_actualizadas = cursor.rowcount
+
+
+            print(
+                "DEBUG STOCK:",
+                "uuid =", producto_uuid,
+                "id =", producto_id,
+                "cantidad =", item["cantidad"],
+                "filas_actualizadas =", filas_actualizadas
+            )
+        # ======================================
+        # GUARDAR CAMBIO DE STOCK DEL PRODUCTO
+        # ======================================
+
+        if filas_actualizadas > 0 and producto_uuid:
+
+            # IMPORTANTE:
+            # Volvemos a consultar el producto y obtenemos
+            # explícitamente todas las columnas necesarias.
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    uuid,
+                    codigo_barras,
+                    nombre,
+                    categoria,
+                    precio_compra,
+                    precio_venta,
+                    stock,
+                    stock_minimo
+                FROM productos
+                WHERE uuid = ?
+                LIMIT 1
                 """,
-                (
-                    item["cantidad"],
-                    item["codigo"]
-                ))
+                (producto_uuid,)
+            )
 
+            producto_actualizado = cursor.fetchone()
 
+            if producto_actualizado:
+
+                producto_datos = {
+                    "id": producto_actualizado[0],
+                    "uuid": producto_actualizado[1],
+                    "codigo_barras": producto_actualizado[2],
+                    "nombre": producto_actualizado[3],
+                    "categoria": producto_actualizado[4],
+                    "precio_compra": producto_actualizado[5],
+                    "precio_venta": producto_actualizado[6],
+                    "stock": producto_actualizado[7],
+                    "stock_minimo": producto_actualizado[8]
+                }
+
+                print(
+                    "DEBUG SYNC PRODUCTO:",
+                    producto_datos
+                )
+
+                cursor.execute(
+                    """
+                    INSERT INTO sincronizacion
+                    (
+                        tabla,
+                        registro,
+                        registro_uuid,
+                        accion,
+                        datos,
+                        fecha,
+                        sincronizado
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "productos",
+                        producto_datos["id"],
+                        producto_datos["uuid"],
+                        "UPDATE",
+                        json.dumps(
+                            producto_datos,
+                            ensure_ascii=False
+                        ),
+                        fecha,
+                        0
+                    )
+                )
+
+                print(
+                    "DEBUG SYNC PRODUCTO INSERTADO:",
+                    producto_datos["uuid"],
+                    "stock =",
+                    producto_datos["stock"],
+                    "rowid =",
+                    cursor.lastrowid
+                )
 
         # ======================================
         # GUARDAR PENDIENTE DE SINCRONIZACION
@@ -2646,14 +2779,14 @@ class Ventas(QWidget):
 
             for p in self.carrito:
                 items.append({
-                    "producto_id": 0,
+                    "producto_id": p.get("producto_id", 0),
+                    "producto_uuid": p.get("producto_uuid"),
                     "producto": p["nombre"],
                     "cantidad": p["cantidad"],
                     "precio": p["precio"],
                     "subtotal": p["cantidad"] * p["precio"],
                     "codigo": p.get("codigo", "")
                 })
-
 
             venta = {
                 "items": items,
@@ -2667,7 +2800,19 @@ class Ventas(QWidget):
                 "pago_cuenta": datos["cuenta"]
             }
 
-
+            print("========== DEBUG CARRITO ANTES DE VENTA ==========")
+            for p in self.carrito:
+                print(
+                    "PRODUCTO:",
+                    p.get("nombre"),
+                    "| ID:",
+                    p.get("producto_id"),
+                    "| UUID:",
+                    p.get("producto_uuid"),
+                    "| CANTIDAD:",
+                    p.get("cantidad")
+                )
+            print("===================================================")
             venta_id = self.guardar_venta_local(venta)
             self.venta_realizada.emit()
 
