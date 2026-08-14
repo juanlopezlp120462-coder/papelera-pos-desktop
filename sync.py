@@ -606,7 +606,6 @@ def descargar_productos():
         )
 
         if respuesta.status_code != 200:
-
             return 0
 
         productos_remotos = respuesta.json()
@@ -616,12 +615,20 @@ def descargar_productos():
 
         actualizados = 0
 
+        # ==========================================================
+        # UUID DE TODOS LOS PRODUCTOS QUE EXISTEN EN RAILWAY
+        # ==========================================================
+
+        uuids_remotos = set()
+
         for prod in productos_remotos:
 
             uuid_prod = prod.get("uuid")
 
             if not uuid_prod:
                 continue
+
+            uuids_remotos.add(uuid_prod)
 
             codigo = prod.get(
                 "codigo_barras",
@@ -658,6 +665,10 @@ def descargar_productos():
                 5
             )
 
+            # ======================================================
+            # BUSCAR PRODUCTO LOCAL
+            # ======================================================
+
             existente = cursor.execute(
                 """
                 SELECT id
@@ -666,6 +677,10 @@ def descargar_productos():
                 """,
                 (uuid_prod,)
             ).fetchone()
+
+            # ======================================================
+            # ACTUALIZAR PRODUCTO EXISTENTE
+            # ======================================================
 
             if existente:
 
@@ -693,6 +708,12 @@ def descargar_productos():
                         uuid_prod
                     )
                 )
+
+                actualizados += 1
+
+            # ======================================================
+            # CREAR PRODUCTO NUEVO
+            # ======================================================
 
             else:
 
@@ -723,22 +744,83 @@ def descargar_productos():
                     )
                 )
 
-            actualizados += 1
+                actualizados += 1
+
+        # ==========================================================
+        # ELIMINAR PRODUCTOS LOCALES QUE YA NO EXISTEN EN RAILWAY
+        # ==========================================================
+
+        productos_locales = cursor.execute(
+            """
+            SELECT id, uuid, nombre
+            FROM productos
+            """
+        ).fetchall()
+
+        eliminados = 0
+
+        for producto_local in productos_locales:
+
+            id_local = producto_local["id"]
+            uuid_local = producto_local["uuid"]
+            nombre_local = producto_local["nombre"]
+
+            if not uuid_local:
+                continue
+
+            # ------------------------------------------------------
+            # Si existe en Railway, se mantiene
+            # ------------------------------------------------------
+
+            if uuid_local in uuids_remotos:
+                continue
+
+            # ------------------------------------------------------
+            # No existe en Railway:
+            # eliminarlo localmente.
+            # ------------------------------------------------------
+
+            print(
+                "PRODUCTO ELIMINADO LOCALMENTE:",
+                uuid_local,
+                nombre_local
+            )
+
+            cursor.execute(
+                """
+                DELETE FROM productos
+                WHERE id=?
+                """,
+                (id_local,)
+            )
+
+            eliminados += 1
 
         conexion.commit()
         conexion.close()
 
-        return actualizados
+        print(
+            "PRODUCTOS SINCRONIZADOS:",
+            actualizados,
+            "| ELIMINADOS:",
+            eliminados
+        )
+
+        return actualizados + eliminados
 
     except Exception as e:
 
         print(
-            "Error descargando productos:",
+            "ERROR DESCARGANDO PRODUCTOS:",
             e
         )
 
-        return 0
+        try:
+            conexion.close()
+        except:
+            pass
 
+        return 0
 
 # ==========================================
 # 6. DESCARGA DE VENTAS
