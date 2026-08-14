@@ -162,6 +162,7 @@ def sincronizar_ventas():
 # 2. SUBIDA DE PRODUCTOS (LOCAL -> NUBE)
 # ==========================================
 def sincronizar_productos():
+
     init_db()
 
     if not hay_internet():
@@ -191,17 +192,76 @@ def sincronizar_productos():
 
         sync_id = fila[0]
         producto_uuid = fila[2]
+        accion = fila[3]
         datos_json = fila[4]
 
         if not producto_uuid:
-            print("Producto sin UUID")
-            continue
 
-        if not datos_json:
-            print("Producto sin datos")
+            print(
+                "Producto sin UUID:",
+                sync_id
+            )
+
             continue
 
         try:
+
+            # ======================================================
+            # ELIMINAR PRODUCTO EN RAILWAY
+            # ======================================================
+
+            if accion == "eliminar":
+
+                print(
+                    "ELIMINANDO PRODUCTO EN RAILWAY:",
+                    producto_uuid
+                )
+
+                respuesta = requests.delete(
+                    f"{SERVIDOR}/productos/sync/{producto_uuid}",
+                    timeout=15
+                )
+
+                if respuesta.status_code in (200, 404):
+
+                    cursor.execute(
+                        """
+                        UPDATE sincronizacion
+                        SET sincronizado=1
+                        WHERE id=?
+                        """,
+                        (sync_id,)
+                    )
+
+                    sincronizados += 1
+
+                    print(
+                        "Producto eliminado de Railway:",
+                        producto_uuid
+                    )
+
+                else:
+
+                    print(
+                        "Error eliminando producto:",
+                        respuesta.status_code,
+                        respuesta.text
+                    )
+
+                continue
+
+            # ======================================================
+            # CREAR / ACTUALIZAR PRODUCTO EN RAILWAY
+            # ======================================================
+
+            if not datos_json:
+
+                print(
+                    "Producto sin datos:",
+                    producto_uuid
+                )
+
+                continue
 
             producto = json.loads(
                 datos_json
@@ -209,29 +269,40 @@ def sincronizar_productos():
 
             datos = {
                 "uuid": producto_uuid,
+
                 "codigo_barras": producto.get(
                     "codigo_barras",
                     ""
                 ),
+
                 "nombre": producto.get(
                     "nombre",
                     ""
                 ),
+
                 "categoria": producto.get(
                     "categoria",
                     "General"
                 ),
+
                 "precio_compra": producto.get(
                     "precio_compra",
                     0
                 ),
+
                 "precio_venta": producto.get(
                     "precio_venta",
                     0
                 ),
+
                 "stock": producto.get(
                     "stock",
                     0
+                ),
+
+                "stock_minimo": producto.get(
+                    "stock_minimo",
+                    5
                 )
             }
 
@@ -278,7 +349,6 @@ def sincronizar_productos():
     conexion.close()
 
     return sincronizados
-
 
 # ==========================================
 # 3. SUBIDA DE ARQUEOS (LOCAL -> NUBE)
