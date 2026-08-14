@@ -4,7 +4,7 @@ import uuid
 import requests
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 
 from ui.db import (
     BASE_DATOS,
@@ -24,6 +24,7 @@ from ui.ventas import DialogoAviso
 
 class Caja(QWidget):
 
+    arqueo_realizado = Signal()
 
     def __init__(self):
 
@@ -1578,8 +1579,10 @@ $ {self.real.value():,.2f}
                 archivar_ventas(
                     fecha=hoy_str
                 )
-
-
+            
+            # Avisar al Dashboard que el arqueo terminó
+            # para actualizar Inicio inmediatamente.
+            self.arqueo_realizado.emit()
 
             DialogoAviso(
 

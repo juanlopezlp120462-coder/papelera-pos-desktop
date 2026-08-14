@@ -360,6 +360,8 @@ class Dashboard(QMainWindow):
 
             if cls is Ventas:
                 w.venta_realizada.connect(self.actualizar)
+            if cls is Caja:
+                w.arqueo_realizado.connect(self.actualizar)
 
         self.stack.setCurrentWidget(w)
 
