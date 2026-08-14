@@ -23,18 +23,29 @@ from sync import sincronizar
 
 
 # =========================================================
-# SINCRONIZACION EN SEGUNDO PLANO
+# VARIABLES DE SINCRONIZACIÓN
 # =========================================================
 
 sync_en_curso = False
 sync_lock = threading.Lock()
 
+# Referencia global al Dashboard.
+# Se asigna cuando se crea la ventana principal.
+dashboard = None
+
+
+# =========================================================
+# SINCRONIZACIÓN EN SEGUNDO PLANO
+# =========================================================
 
 def ejecutar_sincronizacion():
 
     global sync_en_curso
 
+    # -----------------------------------------------------
     # Evitar dos sincronizaciones simultáneas
+    # -----------------------------------------------------
+
     if sync_en_curso:
 
         print(
@@ -52,12 +63,34 @@ def ejecutar_sincronizacion():
 
     try:
 
+        # -------------------------------------------------
+        # SINCRONIZAR
+        # -------------------------------------------------
+
         resultado = sincronizar()
 
         print(
             "Sincronización automática OK:",
             resultado
         )
+
+        # -------------------------------------------------
+        # ACTUALIZAR INICIO
+        #
+        # IMPORTANTE:
+        # No modificamos widgets desde este hilo.
+        #
+        # Usamos QTimer.singleShot(0, ...) para que
+        # Dashboard.actualizar() se ejecute en el hilo
+        # principal de Qt.
+        # -------------------------------------------------
+
+        if dashboard is not None:
+
+            QTimer.singleShot(
+                0,
+                dashboard.actualizar
+            )
 
     except Exception as e:
 
@@ -72,6 +105,10 @@ def ejecutar_sincronizacion():
 
             sync_en_curso = False
 
+
+# =========================================================
+# INICIAR SINCRONIZACIÓN EN HILO
+# =========================================================
 
 def iniciar_sincronizacion_hilo():
 
@@ -141,7 +178,7 @@ if __name__ == "__main__":
     )
 
     # =====================================================
-    # COMPROBAR ACTUALIZACION
+    # COMPROBAR ACTUALIZACIÓN
     # =====================================================
 
     actualizar = False
@@ -166,7 +203,7 @@ if __name__ == "__main__":
             nueva_version = None
 
     # =====================================================
-    # DIAGNOSTICO DE ACTUALIZACION
+    # DIAGNÓSTICO
     # =====================================================
 
     try:
@@ -204,7 +241,7 @@ if __name__ == "__main__":
         )
 
     # =====================================================
-    # ACTUALIZACION
+    # ACTUALIZACIÓN
     # =====================================================
 
     if actualizar:
@@ -276,7 +313,7 @@ if __name__ == "__main__":
                 QApplication.processEvents()
 
             # =================================================
-            # DESCARGAR ACTUALIZACION
+            # DESCARGAR ACTUALIZACIÓN
             # =================================================
 
             zip_actualizacion = descargar_actualizacion(
@@ -316,10 +353,13 @@ if __name__ == "__main__":
 
                     QApplication.processEvents()
 
-                    # No iniciar Dashboard.
-                    # No iniciar sincronización.
-                    # El actualizador externo abrirá
-                    # la nueva versión.
+                    # -------------------------------------------------
+                    # NO CREAR DASHBOARD
+                    # NO INICIAR SINCRONIZACIÓN
+                    # NO INICIAR WEBHOOK
+                    #
+                    # El actualizador externo abrirá la nueva versión.
+                    # -------------------------------------------------
 
                     app.quit()
 
@@ -406,12 +446,12 @@ if __name__ == "__main__":
         "Iniciando Dashboard..."
     )
 
-    w = Dashboard()
+    dashboard = Dashboard()
 
-    w.showMaximized()
+    dashboard.showMaximized()
 
     # =====================================================
-    # SINCRONIZACION INICIAL
+    # SINCRONIZACIÓN INICIAL
     #
     # Esperamos 2 segundos para que el Dashboard
     # termine de aparecer antes de sincronizar.
@@ -423,9 +463,13 @@ if __name__ == "__main__":
     )
 
     # =====================================================
-    # SINCRONIZACION AUTOMATICA
+    # SINCRONIZACIÓN AUTOMÁTICA
     #
-    # Cada 60 segundos.
+    # Cada 30 segundos.
+    #
+    # Se ejecuta en segundo plano.
+    # Cuando termina, actualiza Inicio mediante
+    # dashboard.actualizar() en el hilo principal.
     # =====================================================
 
     timer_sync = QTimer()
@@ -439,10 +483,9 @@ if __name__ == "__main__":
     )
 
     # =====================================================
-    # EJECUTAR APLICACION
+    # EJECUTAR APLICACIÓN
     # =====================================================
 
     sys.exit(
         app.exec()
     )
-
