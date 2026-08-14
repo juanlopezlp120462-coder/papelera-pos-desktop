@@ -344,7 +344,6 @@ class Dashboard(QMainWindow):
 
     def ir_inicio(self):
         self.stack.setCurrentWidget(self.home)
-        self.actualizar()
 
     def openw(self, cls):
         if not hasattr(self, '_module_cache'):

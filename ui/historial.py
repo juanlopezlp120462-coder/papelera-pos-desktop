@@ -974,8 +974,7 @@ class Historial(QWidget):
 
         try:
             # Sincronizamos ventas y arqueos de la nube antes de pintar la tabla
-            self.sincronizar_ventas_nube()
-            self.sincronizar_arqueos_nube()
+            
 
             c = sqlite3.connect(
                 BASE_DATOS

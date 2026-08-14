@@ -1375,15 +1375,25 @@ class Ventas(QWidget):
             pass
     def showEvent(self, event):
         super().showEvent(event)
-        self.verificar_estado_caja_remota()
+
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.cargar_clientes()
-        self.cargar_sugerencias()
+        self.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding
+        )
+
         self.buscar.setFocus()
-        QTimer.singleShot(0, self.refresh_layout_on_return)
-        QTimer.singleShot(50, self.refresh_layout_on_return)
+
+        QTimer.singleShot(
+            0,
+            self.refresh_layout_on_return
+        )
+
+        QTimer.singleShot(
+            50,
+            self.refresh_layout_on_return
+        )
 
 
     def keyPressEvent(self, event):

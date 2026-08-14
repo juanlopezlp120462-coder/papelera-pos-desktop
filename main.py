@@ -1,5 +1,6 @@
 import sys
 import os
+import threading
 
 from core.version import obtener_version_actual
 from core.actualizador import hay_actualizacion
@@ -21,13 +22,78 @@ from webhook_server import start_webhook_server
 from sync import sincronizar
 
 
+# =========================================================
+# SINCRONIZACION EN SEGUNDO PLANO
+# =========================================================
+
+sync_en_curso = False
+sync_lock = threading.Lock()
+
+
+def ejecutar_sincronizacion():
+
+    global sync_en_curso
+
+    # Evitar dos sincronizaciones simultáneas
+    if sync_en_curso:
+
+        print(
+            "Sincronización anterior todavía en ejecución."
+        )
+
+        return
+
+    with sync_lock:
+
+        if sync_en_curso:
+            return
+
+        sync_en_curso = True
+
+    try:
+
+        resultado = sincronizar()
+
+        print(
+            "Sincronización automática OK:",
+            resultado
+        )
+
+    except Exception as e:
+
+        print(
+            "Error sincronización automática:",
+            e
+        )
+
+    finally:
+
+        with sync_lock:
+
+            sync_en_curso = False
+
+
+def iniciar_sincronizacion_hilo():
+
+    hilo = threading.Thread(
+        target=ejecutar_sincronizacion,
+        daemon=True
+    )
+
+    hilo.start()
+
+
+# =========================================================
+# PROGRAMA PRINCIPAL
+# =========================================================
+
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    # ==================================
+    # =====================================================
     # ESCALA DE PANTALLA
-    # ==================================
+    # =====================================================
 
     screen = QGuiApplication.primaryScreen().availableGeometry()
 
@@ -64,9 +130,9 @@ if __name__ == "__main__":
     }}
     """)
 
-    # ==================================
+    # =====================================================
     # VERSION
-    # ==================================
+    # =====================================================
 
     version = obtener_version_actual()
 
@@ -74,19 +140,9 @@ if __name__ == "__main__":
         f"PAPELERA POS - VERSION {version}"
     )
 
-    # ==================================
+    # =====================================================
     # COMPROBAR ACTUALIZACION
-    #
-    # IMPORTANTE:
-    # Esto se hace ANTES de iniciar:
-    # - base de datos
-    # - webhook
-    # - sincronización
-    # - Dashboard
-    #
-    # Así la versión vieja no queda
-    # funcionando mientras se actualiza.
-    # ==================================
+    # =====================================================
 
     actualizar = False
     nueva_version = None
@@ -109,9 +165,9 @@ if __name__ == "__main__":
             actualizar = False
             nueva_version = None
 
-    # ==================================
-    # DIAGNOSTICO
-    # ==================================
+    # =====================================================
+    # DIAGNOSTICO DE ACTUALIZACION
+    # =====================================================
 
     try:
 
@@ -147,9 +203,9 @@ if __name__ == "__main__":
             e
         )
 
-    # ==================================
+    # =====================================================
     # ACTUALIZACION
-    # ==================================
+    # =====================================================
 
     if actualizar:
 
@@ -180,9 +236,9 @@ if __name__ == "__main__":
                 instalar_actualizacion
             )
 
-            # ==================================
+            # =================================================
             # PROGRESO
-            # ==================================
+            # =================================================
 
             progreso = QProgressDialog(
                 "Descargando actualización...",
@@ -196,22 +252,18 @@ if __name__ == "__main__":
             )
 
             progreso.setMinimumDuration(0)
-
             progreso.setValue(0)
-
             progreso.setAutoClose(False)
-
             progreso.setAutoReset(False)
-
             progreso.setCancelButton(None)
 
             progreso.show()
 
             QApplication.processEvents()
 
-            # ==================================
-            # ACTUALIZAR PROGRESO
-            # ==================================
+            # =================================================
+            # PROGRESO DE DESCARGA
+            # =================================================
 
             def actualizar_progreso(valor):
 
@@ -223,9 +275,9 @@ if __name__ == "__main__":
 
                 QApplication.processEvents()
 
-            # ==================================
-            # DESCARGAR
-            # ==================================
+            # =================================================
+            # DESCARGAR ACTUALIZACION
+            # =================================================
 
             zip_actualizacion = descargar_actualizacion(
                 actualizar_progreso
@@ -237,9 +289,9 @@ if __name__ == "__main__":
                     "Actualización descargada."
                 )
 
-                # ==================================
+                # =================================================
                 # INSTALAR
-                # ==================================
+                # =================================================
 
                 instalado = instalar_actualizacion(
                     zip_actualizacion,
@@ -264,17 +316,10 @@ if __name__ == "__main__":
 
                     QApplication.processEvents()
 
-                    # ==================================
-                    # MUY IMPORTANTE
-                    #
-                    # No crear Dashboard.
+                    # No iniciar Dashboard.
                     # No iniciar sincronización.
-                    # No iniciar webhook.
-                    #
-                    # El BAT externo esperará que
-                    # este proceso termine y luego
-                    # abrirá el nuevo EXE.
-                    # ==================================
+                    # El actualizador externo abrirá
+                    # la nueva versión.
 
                     app.quit()
 
@@ -320,17 +365,15 @@ if __name__ == "__main__":
                 "Usuario rechazó actualización."
             )
 
-    # ==================================
+    # =====================================================
     # CREAR BASE LOCAL
-    #
-    # SOLAMENTE si no estamos actualizando.
-    # ==================================
+    # =====================================================
 
     init_db()
 
-    # ==================================
-    # SERVIDOR LOCAL
-    # ==================================
+    # =====================================================
+    # SERVIDOR LOCAL / WEBHOOK
+    # =====================================================
 
     try:
 
@@ -343,42 +386,9 @@ if __name__ == "__main__":
             e
         )
 
-    # ==================================
-    # SINCRONIZACION INICIAL
-    # ==================================
-
-    try:
-
-        sincronizar()
-
-        print(
-            "Sincronización inicial OK"
-        )
-
-    except Exception as e:
-
-        print(
-            "Error sincronización inicial:",
-            e
-        )
-
-    # ==================================
-    # SINCRONIZACION AUTOMATICA
-    # ==================================
-
-    timer_sync = QTimer()
-
-    timer_sync.timeout.connect(
-        sincronizar
-    )
-
-    timer_sync.start(
-        60000
-    )
-
-    # ==================================
+    # =====================================================
     # TECLADO ESPECIAL POS
-    # ==================================
+    # =====================================================
 
     keyboard_filter = KeyboardAndNumberFilter(
         app
@@ -388,9 +398,9 @@ if __name__ == "__main__":
         keyboard_filter
     )
 
-    # ==================================
+    # =====================================================
     # PANTALLA PRINCIPAL
-    # ==================================
+    # =====================================================
 
     print(
         "Iniciando Dashboard..."
@@ -400,10 +410,39 @@ if __name__ == "__main__":
 
     w.showMaximized()
 
-    # ==================================
+    # =====================================================
+    # SINCRONIZACION INICIAL
+    #
+    # Esperamos 2 segundos para que el Dashboard
+    # termine de aparecer antes de sincronizar.
+    # =====================================================
+
+    QTimer.singleShot(
+        2000,
+        iniciar_sincronizacion_hilo
+    )
+
+    # =====================================================
+    # SINCRONIZACION AUTOMATICA
+    #
+    # Cada 60 segundos.
+    # =====================================================
+
+    timer_sync = QTimer()
+
+    timer_sync.timeout.connect(
+        iniciar_sincronizacion_hilo
+    )
+
+    timer_sync.start(
+        60000
+    )
+
+    # =====================================================
     # EJECUTAR APLICACION
-    # ==================================
+    # =====================================================
 
     sys.exit(
         app.exec()
     )
+
