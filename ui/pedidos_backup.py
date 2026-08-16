@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 import os
 import sqlite3
 import datetime
-import json
+
 from PySide6.QtCore import Qt, QDate, QSize, QMarginsF
 from PySide6.QtGui import (
     QFont,
@@ -397,7 +396,6 @@ class Pedidos(QWidget):
         )
 
         self.setMinimumSize(1200, 760)
-        self.resize(1400, 900)
 
         self.preparar_base_datos()
         self.construir_interfaz()
@@ -439,15 +437,6 @@ class Pedidos(QWidget):
             cursor,
             "pedidos",
             "fecha_pago",
-            "TEXT"
-        )
-
-        # El cliente debe quedar guardado en el pedido para que
-        # aparezca tanto en Pedidos registrados como en la factura.
-        asegurar_columna(
-            cursor,
-            "pedidos",
-            "cliente",
             "TEXT"
         )
 
@@ -682,8 +671,8 @@ class Pedidos(QWidget):
         """)
 
         principal = QVBoxLayout(self)
-        principal.setContentsMargins(16, 14, 16, 14)
-        principal.setSpacing(10)
+        principal.setContentsMargins(24, 22, 24, 24)
+        principal.setSpacing(18)
 
         # ====================================================
         # ENCABEZADO
@@ -775,9 +764,6 @@ class Pedidos(QWidget):
         # ====================================================
         # CUERPO PRINCIPAL
         # ====================================================
-        # Productos y pedido actual arriba; pedidos registrados abajo.
-        cuerpo_superior = QHBoxLayout()
-        cuerpo_superior.setSpacing(12)
 
         cuerpo = QHBoxLayout()
         cuerpo.setSpacing(16)
@@ -791,7 +777,7 @@ class Pedidos(QWidget):
 
         productos_layout = QVBoxLayout(productos_panel)
         productos_layout.setContentsMargins(16, 16, 16, 16)
-        productos_layout.setSpacing(8)
+        productos_layout.setSpacing(12)
 
         titulo_productos = QLabel("Buscar productos")
         titulo_productos.setObjectName("titulo_panel")
@@ -831,21 +817,25 @@ class Pedidos(QWidget):
             QAbstractItemView.NoEditTriggers
         )
 
-        self.tabla_productos.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarAlwaysOff
-        )
-        self.tabla_productos.setWordWrap(False)
-
         self.tabla_productos.verticalHeader().setDefaultSectionSize(42)
 
         header = self.tabla_productos.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
-        header.setSectionResizeMode(3, QHeaderView.Fixed)
-        header.resizeSection(0, 90)
-        header.resizeSection(2, 70)
-        header.resizeSection(3, 105)
+        header.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeToContents
+        )
+        header.setSectionResizeMode(
+            1,
+            QHeaderView.Stretch
+        )
+        header.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeToContents
+        )
+        header.setSectionResizeMode(
+            3,
+            QHeaderView.ResizeToContents
+        )
 
         productos_layout.addWidget(
             self.tabla_productos,
@@ -853,7 +843,7 @@ class Pedidos(QWidget):
         )
 
         btn_agregar = QPushButton(
-            "➕ Agregar producto seleccionado"
+            "＋ Agregar producto seleccionado"
         )
         btn_agregar.setObjectName("verde")
         btn_agregar.setMinimumHeight(44)
@@ -863,7 +853,7 @@ class Pedidos(QWidget):
 
         productos_layout.addWidget(btn_agregar)
 
-        cuerpo_superior.addWidget(productos_panel, 5)
+        cuerpo.addWidget(productos_panel, 4)
 
         # ----------------------------------------------------
         # PEDIDO ACTUAL
@@ -874,7 +864,7 @@ class Pedidos(QWidget):
 
         pedido_layout = QVBoxLayout(pedido_panel)
         pedido_layout.setContentsMargins(16, 16, 16, 16)
-        pedido_layout.setSpacing(8)
+        pedido_layout.setSpacing(12)
 
         titulo_pedido = QLabel("Productos del pedido")
         titulo_pedido.setObjectName("titulo_panel")
@@ -905,27 +895,41 @@ class Pedidos(QWidget):
             QAbstractItemView.NoEditTriggers
         )
 
-        self.tabla_pedido.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarAlwaysOff
-        )
-        self.tabla_pedido.setWordWrap(False)
-
         self.tabla_pedido.verticalHeader().setDefaultSectionSize(54)
 
         header2 = self.tabla_pedido.horizontalHeader()
 
-        for columna in range(5):
-            header2.setSectionResizeMode(
-                columna,
-                QHeaderView.Stretch
-            )
+        header2.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeToContents
+        )
+
+        header2.setSectionResizeMode(
+            1,
+            QHeaderView.Stretch
+        )
+
+        header2.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeToContents
+        )
+
+        header2.setSectionResizeMode(
+            3,
+            QHeaderView.ResizeToContents
+        )
+
+        header2.setSectionResizeMode(
+            4,
+            QHeaderView.ResizeToContents
+        )
 
         header2.setSectionResizeMode(
             5,
             QHeaderView.Fixed
         )
 
-        header2.resizeSection(5, 76)
+        header2.resizeSection(5, 82)
 
         pedido_layout.addWidget(
             self.tabla_pedido,
@@ -979,7 +983,7 @@ class Pedidos(QWidget):
 
         pedido_layout.addLayout(botones_pedido)
 
-        cuerpo_superior.addWidget(pedido_panel, 7)
+        cuerpo.addWidget(pedido_panel, 6)
 
         # ----------------------------------------------------
         # PEDIDOS REGISTRADOS
@@ -1061,7 +1065,7 @@ class Pedidos(QWidget):
             6,
             QHeaderView.Fixed
         )
-        header3.resizeSection(6, 155)
+        header3.resizeSection(6, 190)
 
         self.tabla_registrados.itemSelectionChanged.connect(
             self.seleccionar_pedido_registrado
@@ -1083,11 +1087,9 @@ class Pedidos(QWidget):
 
         registrados_layout.addWidget(leyenda)
 
-        # Primero la fila superior.
-        principal.addLayout(cuerpo_superior, 1)
+        cuerpo.addWidget(registrados_panel, 6)
 
-        # Después Pedidos registrados a todo el ancho.
-        principal.addWidget(registrados_panel, 0)
+        principal.addLayout(cuerpo, 1)
 
         # ====================================================
         # CONEXIONES
@@ -1108,7 +1110,6 @@ class Pedidos(QWidget):
 
         cursor.execute("""
             SELECT
-                id,
                 codigo_barras,
                 nombre,
                 stock,
@@ -1129,23 +1130,10 @@ class Pedidos(QWidget):
 
         for producto in productos:
 
-            producto_id = producto[0]
-
-            codigo = str(
-                producto[1] or "SIN COD"
-            )
-
-            nombre = str(
-                producto[2] or ""
-            )
-
-            stock = int(
-                producto[3] or 0
-            )
-
-            precio = float(
-                producto[4] or 0
-            )
+            codigo = str(producto[0] or "SIN COD")
+            nombre = str(producto[1] or "")
+            stock = int(producto[2] or 0)
+            precio = float(producto[3] or 0)
 
             fila = self.tabla_productos.rowCount()
 
@@ -1168,7 +1156,6 @@ class Pedidos(QWidget):
                 )
 
                 if columna in (0, 2, 3):
-
                     item.setTextAlignment(
                         Qt.AlignCenter
                     )
@@ -1179,35 +1166,14 @@ class Pedidos(QWidget):
                     item
                 )
 
-            # Guardamos el ID REAL del producto
-            # dentro de la fila, sin mostrarlo.
-            self.tabla_productos.item(
-                fila,
-                0
-            ).setData(
-                Qt.UserRole,
-                producto_id
-            )
-
-            # Guardamos también el PRECIO REAL de venta.
-            # No debemos volver a obtenerlo desde el texto formateado.
-            self.tabla_productos.item(
-                fila,
-                3
-            ).setData(
-                Qt.UserRole,
-                precio
-            )
     def filtrar_productos(self, texto):
 
         texto = texto.strip().lower()
 
         if not texto:
-
             self.mostrar_productos(
                 self.productos
             )
-
             return
 
         encontrados = []
@@ -1215,22 +1181,18 @@ class Pedidos(QWidget):
         for producto in self.productos:
 
             codigo = str(
-                producto[1] or ""
+                producto[0] or ""
             ).lower()
 
             nombre = str(
-                producto[2] or ""
+                producto[1] or ""
             ).lower()
 
             if texto in codigo or texto in nombre:
+                encontrados.append(producto)
 
-                encontrados.append(
-                    producto
-                )
+        self.mostrar_productos(encontrados)
 
-        self.mostrar_productos(
-            encontrados
-        )
     def agregar_producto_seleccionado(self):
 
         fila = self.tabla_productos.currentRow()
@@ -1248,11 +1210,6 @@ class Pedidos(QWidget):
             0
         )
 
-        # ID REAL del producto en la base de datos
-        producto_id = item_codigo.data(
-            Qt.UserRole
-        )
-
         item_nombre = self.tabla_productos.item(
             fila,
             1
@@ -1263,78 +1220,36 @@ class Pedidos(QWidget):
             2
         )
 
-        if not item_codigo or not item_nombre:
+        item_precio = self.tabla_productos.item(
+            fila,
+            3
+        )
+
+        if not item_nombre or not item_precio:
             return
 
         codigo = item_codigo.text()
         nombre = item_nombre.text()
 
         try:
-
-            stock = int(
-                item_stock.text()
-            )
-
+            stock = int(item_stock.text())
         except Exception:
-
             stock = 0
 
-        # ========================================================
-        # OBTENER PRECIO REAL DESDE LA BASE DE DATOS
-        # ========================================================
-
-        precio = 0.0
-
-        conexion = sqlite3.connect(
-            BASE_DATOS
+        texto_precio = (
+            item_precio.text()
+            .replace("$", "")
+            .replace(".", "")
+            .replace(",", ".")
+            .strip()
         )
 
-        cursor = conexion.cursor()
-
         try:
-
-            resultado_precio = cursor.execute(
-                """
-                SELECT precio_venta
-                FROM productos
-                WHERE id = ?
-                LIMIT 1
-                """,
-                (producto_id,)
-            ).fetchone()
-
-            if resultado_precio:
-
-                precio = float(
-                    resultado_precio[0] or 0
-                )
-
-        except sqlite3.Error as error:
-
-            conexion.close()
-
-            QMessageBox.critical(
-                self,
-                "Error",
-                "No se pudo obtener el precio del producto.\n\n"
-                f"{error}"
-            )
-
-            return
-
-        finally:
-
-            try:
-                conexion.close()
-            except Exception:
-                pass
-
-        # ========================================================
-        # VERIFICAR STOCK
-        # ========================================================
+            precio = float(texto_precio)
+        except Exception:
+            precio = 0
 
         if stock <= 0:
-
             respuesta = QMessageBox.question(
                 self,
                 "Stock agotado",
@@ -1347,10 +1262,6 @@ class Pedidos(QWidget):
             if respuesta != QMessageBox.Yes:
                 return
 
-        # ========================================================
-        # SI EL PRODUCTO YA ESTÁ EN EL CARRITO
-        # ========================================================
-
         for producto in self.carrito:
 
             if (
@@ -1360,32 +1271,17 @@ class Pedidos(QWidget):
 
                 producto["cantidad"] += 1
 
-                # Actualizamos también el precio real
-                producto["precio"] = precio
-
                 self.actualizar_tabla_pedido()
 
                 self.tabla_productos.setFocus()
 
                 return
 
-        # ========================================================
-        # AGREGAR PRODUCTO NUEVO
-        # ========================================================
-
         self.carrito.append({
-
-            "id": producto_id,
-
             "codigo": codigo,
-
             "nombre": nombre,
-
-            # PRECIO REAL DE precio_venta
             "precio": precio,
-
             "cantidad": 1,
-
             "stock": stock,
         })
 
@@ -1652,12 +1548,8 @@ class Pedidos(QWidget):
 
             return
 
-        # ========================================================
-        # CALCULAR TOTAL
-        # ========================================================
-
         total = sum(
-            float(p["precio"]) * int(p["cantidad"])
+            p["precio"] * p["cantidad"]
             for p in self.carrito
         )
 
@@ -1680,102 +1572,7 @@ class Pedidos(QWidget):
 
         try:
 
-            # ====================================================
-            # BUSCAR CLIENTE
-            # ====================================================
-
-            cliente_id = None
-
-            try:
-
-                resultado_cliente = cursor.execute(
-                    """
-                    SELECT id
-                    FROM clientes
-                    WHERE LOWER(TRIM(nombre)) =
-                        LOWER(TRIM(?))
-                    LIMIT 1
-                    """,
-                    (cliente,)
-                ).fetchone()
-
-                if resultado_cliente:
-
-                    cliente_id = resultado_cliente[0]
-
-            except sqlite3.Error:
-
-                cliente_id = None
-
-            # ====================================================
-            # VALIDAR PRODUCTOS DEL CARRITO
-            #
-            # IMPORTANTE:
-            # ACÁ NO SE DESCUENTA STOCK.
-            #
-            # Tampoco se exige que haya stock suficiente.
-            # El stock se verificará recién al entregar.
-            # ====================================================
-
-            for producto in self.carrito:
-
-                producto_id = producto.get("id")
-
-                cantidad = int(
-                    producto.get("cantidad", 0)
-                )
-
-                if not producto_id:
-
-                    raise Exception(
-                        f"El producto "
-                        f"'{producto.get('nombre', '')}' "
-                        "no tiene un ID válido."
-                    )
-
-                if cantidad <= 0:
-
-                    raise Exception(
-                        f"La cantidad del producto "
-                        f"'{producto.get('nombre', '')}' "
-                        "no es válida."
-                    )
-
-                # ------------------------------------------------
-                # Verificar que el producto todavía exista.
-                #
-                # NO modificamos stock.
-                # ------------------------------------------------
-
-                resultado_producto = cursor.execute(
-                    """
-                    SELECT
-                        id,
-                        codigo_barras,
-                        nombre,
-                        precio_venta
-                    FROM productos
-                    WHERE id = ?
-                    LIMIT 1
-                    """,
-                    (producto_id,)
-                ).fetchone()
-
-                if not resultado_producto:
-
-                    raise Exception(
-                        f"No se encontró el producto:\n\n"
-                        f"{producto.get('nombre', '')}\n"
-                        f"Código: "
-                        f"{producto.get('codigo', '')}"
-                    )
-
-            # ====================================================
-            # GUARDAR PEDIDO
-            # ====================================================
-
-            cursor.execute(
-                """
+            cursor.execute("""
                 INSERT INTO pedidos(
                     fecha,
                     entrega,
@@ -1784,50 +1581,44 @@ class Pedidos(QWidget):
                     total,
                     forma_pago,
                     pago_efectivo,
-                    pago_transferencia,
-                    cliente,
-                    cliente_id
+                    pago_transferencia
                 )
                 VALUES(
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?
                 )
-                """,
-                (
-                    fecha,
-                    entrega,
-                    "PENDIENTE",
-                    observaciones,
-                    total,
-                    "",
-                    0,
-                    0,
-                    cliente,
-                    cliente_id,
-                )
-            )
+            """, (
+                fecha,
+                entrega,
+                "PENDIENTE",
+                observaciones,
+                total,
+                "",
+                0,
+                0,
+            ))
 
             pedido_id = cursor.lastrowid
 
-            # ====================================================
-            # GUARDAR DETALLE DEL PEDIDO
-            # ====================================================
+            # Intentamos guardar el cliente si existe
+            # una columna cliente_id.
+            columnas = [
+                fila[1]
+                for fila in cursor.execute(
+                    "PRAGMA table_info(pedidos)"
+                ).fetchall()
+            ]
+
+            if "cliente_id" in columnas:
+                pass
 
             for producto in self.carrito:
 
-                cantidad = int(
-                    producto["cantidad"]
-                )
-
-                precio = float(
-                    producto["precio"]
-                )
-
                 subtotal = (
-                    precio * cantidad
+                    producto["precio"]
+                    * producto["cantidad"]
                 )
 
-                cursor.execute(
-                    """
+                cursor.execute("""
                     INSERT INTO detalle_pedidos(
                         pedido_id,
                         producto,
@@ -1839,94 +1630,54 @@ class Pedidos(QWidget):
                     VALUES(
                         ?, ?, ?, ?, ?, ?
                     )
-                    """,
-                    (
-                        pedido_id,
-                        producto["nombre"],
-                        cantidad,
-                        precio,
-                        subtotal,
-                        producto["codigo"],
-                    )
-                )
-
-            # ====================================================
-            # IMPORTANTE
-            #
-            # NO HAY UPDATE DE STOCK ACÁ.
-            #
-            # El stock se descontará únicamente en:
-            #
-            #     marcar_entregado()
-            #
-            # cuando el pedido pase a ENTREGADO.
-            # ====================================================
-
-            # ====================================================
-            # CONFIRMAR TODO
-            # ====================================================
+                """, (
+                    pedido_id,
+                    producto["nombre"],
+                    producto["cantidad"],
+                    producto["precio"],
+                    subtotal,
+                    producto["codigo"],
+                ))
 
             conexion.commit()
 
         except Exception as error:
 
-            # ====================================================
-            # SI ALGO FALLA, DESHACER TODO
-            # ====================================================
-
             conexion.rollback()
 
             QMessageBox.critical(
                 self,
-                "No se pudo guardar el pedido",
-                f"{error}\n\n"
-                "El pedido NO fue guardado "
-                "y el stock NO fue modificado."
+                "Error",
+                f"No se pudo guardar el pedido:\n\n{error}"
             )
 
             conexion.close()
 
             return
 
-        # ========================================================
-        # CERRAR CONEXIÓN
-        # ========================================================
-
         conexion.close()
-
-        # ========================================================
-        # CONFIRMACIÓN
-        # ========================================================
 
         QMessageBox.information(
             self,
             "Pedido guardado",
-            f"Pedido #{pedido_id} guardado correctamente.\n\n"
-            "El stock se descontará cuando el pedido "
-            "sea marcado como ENTREGADO."
+            f"Pedido #{pedido_id} guardado correctamente."
         )
 
-        # ========================================================
-        # LIMPIAR FORMULARIO
-        # ========================================================
-
         self.cliente.clear()
-
         self.obs.clear()
-
         self.carrito.clear()
 
         self.entrega.setDate(
             QDate.currentDate()
         )
 
-        # ========================================================
-        # ACTUALIZAR INTERFAZ
-        # ========================================================
-
         self.actualizar_tabla_pedido()
-
         self.cargar_pedidos()
+
+    # ========================================================
+    # PEDIDOS REGISTRADOS
+    # ========================================================
+
     def cargar_pedidos(self):
 
         conexion = sqlite3.connect(
@@ -2093,10 +1844,10 @@ class Pedidos(QWidget):
             )
 
             acciones_layout.setContentsMargins(
-                2, 2, 2, 2
+                4, 4, 4, 4
             )
 
-            acciones_layout.setSpacing(3)
+            acciones_layout.setSpacing(5)
 
             if estado != "ENTREGADO":
 
@@ -2147,35 +1898,6 @@ class Pedidos(QWidget):
 
             acciones_layout.addWidget(
                 btn_factura
-            )
-            
-            # ------------------------------------------------
-            # BOTÓN ELIMINAR
-            # ------------------------------------------------
-
-            btn_eliminar = QPushButton("🗑")
-
-            btn_eliminar.setObjectName(
-                "eliminar"
-            )
-
-            btn_eliminar.setToolTip(
-                "Eliminar pedido"
-            )
-
-            btn_eliminar.setFixedSize(
-                42,
-                36
-            )
-
-            btn_eliminar.clicked.connect(
-                lambda checked=False,
-                pid=pedido_id:
-                self.eliminar_pedido(pid)
-            )
-
-            acciones_layout.addWidget(
-                btn_eliminar
             )
 
             self.tabla_registrados.setCellWidget(
@@ -2276,80 +1998,7 @@ class Pedidos(QWidget):
             )
         except Exception:
             self.pedido_seleccionado = None
-    # ========================================================
-    # ELIMINAR PEDIDO
-    # ========================================================
 
-    def eliminar_pedido(self, pedido_id):
-
-        respuesta = QMessageBox.question(
-            self,
-            "Eliminar pedido",
-            f"¿Seguro que querés eliminar el pedido N° {pedido_id}?\n\n"
-            "Esta acción no se puede deshacer.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if respuesta != QMessageBox.Yes:
-            return
-
-        conexion = sqlite3.connect(
-            BASE_DATOS
-        )
-
-        cursor = conexion.cursor()
-
-        try:
-
-            # Eliminar primero los detalles del pedido
-            cursor.execute(
-                """
-                DELETE FROM detalle_pedidos
-                WHERE pedido_id = ?
-                """,
-                (pedido_id,)
-            )
-
-            # Eliminar el pedido
-            cursor.execute(
-                """
-                DELETE FROM pedidos
-                WHERE id = ?
-                """,
-                (pedido_id,)
-            )
-
-            conexion.commit()
-
-        except Exception as error:
-
-            conexion.rollback()
-
-            QMessageBox.critical(
-                self,
-                "Error",
-                "No se pudo eliminar el pedido.\n\n"
-                f"{error}"
-            )
-
-            conexion.close()
-            return
-
-        conexion.close()
-
-        # Si estaba seleccionado, quitar selección
-        if self.pedido_seleccionado == pedido_id:
-            self.pedido_seleccionado = None
-
-        # Recargar pedidos
-        self.cargar_pedidos()
-
-        QMessageBox.information(
-            self,
-            "Pedido eliminado",
-            f"El pedido N° {pedido_id} fue eliminado correctamente."
-        )
     # ========================================================
     # MARCAR ENTREGADO
     # ========================================================
@@ -2364,18 +2013,12 @@ class Pedidos(QWidget):
             return
 
         if datos_pedido["estado"] == "ENTREGADO":
-
             QMessageBox.information(
                 self,
                 "Pedido entregado",
                 "Este pedido ya está marcado como entregado."
             )
-
             return
-
-        # ========================================================
-        # ABRIR VENTANA DE PAGO
-        # ========================================================
 
         dialogo = DialogoPagoPedido(
             datos_pedido["total"],
@@ -2383,338 +2026,53 @@ class Pedidos(QWidget):
         )
 
         if dialogo.exec() != QDialog.Accepted:
-
-            # Canceló el pago.
-            # NO se modifica el stock.
             return
 
         pago = dialogo.datos()
-
         fecha_pago = datetime.datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S"
         )
 
-        conexion = sqlite3.connect(
-            BASE_DATOS
-        )
-
+        conexion = sqlite3.connect(BASE_DATOS)
         cursor = conexion.cursor()
 
         try:
-
-            # ====================================================
-            # OBTENER PRODUCTOS DEL PEDIDO
-            # ====================================================
-
-            detalles = cursor.execute(
-                """
-                SELECT
-                    codigo,
-                    producto,
-                    cantidad
-                FROM detalle_pedidos
-                WHERE pedido_id = ?
-                ORDER BY id
-                """,
-                (
-                    pedido_id,
-                )
-            ).fetchall()
-
-            if not detalles:
-
-                raise Exception(
-                    "El pedido no tiene productos asociados."
-                )
-
-            # ====================================================
-            # BUSCAR TODOS LOS PRODUCTOS Y VERIFICAR STOCK
-            # ====================================================
-
-            productos_stock = []
-
-            for detalle in detalles:
-
-                codigo = detalle[0]
-                nombre_pedido = detalle[1]
-
-                cantidad = int(
-                    detalle[2] or 0
-                )
-
-                if cantidad <= 0:
-
-                    raise Exception(
-                        f"La cantidad del producto "
-                        f"'{nombre_pedido}' no es válida."
-                    )
-
-                # ------------------------------------------------
-                # BUSCAR PRIMERO POR CÓDIGO
-                # ------------------------------------------------
-
-                producto_db = cursor.execute("""
-                    SELECT
-                        id,
-                        uuid,
-                        codigo_barras,
-                        nombre,
-                        categoria,
-                        precio_compra,
-                        precio_venta,
-                        stock,
-                        stock_minimo
-                    FROM productos
-                    WHERE LOWER(TRIM(nombre))
-                        = LOWER(TRIM(?))
-                    LIMIT 1
-                """, (
-                    nombre_pedido,
-                )).fetchone()
-
-                # ------------------------------------------------
-                # SI NO EXISTE POR CÓDIGO,
-                # BUSCAR POR NOMBRE
-                # ------------------------------------------------
-
-                if not producto_db:
-
-                    
-                    producto_db = cursor.execute("""
-                        SELECT
-                            id,
-                            uuid,
-                            codigo_barras,
-                            nombre,
-                            categoria,
-                            precio_compra,
-                            precio_venta,
-                            stock,
-                            stock_minimo
-                        FROM productos
-                        WHERE LOWER(TRIM(nombre))
-                            = LOWER(TRIM(?))
-                        LIMIT 1
-                    """, (
-                        nombre_pedido,
-                    )).fetchone()
-
-                if not producto_db:
-
-                    raise Exception(
-                        f"No se encontró el producto:\n\n"
-                        f"{nombre_pedido}\n\n"
-                        f"Código: {codigo}"
-                    )
-
-                producto_id = producto_db[0]
-                producto_uuid = producto_db[1]
-                codigo_db = producto_db[2]
-                nombre_db = producto_db[3]
-                categoria_db = producto_db[4]
-                precio_compra_db = float(
-                    producto_db[5] or 0
-                )
-                precio_venta_db = float(
-                    producto_db[6] or 0
-                )
-                stock_actual = int(
-                    producto_db[7] or 0
-                )
-                stock_minimo_db = int(
-                    producto_db[8] or 0
-                )
-
-                # ------------------------------------------------
-                # VERIFICAR STOCK
-                # ------------------------------------------------
-
-                if stock_actual < cantidad:
-
-                    raise Exception(
-                        f"No hay stock suficiente para:\n\n"
-                        f"{nombre_db}\n\n"
-                        f"Stock disponible: {stock_actual}\n"
-                        f"Cantidad necesaria: {cantidad}"
-                    )
-
-                productos_stock.append({
-                    "id": producto_id,
-                    "uuid": producto_uuid,
-                    "codigo": codigo_db,
-                    "nombre": nombre_db,
-                    "categoria": categoria_db,
-                    "precio_compra": precio_compra_db,
-                    "precio_venta": precio_venta_db,
-                    "stock_minimo": stock_minimo_db,
-                    "stock_anterior": stock_actual,
-                    "cantidad": cantidad,
-                    "stock_nuevo": (
-                        stock_actual - cantidad
-                    )
-                })
-
-            # ====================================================
-            # DESCONTAR STOCK Y REGISTRAR SINCRONIZACIÓN
-            # ====================================================
-
-            for producto in productos_stock:
-
-                # -----------------------------------------------
-                # Actualizar stock local
-                # -----------------------------------------------
-
-                cursor.execute("""
-                    UPDATE productos
-                    SET stock = ?
-                    WHERE id = ?
-                """, (
-                    producto["stock_nuevo"],
-                    producto["id"]
-                ))
-
-                if cursor.rowcount != 1:
-
-                    raise Exception(
-                        f"No se pudo actualizar el stock de:\n\n"
-                        f"{producto['nombre']}"
-                    )
-
-                # -----------------------------------------------
-                # Registrar el PRODUCTO COMPLETO para sincronizar
-                # -----------------------------------------------
-                #
-                # IMPORTANTE:
-                # No mandamos solamente el stock.
-                # Mandamos también precio de compra, precio de
-                # venta, categoría, código, etc.
-                #
-                # Así el servidor no pone los precios en 0.
-                # -----------------------------------------------
-
-                datos_sync = {
-                    "uuid": producto["uuid"],
-                    "codigo_barras": producto["codigo"],
-                    "nombre": producto["nombre"],
-                    "categoria": producto["categoria"],
-                    "precio_compra": producto["precio_compra"],
-                    "precio_venta": producto["precio_venta"],
-                    "stock": producto["stock_nuevo"],
-                    "stock_minimo": producto["stock_minimo"]
-                }
-
-                cursor.execute("""
-                    INSERT INTO sincronizacion
-                    (
-                        tabla,
-                        registro_uuid,
-                        accion,
-                        datos,
-                        fecha,
-                        sincronizado
-                    )
-                    VALUES
-                    (
-                        ?, ?, ?, ?, ?, ?
-                    )
-                """, (
-                    "productos",
-                    producto["uuid"],
-                    "UPDATE",
-                    json.dumps(datos_sync),
-                    datetime.datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    0
-                ))
-                # ------------------------------------------------
-                # ASEGURAR QUE REALMENTE SE ACTUALIZÓ
-                # ------------------------------------------------
-
-                if cursor.rowcount != 1:
-
-                    raise Exception(
-                        "No se pudo descontar correctamente "
-                        "el stock de:\n\n"
-                        f"{producto['nombre']}\n\n"
-                        "El pedido NO fue entregado."
-                    )
-
-            # ====================================================
-            # MARCAR PEDIDO COMO ENTREGADO
-            # ====================================================
-
-            cursor.execute(
-                """
+            cursor.execute("""
                 UPDATE pedidos
                 SET
-                    estado = ?,
-                    forma_pago = ?,
-                    pago_efectivo = ?,
-                    pago_transferencia = ?,
-                    fecha_pago = ?
-                WHERE id = ?
-                """,
-                (
-                    "ENTREGADO",
-                    pago["forma"],
-                    pago["efectivo"],
-                    pago["transferencia"],
-                    fecha_pago,
-                    pedido_id,
-                )
-            )
-
-            if cursor.rowcount != 1:
-
-                raise Exception(
-                    "No se pudo marcar el pedido "
-                    "como ENTREGADO."
-                )
-
-            # ====================================================
-            # CONFIRMAR TODO JUNTO
-            # ====================================================
+                    estado=?,
+                    forma_pago=?,
+                    pago_efectivo=?,
+                    pago_transferencia=?,
+                    fecha_pago=?
+                WHERE id=?
+            """, (
+                "ENTREGADO",
+                pago["forma"],
+                pago["efectivo"],
+                pago["transferencia"],
+                fecha_pago,
+                pedido_id,
+            ))
 
             conexion.commit()
 
         except Exception as error:
-
             conexion.rollback()
-
             conexion.close()
 
             QMessageBox.critical(
                 self,
-                "No se pudo entregar el pedido",
-                f"{error}\n\n"
-                "El pedido NO fue entregado.\n"
-                "El stock NO fue modificado.\n"
-                "El pago NO fue registrado."
+                "Error",
+                f"No se pudo registrar el pago:\n\n{error}"
             )
-
             return
-
-        # ========================================================
-        # CERRAR CONEXIÓN
-        # ========================================================
 
         conexion.close()
 
-        # ========================================================
-        # RECARGAR PRODUCTOS
-        #
-        # IMPORTANTE:
-        # Esto hace que la tabla de productos muestre
-        # inmediatamente el nuevo stock.
-        # ========================================================
-
-        self.cargar_productos()
-
-        # ========================================================
-        # LA FACTURA SE GENERA SOLAMENTE AL ENTREGAR
-        # ========================================================
-
+        # ====================================================
+        # LA FACTURA SE GENERA Y GUARDA SOLAMENTE AL ENTREGAR
+        # ====================================================
         datos_factura = self.obtener_datos_pedido(
             pedido_id
         )
@@ -2724,46 +2082,31 @@ class Pedidos(QWidget):
         )
 
         try:
-
             self.generar_factura_pdf(
                 datos_factura,
                 ruta
             )
-
         except Exception as error:
-
             QMessageBox.warning(
                 self,
                 "Pedido entregado",
-                "El pedido y el pago fueron registrados "
-                "correctamente y el stock fue descontado, "
+                "El pedido y el pago fueron registrados correctamente, "
                 "pero no se pudo guardar la factura.\n\n"
                 f"Error: {error}"
             )
-
             self.cargar_pedidos()
-
             return
-
-        # ========================================================
-        # CONFIRMACIÓN
-        # ========================================================
 
         QMessageBox.information(
             self,
             "Pedido entregado",
-            "El pedido fue marcado como ENTREGADO.\n\n"
-            "El pago quedó registrado.\n"
-            "El stock fue descontado correctamente.\n"
-            "La factura fue guardada correctamente.\n\n"
+            "El pedido fue marcado como ENTREGADO, el pago quedó "
+            "registrado y la factura fue guardada correctamente.\n\n"
             f"Ubicación: {ruta}"
         )
 
-        # ========================================================
-        # ACTUALIZAR PEDIDOS
-        # ========================================================
-
         self.cargar_pedidos()
+
     # ========================================================
     # DATOS DEL PEDIDO
     # ========================================================
@@ -2961,7 +2304,14 @@ class Pedidos(QWidget):
         )
 
         vista.setZoomMode(
-            QPrintPreviewWidget.ZoomMode.FitInView
+            QPrintPreviewWidget.ZoomMode.FitToWidth
+        )
+
+        vista.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
+        vista.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded
         )
 
         vista.paintRequested.connect(
@@ -3095,462 +2445,750 @@ class Pedidos(QWidget):
             datos
         )
 
-    # ========================================================
-    # FACTURA - VISTA PREVIA / IMPRESION / PDF
-    # ========================================================
+    def pintar_factura(
+        self,
+        printer,
+        datos
+    ):
 
-    def pintar_factura(self, printer, datos):
-        """Dibuja la factura usando coordenadas físicas de A4.
+        painter = QPainter(
+            printer
+        )
 
-        La versión anterior utilizaba coordenadas fijas en píxeles.
-        En una QPrinter de alta resolución eso hacía que todo el contenido
-        quedara comprimido en la parte superior de la hoja. Esta versión
-        trabaja en milímetros y convierte cada coordenada al tamaño real
-        de la página imprimible.
-        """
+        painter.setRenderHint(
+            QPainter.RenderHint.Antialiasing
+        )
 
-        painter = QPainter(printer)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.setRenderHint(
+            QPainter.RenderHint.TextAntialiasing
+        )
 
-        # La página configurada por mostrar_factura(), imprimir_factura()
-        # y generar_factura_pdf() es A4 vertical con 10 mm de margen.
-        # Usamos el viewport real para que también funcione correctamente
-        # en PDF y en impresoras con distintas resoluciones.
-        viewport = painter.viewport()
-        px_w = max(1, viewport.width())
-        px_h = max(1, viewport.height())
+        rect = painter.viewport()
 
-        # Área imprimible de A4 con márgenes de 10 mm.
-        page_w_mm = 190.0
-        page_h_mm = 277.0
-        sx = px_w / page_w_mm
-        sy = px_h / page_h_mm
+        ancho = rect.width()
+        alto = rect.height()
 
-        def X(mm):
-            return int(round(mm * sx))
+        margen = int(ancho * 0.055)
+        derecha = ancho - margen
+        ancho_util = derecha - margen
 
-        def Y(mm):
-            return int(round(mm * sy))
+        # ====================================================
+        # COLORES
+        # ====================================================
 
-        # Paleta
-        azul = QColor("#1e3a8a")
-        azul_claro = QColor("#eff6ff")
-        rojo = QColor("#dc2626")
-        negro = QColor("#1f2937")
+        azul = QColor("#1f2f63")
+        rojo = QColor("#dc3b32")
+        negro = QColor("#111827")
         gris = QColor("#64748b")
         gris_claro = QColor("#e2e8f0")
-        gris_fondo = QColor("#f8fafc")
-        gris_fila = QColor("#f8fafc")
+        fondo = QColor("#f8fafc")
         blanco = QColor("#ffffff")
-        verde = QColor("#059669")
-        naranja = QColor("#d97706")
-        amarillo_fondo = QColor("#fffbeb")
+        verde = QColor("#15803d")
+        naranja = QColor("#c2410c")
 
-        # --------------------------------------------------------
-        # UTILIDADES DE DIBUJO
-        # --------------------------------------------------------
-
-        def fuente(tamano, negrita=False):
+        def fuente(
+            tamano,
+            negrita=False
+        ):
             f = QFont("Arial")
-            f.setPointSizeF(float(tamano))
-            f.setBold(bool(negrita))
+            f.setPointSize(tamano)
+            f.setBold(negrita)
             return f
 
-        def escribir(x, y, w, h, texto, tamano=9, color=negro,
-                     negrita=False,
-                     alineacion=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter):
+        def escribir(
+            x,
+            y,
+            w,
+            h,
+            texto,
+            tamano=9,
+            color=negro,
+            negrita=False,
+            alineacion=Qt.AlignLeft | Qt.AlignVCenter
+        ):
             painter.setPen(color)
-            painter.setFont(fuente(tamano, negrita))
+            painter.setFont(
+                fuente(tamano, negrita)
+            )
             painter.drawText(
-                X(x), Y(y), X(w), Y(h),
-                alineacion | Qt.TextFlag.TextSingleLine,
-                str(texto),
+                int(x),
+                int(y),
+                int(w),
+                int(h),
+                alineacion | Qt.TextSingleLine,
+                str(texto)
             )
 
-        def escribir_elidido(x, y, w, h, texto, tamano=9, color=negro,
-                             negrita=False,
-                             alineacion=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter):
+        def escribir_elidido(
+            x,
+            y,
+            w,
+            h,
+            texto,
+            tamano=9,
+            color=negro,
+            negrita=False
+        ):
             f = fuente(tamano, negrita)
             fm = QFontMetrics(f)
-            # El ancho de QFontMetrics está en coordenadas del dispositivo.
-            ancho_px = max(1, X(w))
             valor = fm.elidedText(
                 str(texto),
                 Qt.TextElideMode.ElideRight,
-                ancho_px,
+                int(w)
             )
-            escribir(x, y, w, h, valor, tamano, color, negrita, alineacion)
-
-        def escribir_derecha(x, y, w, h, texto, tamano=9, color=negro,
-                             negrita=False):
             escribir(
-                x, y, w, h, texto, tamano, color, negrita,
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                x, y, w, h, valor,
+                tamano, color, negrita
             )
 
-        def escribir_centro(x, y, w, h, texto, tamano=9, color=negro,
-                            negrita=False):
+        def escribir_derecha(
+            x,
+            y,
+            w,
+            h,
+            texto,
+            tamano=9,
+            color=negro,
+            negrita=False
+        ):
             escribir(
-                x, y, w, h, texto, tamano, color, negrita,
-                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
+                x, y, w, h, texto,
+                tamano, color, negrita,
+                Qt.AlignRight | Qt.AlignVCenter
             )
 
-        def linea(y, color=gris_claro, grosor=1):
-            painter.setPen(QPen(color, max(1, X(grosor * 0.30))))
-            painter.drawLine(X(6), Y(y), X(184), Y(y))
-
-        def caja(x, y, w, h, fondo=blanco, borde=gris_claro, radio=2.5):
-            painter.setBrush(QBrush(fondo))
-            painter.setPen(QPen(borde, max(1, X(0.30))))
-            painter.drawRoundedRect(
-                X(x), Y(y), X(w), Y(h),
-                float(radio), float(radio),
+        def linea(
+            y,
+            color=gris_claro,
+            grosor=1
+        ):
+            painter.setPen(
+                QPen(color, grosor)
+            )
+            painter.drawLine(
+                margen,
+                int(y),
+                derecha,
+                int(y)
             )
 
-        def rect_sin_borde(x, y, w, h, color):
-            painter.setBrush(QBrush(color))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRect(X(x), Y(y), X(w), Y(h))
-
-        # --------------------------------------------------------
-        # DIMENSIONES GENERALES
-        # --------------------------------------------------------
-
-        izquierda = 6.0
-        derecha = 184.0
-        ancho = derecha - izquierda
-        pie = 270.0
-
-        # --------------------------------------------------------
+        # ====================================================
         # ENCABEZADO
-        # --------------------------------------------------------
+        # ====================================================
 
-        y = 7.0
+        y = 38
 
         nombre_negocio = (
-            get_setting("nombre_negocio", "COTILLON") or "COTILLON"
+            get_setting(
+                "nombre_negocio",
+                "COTILLON"
+            )
+            or "COTILLON"
         ).upper()
-        direccion = get_setting("direccion", "") or ""
-        telefono = get_setting("telefono", "") or ""
-        email = get_setting("email", "") or ""
 
-        # Caja de factura a la derecha.
-        caja_factura_x = 133.0
-        caja_factura_w = 51.0
-        caja_factura_h = 36.0
-
-        caja(
-            caja_factura_x,
-            7.0,
-            caja_factura_w,
-            caja_factura_h,
-            gris_fondo,
-            gris_claro,
-            3,
-        )
-
-        escribir_centro(
-            caja_factura_x,
-            10.0,
-            caja_factura_w,
-            8.0,
-            "FACTURA",
-            16,
-            rojo,
-            True,
-        )
-
-        painter.setPen(QPen(gris_claro, max(1, X(0.30))))
-        painter.drawLine(
-            X(caja_factura_x + 5),
-            Y(20),
-            X(caja_factura_x + caja_factura_w - 5),
-            Y(20),
-        )
-
-        escribir(caja_factura_x + 5, 22.0, 20, 5, "PEDIDO N°", 7.5, gris, True)
-        escribir_derecha(
-            caja_factura_x + 25,
-            22.0,
-            21,
-            5,
-            datos.get("id", ""),
-            9,
-            negro,
-            True,
-        )
-
-        escribir(caja_factura_x + 5, 27.0, 20, 5, "FECHA", 7.5, gris, True)
-        escribir_derecha(
-            caja_factura_x + 25,
-            27.0,
-            21,
-            5,
-            self.formatear_fecha(datos.get("fecha", "")),
-            8,
-            negro,
-        )
-
-        escribir(caja_factura_x + 5, 32.0, 20, 5, "ENTREGA", 7.5, gris, True)
-        escribir_derecha(
-            caja_factura_x + 25,
-            32.0,
-            21,
-            5,
-            self.formatear_fecha(datos.get("entrega", "")),
-            8,
-            negro,
-        )
-
-        # Nombre del negocio.
-        escribir_elidido(
-            izquierda,
+        escribir(
+            margen,
             y,
-            118,
-            12,
+            int(ancho_util * 0.58),
+            34,
             nombre_negocio,
-            20,
+            22,
             azul,
-            True,
+            True
         )
-        y += 14
+
+        y += 29
+
+        direccion = get_setting(
+            "direccion",
+            ""
+        ) or ""
+
+        telefono = get_setting(
+            "telefono",
+            ""
+        ) or ""
+
+        email = get_setting(
+            "email",
+            ""
+        ) or ""
 
         if direccion:
-            escribir_elidido(izquierda, y, 118, 5.5, direccion, 8, gris)
-            y += 6
+            escribir(
+                margen, y,
+                int(ancho_util * 0.58), 18,
+                direccion, 8, gris
+            )
+            y += 14
 
         if telefono:
-            escribir_elidido(izquierda, y, 118, 5.5, f"Tel: {telefono}", 8, gris)
-            y += 6
+            escribir(
+                margen, y,
+                int(ancho_util * 0.58), 18,
+                f"Tel: {telefono}", 8, gris
+            )
+            y += 14
 
         if email:
-            escribir_elidido(izquierda, y, 118, 5.5, email, 8, gris)
-            y += 6
+            escribir(
+                margen, y,
+                int(ancho_util * 0.58), 18,
+                email, 8, gris
+            )
+            y += 14
 
-        y = max(y + 4, 48.0)
-        linea(y, azul, 2.0)
-        y += 6
+        # ====================================================
+        # BLOQUE FACTURA
+        # ====================================================
 
-        # --------------------------------------------------------
-        # DATOS DEL CLIENTE / ESTADO
-        # --------------------------------------------------------
+        caja_w = int(ancho_util * 0.31)
+        caja_h = 112
+        caja_x = derecha - caja_w
+        caja_y = 30
 
-        col1 = izquierda
-        col2 = 68.0
-        col3 = 126.0
+        painter.setBrush(
+            QBrush(fondo)
+        )
+        painter.setPen(
+            QPen(gris_claro, 1)
+        )
+        painter.drawRoundedRect(
+            caja_x,
+            caja_y,
+            caja_w,
+            caja_h,
+            8,
+            8
+        )
 
-        escribir(col1, y, 55, 5, "CLIENTE", 7.5, gris, True)
-        escribir(col2, y, 52, 5, "FECHA DE ENTREGA", 7.5, gris, True)
-        escribir(col3, y, 58, 5, "ESTADO", 7.5, gris, True)
-        y += 6
+        escribir(
+            caja_x + 14,
+            caja_y + 8,
+            caja_w - 28,
+            28,
+            "FACTURA",
+            17,
+            rojo,
+            True
+        )
 
-        cliente_texto = datos.get("cliente", "") or "Sin cliente"
-        fecha_entrega = self.formatear_fecha(datos.get("entrega", "")) or "-"
-        estado = str(datos.get("estado", "PENDIENTE") or "PENDIENTE").upper()
-        color_estado = verde if estado == "ENTREGADO" else naranja
+        escribir(
+            caja_x + 14,
+            caja_y + 38,
+            92,
+            18,
+            "PEDIDO N°",
+            8,
+            azul,
+            True
+        )
 
-        escribir_elidido(col1, y, 55, 8, cliente_texto, 9.5, negro, True)
-        escribir(col2, y, 52, 8, fecha_entrega, 9.5, negro)
-        escribir(col3, y, 58, 8, estado, 9.5, color_estado, True)
-        y += 12
+        escribir_derecha(
+            caja_x + 100,
+            caja_y + 38,
+            caja_w - 114,
+            18,
+            datos["id"],
+            9,
+            negro,
+            True
+        )
 
-        # --------------------------------------------------------
+        escribir(
+            caja_x + 14,
+            caja_y + 60,
+            92,
+            18,
+            "FECHA",
+            8,
+            azul,
+            True
+        )
+
+        escribir_derecha(
+            caja_x + 100,
+            caja_y + 60,
+            caja_w - 114,
+            18,
+            self.formatear_fecha(datos["fecha"]),
+            8,
+            negro
+        )
+
+        escribir(
+            caja_x + 14,
+            caja_y + 82,
+            92,
+            18,
+            "ENTREGA",
+            8,
+            azul,
+            True
+        )
+
+        escribir_derecha(
+            caja_x + 100,
+            caja_y + 82,
+            caja_w - 114,
+            18,
+            self.formatear_fecha(datos["entrega"]),
+            8,
+            negro
+        )
+
+        y = max(
+            y + 22,
+            caja_y + caja_h + 18
+        )
+
+        linea(
+            y,
+            rojo,
+            2
+        )
+
+        # ====================================================
+        # CLIENTE / ENTREGA / ESTADO
+        # ====================================================
+
+        y += 16
+
+        tercera = ancho_util / 3
+
+        x1 = margen
+        x2 = margen + tercera
+        x3 = margen + tercera * 2
+
+        escribir(
+            x1, y, tercera - 12, 18,
+            "FACTURAR A", 8, azul, True
+        )
+        escribir(
+            x2, y, tercera - 12, 18,
+            "FECHA DE ENTREGA", 8, azul, True
+        )
+        escribir(
+            x3, y, tercera, 18,
+            "ESTADO", 8, azul, True
+        )
+
+        y += 18
+
+        escribir_elidido(
+            x1, y, tercera - 12, 20,
+            datos["cliente"] or "Sin cliente",
+            9, negro, True
+        )
+
+        escribir(
+            x2, y, tercera - 12, 20,
+            self.formatear_fecha(datos["entrega"]) or "-",
+            9, negro
+        )
+
+        estado = (
+            datos.get("estado", "PENDIENTE")
+            or "PENDIENTE"
+        )
+
+        color_estado = (
+            verde
+            if estado == "ENTREGADO"
+            else naranja
+        )
+
+        escribir(
+            x3, y, tercera, 20,
+            estado, 9, color_estado, True
+        )
+
+        y += 27
+
+        # ====================================================
         # OBSERVACIONES
-        # --------------------------------------------------------
+        # ====================================================
 
-        observaciones = datos.get("observaciones", "") or ""
-        if observaciones.strip():
-            caja(
-                izquierda,
-                y,
-                ancho,
-                13,
-                amarillo_fondo,
-                QColor("#f59e0b"),
-                2,
+        observaciones = (
+            datos.get("observaciones", "")
+            or ""
+        )
+
+        if observaciones:
+            escribir(
+                margen, y, 95, 18,
+                "OBSERVACIONES", 8, azul, True
             )
-            escribir(izquierda + 3, y + 2, 28, 7, "OBSERVACIONES", 7.5, naranja, True)
             escribir_elidido(
-                izquierda + 31,
-                y + 2,
-                ancho - 34,
-                7,
-                observaciones,
-                8,
-                negro,
+                margen + 95, y,
+                ancho_util - 95, 18,
+                observaciones, 8, gris
             )
-            y += 19
-        else:
-            y += 3
+            y += 24
 
-        # --------------------------------------------------------
-        # TABLA DE PRODUCTOS
-        # --------------------------------------------------------
+        # ====================================================
+        # TABLA PRODUCTOS
+        # ====================================================
 
-        detalles = datos.get("detalles", []) or []
+        y += 6
 
-        tabla_x = izquierda
-        tabla_w = ancho
-        header_h = 9.0
-        fila_h = 9.0
+        tabla_y = y
+        tabla_h = 27
 
-        w_cant = 18.0
-        w_producto = 83.0
-        w_precio = 38.0
-        w_importe = tabla_w - w_cant - w_producto - w_precio
+        painter.setBrush(
+            QBrush(azul)
+        )
+        painter.setPen(
+            Qt.NoPen
+        )
+        painter.drawRect(
+            margen,
+            tabla_y,
+            ancho_util,
+            tabla_h
+        )
 
-        x_cant = tabla_x
+        # Columnas perfectamente separadas.
+        w_cant = int(ancho_util * 0.10)
+        w_producto = int(ancho_util * 0.48)
+        w_precio = int(ancho_util * 0.20)
+        w_importe = (
+            ancho_util
+            - w_cant
+            - w_producto
+            - w_precio
+        )
+
+        x_cant = margen
         x_producto = x_cant + w_cant
         x_precio = x_producto + w_producto
         x_importe = x_precio + w_precio
 
-        def dibujar_cabecera_tabla(y_tabla):
-            rect_sin_borde(tabla_x, y_tabla, tabla_w, header_h, azul)
-            escribir_centro(x_cant, y_tabla, w_cant, header_h, "CANT.", 7.5, blanco, True)
-            escribir(x_producto + 2, y_tabla, w_producto - 4, header_h, "DESCRIPCIÓN", 7.5, blanco, True)
-            escribir_derecha(x_precio, y_tabla, w_precio - 2, header_h, "PRECIO UNIT.", 7.5, blanco, True)
-            escribir_derecha(x_importe, y_tabla, w_importe - 2, header_h, "IMPORTE", 7.5, blanco, True)
-
-        dibujar_cabecera_tabla(y)
-        y += header_h
-
-        # Reservamos espacio para el pie de la página.
-        limite_productos = pie - 14
-
-        def nueva_pagina_productos():
-            nonlocal y
-            if not printer.newPage():
-                return False
-
-            # El painter sigue activo después de newPage().
-            y = 12.0
-            escribir(izquierda, y, ancho, 9, "FACTURA - CONTINUACIÓN", 13, azul, True)
-            y += 13
-            dibujar_cabecera_tabla(y)
-            y += header_h
-            return True
-
-        if detalles:
-            for indice, detalle in enumerate(detalles):
-                producto = str(detalle[0] or "")
-                cantidad = int(detalle[1] or 0)
-                precio = float(detalle[2] or 0)
-                subtotal = float(detalle[3] or 0)
-
-                if y + fila_h > limite_productos:
-                    nueva_pagina_productos()
-
-                if indice % 2 == 1:
-                    rect_sin_borde(tabla_x, y, tabla_w, fila_h, gris_fila)
-
-                painter.setPen(QPen(gris_claro, max(1, X(0.25))))
-                painter.drawLine(X(tabla_x), Y(y + fila_h), X(derecha), Y(y + fila_h))
-
-                escribir_centro(x_cant, y, w_cant, fila_h, cantidad, 8.5, negro)
-                escribir_elidido(x_producto + 2, y, w_producto - 4, fila_h, producto, 8.5, negro)
-                escribir_derecha(x_precio, y, w_precio - 2, fila_h, dinero(precio), 8.5, negro)
-                escribir_derecha(x_importe, y, w_importe - 2, fila_h, dinero(subtotal), 8.5, negro)
-
-                y += fila_h
-        else:
-            escribir_centro(
-                tabla_x,
-                y,
-                tabla_w,
-                fila_h,
-                "No hay productos registrados",
-                8.5,
-                gris,
-            )
-            y += fila_h
-
-        # --------------------------------------------------------
-        # TOTALES Y PAGO
-        # --------------------------------------------------------
-
-        # Si los totales no entran, pasamos a una página nueva.
-        if y + 48 > pie - 2:
-            printer.newPage()
-            y = 12.0
-            escribir(izquierda, y, ancho, 9, "FACTURA - CONTINUACIÓN", 13, azul, True)
-            y += 14
-
-        y += 5
-
-        subtotal_general = sum(float(d[3] or 0) for d in detalles)
-        total_general = float(datos.get("total", 0) or 0)
-
-        # Bloque de pago a la izquierda.
-        pago_x = izquierda
-        pago_w = 83.0
-        total_x = 116.0
-        total_w = derecha - total_x
-        bloque_y = y
-
-        forma = datos.get("forma_pago", "") or "PENDIENTE"
-        pago_efectivo = float(datos.get("pago_efectivo", 0) or 0)
-        pago_transferencia = float(datos.get("pago_transferencia", 0) or 0)
-
-        escribir(pago_x, bloque_y, pago_w, 6, "FORMA DE PAGO", 8.5, azul, True)
-        caja(pago_x, bloque_y + 7, pago_w, 30, blanco, gris_claro, 2)
-        escribir_elidido(pago_x + 4, bloque_y + 10, pago_w - 8, 7, forma, 9, negro, True)
-
-        pago_linea_y = bloque_y + 19
-        if pago_efectivo > 0:
-            escribir(pago_x + 4, pago_linea_y, 28, 6, "Efectivo:", 7.5, gris)
-            escribir_derecha(pago_x + 33, pago_linea_y, pago_w - 37, 6, dinero(pago_efectivo), 7.5, negro)
-            pago_linea_y += 7
-
-        if pago_transferencia > 0:
-            escribir(pago_x + 4, pago_linea_y, 32, 6, "Transferencia:", 7.5, gris)
-            escribir_derecha(pago_x + 37, pago_linea_y, pago_w - 41, 6, dinero(pago_transferencia), 7.5, negro)
-
-        # Bloque de totales a la derecha.
-        caja(total_x, bloque_y, total_w, 42, gris_fondo, gris_claro, 2.5)
-        escribir(total_x + 5, bloque_y + 7, 38, 6, "Subtotal", 8, gris, True)
-        escribir_derecha(total_x + 43, bloque_y + 7, total_w - 48, 6, dinero(subtotal_general), 8.5, negro)
-
-        painter.setPen(QPen(gris_claro, max(1, X(0.30))))
-        painter.drawLine(
-            X(total_x + 5),
-            Y(bloque_y + 19),
-            X(derecha - 5),
-            Y(bloque_y + 19),
+        escribir(
+            x_cant + 6, tabla_y, w_cant - 12, tabla_h,
+            "CANT.", 8, blanco, True,
+            Qt.AlignCenter | Qt.AlignVCenter
         )
 
-        escribir(total_x + 5, bloque_y + 23, 38, 9, "TOTAL", 10.5, azul, True)
-        escribir_derecha(total_x + 43, bloque_y + 22, total_w - 48, 10, dinero(total_general), 13, azul, True)
-
-        # --------------------------------------------------------
-        # PIE DE PÁGINA
-        # --------------------------------------------------------
-
-        linea(pie - 7, azul, 1.5)
-        escribir(izquierda, pie - 4, 110, 6, "Gracias por su compra", 8.5, azul, True)
-        escribir_derecha(116, pie - 4, 68, 6, f"Pedido #{datos.get('id', '')}", 8, gris, True)
         escribir(
-            izquierda,
-            pie + 3,
-            ancho,
-            5,
-            "Comprobante de pedido - No válido como factura fiscal",
-            6.5,
-            gris,
+            x_producto + 8, tabla_y, w_producto - 16, tabla_h,
+            "DESCRIPCIÓN", 8, blanco, True
+        )
+
+        escribir(
+            x_precio + 5, tabla_y, w_precio - 10, tabla_h,
+            "PRECIO UNIT.", 8, blanco, True,
+            Qt.AlignRight | Qt.AlignVCenter
+        )
+
+        escribir(
+            x_importe + 5, tabla_y, w_importe - 10, tabla_h,
+            "IMPORTE", 8, blanco, True,
+            Qt.AlignRight | Qt.AlignVCenter
+        )
+
+        y = tabla_y + tabla_h
+
+        detalles = datos.get(
+            "detalles", []
+        )
+
+        for indice, detalle in enumerate(detalles):
+
+            producto = str(
+                detalle[0] or ""
+            )
+
+            cantidad = int(
+                detalle[1] or 0
+            )
+
+            precio = float(
+                detalle[2] or 0
+            )
+
+            subtotal = float(
+                detalle[3] or 0
+            )
+
+            fila_h = 29
+
+            if indice % 2 == 1:
+                painter.setBrush(
+                    QBrush(QColor("#fafafa"))
+                )
+                painter.setPen(
+                    Qt.NoPen
+                )
+                painter.drawRect(
+                    margen,
+                    y,
+                    ancho_util,
+                    fila_h
+                )
+
+            escribir(
+                x_cant + 6, y, w_cant - 12, fila_h,
+                cantidad, 8, negro, False,
+                Qt.AlignCenter | Qt.AlignVCenter
+            )
+
+            escribir_elidido(
+                x_producto + 8, y, w_producto - 16, fila_h,
+                producto, 8, negro
+            )
+
+            escribir_derecha(
+                x_precio + 5, y, w_precio - 10, fila_h,
+                dinero(precio), 8, negro
+            )
+
+            escribir_derecha(
+                x_importe + 5, y, w_importe - 10, fila_h,
+                dinero(subtotal), 8, negro
+            )
+
+            painter.setPen(
+                QPen(gris_claro, 1)
+            )
+            painter.drawLine(
+                margen,
+                y + fila_h,
+                derecha,
+                y + fila_h
+            )
+
+            y += fila_h
+
+            # Evita que una lista enorme invada el pie.
+            if y > alto - 290 and indice < len(detalles) - 1:
+                painter.end()
+                printer.newPage()
+                painter = QPainter(printer)
+                painter.setRenderHint(
+                    QPainter.RenderHint.Antialiasing
+                )
+                painter.setRenderHint(
+                    QPainter.RenderHint.TextAntialiasing
+                )
+                y = 50
+                escribir(
+                    margen, y, ancho_util, 25,
+                    "FACTURA - CONTINUACIÓN",
+                    14, azul, True
+                )
+                y += 30
+                painter.setBrush(QBrush(azul))
+                painter.setPen(Qt.NoPen)
+                painter.drawRect(
+                    margen, y, ancho_util, tabla_h
+                )
+                escribir(
+                    x_cant + 6, y, w_cant - 12, tabla_h,
+                    "CANT.", 8, blanco, True,
+                    Qt.AlignCenter | Qt.AlignVCenter
+                )
+                escribir(
+                    x_producto + 8, y, w_producto - 16, tabla_h,
+                    "DESCRIPCIÓN", 8, blanco, True
+                )
+                escribir(
+                    x_precio + 5, y, w_precio - 10, tabla_h,
+                    "PRECIO UNIT.", 8, blanco, True,
+                    Qt.AlignRight | Qt.AlignVCenter
+                )
+                escribir(
+                    x_importe + 5, y, w_importe - 10, tabla_h,
+                    "IMPORTE", 8, blanco, True,
+                    Qt.AlignRight | Qt.AlignVCenter
+                )
+                y += tabla_h
+
+        if not detalles:
+            escribir(
+                margen, y, ancho_util, 32,
+                "No hay productos registrados.",
+                9, gris, False,
+                Qt.AlignCenter | Qt.AlignVCenter
+            )
+            y += 32
+
+        # ====================================================
+        # TOTALES
+        # ====================================================
+
+        y += 18
+
+        total_x = int(
+            margen + ancho_util * 0.60
+        )
+        total_w = derecha - total_x
+
+        painter.setBrush(
+            QBrush(fondo)
+        )
+        painter.setPen(
+            QPen(gris_claro, 1)
+        )
+        painter.drawRoundedRect(
+            total_x,
+            y,
+            total_w,
+            86,
+            8,
+            8
+        )
+
+        subtotal = sum(
+            float(d[3] or 0)
+            for d in detalles
+        )
+
+        escribir(
+            total_x + 14, y + 12,
+            100, 20,
+            "SUBTOTAL", 8, gris, True
+        )
+
+        escribir_derecha(
+            total_x + 105, y + 12,
+            total_w - 119, 20,
+            dinero(subtotal), 9, negro
+        )
+
+        escribir(
+            total_x + 14, y + 40,
+            100, 25,
+            "TOTAL", 11, azul, True
+        )
+
+        escribir_derecha(
+            total_x + 105, y + 35,
+            total_w - 119, 30,
+            dinero(datos["total"]), 14, azul, True
+        )
+
+        y += 108
+
+        # ====================================================
+        # FORMA DE PAGO
+        # ====================================================
+
+        pago_w = int(
+            ancho_util * 0.48
+        )
+        pago_h = 92
+
+        painter.setBrush(
+            QBrush(blanco)
+        )
+        painter.setPen(
+            QPen(gris_claro, 1)
+        )
+        painter.drawRoundedRect(
+            margen,
+            y,
+            pago_w,
+            pago_h,
+            8,
+            8
+        )
+
+        escribir(
+            margen + 14, y + 10,
+            pago_w - 28, 20,
+            "FORMA DE PAGO", 9, azul, True
+        )
+
+        forma = (
+            datos.get("forma_pago", "")
+            or "PENDIENTE"
+        )
+
+        escribir(
+            margen + 14, y + 32,
+            pago_w - 28, 20,
+            forma, 9, negro, True
+        )
+
+        pago_linea = y + 54
+
+        if float(datos.get("pago_efectivo", 0) or 0) > 0:
+            escribir(
+                margen + 14, pago_linea,
+                pago_w - 28, 18,
+                f"Efectivo: {dinero(datos['pago_efectivo'])}",
+                8, gris
+            )
+            pago_linea += 17
+
+        if float(datos.get("pago_transferencia", 0) or 0) > 0:
+            escribir(
+                margen + 14, pago_linea,
+                pago_w - 28, 18,
+                f"Transferencia: {dinero(datos['pago_transferencia'])}",
+                8, gris
+            )
+
+        # ====================================================
+        # PIE SIN FIRMA
+        # ====================================================
+
+        pie_y = alto - 62
+
+        linea(
+            pie_y,
+            azul,
+            1
+        )
+
+        escribir(
+            margen, pie_y + 12,
+            int(ancho_util * 0.65), 22,
+            "Gracias por su compra",
+            11, azul, True
+        )
+
+        escribir(
+            margen, pie_y + 34,
+            int(ancho_util * 0.65), 18,
+            "Comprobante de pedido",
+            8, gris
+        )
+
+        escribir_derecha(
+            int(ancho * 0.65),
+            pie_y + 14,
+            derecha - int(ancho * 0.65),
+            22,
+            f"Pedido #{datos['id']}",
+            8, gris, True
         )
 
         painter.end()
 
+    # ========================================================
+    # FECHAS
+    # ========================================================
+
     def formatear_fecha(self, fecha):
+
         if not fecha:
             return ""
 
         try:
-            texto = str(fecha)
-            if len(texto) >= 10:
-                partes = texto[:10].split("-")
+
+            if len(fecha) >= 10:
+
+                partes = fecha[:10].split("-")
+
                 if len(partes) == 3:
-                    return f"{partes[2]}/{partes[1]}/{partes[0]}"
+                    return (
+                        f"{partes[2]}/"
+                        f"{partes[1]}/"
+                        f"{partes[0]}"
+                    )
+
         except Exception:
             pass
 

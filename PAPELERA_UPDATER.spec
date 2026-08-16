@@ -60,7 +60,7 @@ exe = EXE(
 
     upx=True,
 
-    console=True
+    console=False
 )
 
 coll = COLLECT(
