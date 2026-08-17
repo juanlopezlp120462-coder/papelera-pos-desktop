@@ -3,6 +3,7 @@ import os
 import sqlite3
 import datetime
 import json
+import uuid
 from PySide6.QtCore import Qt, QDate, QSize, QMarginsF
 from PySide6.QtGui import (
     QFont,
@@ -440,6 +441,13 @@ class Pedidos(QWidget):
             "pedidos",
             "fecha_pago",
             "TEXT"
+        )
+
+        asegurar_columna(
+            cursor,
+            "pedidos",
+            "venta_id",
+            "INTEGER"
         )
 
         # El cliente debe quedar guardado en el pedido para que
@@ -2672,6 +2680,177 @@ class Pedidos(QWidget):
                     "como ENTREGADO."
                 )
 
+            # ====================================================
+            # CREAR VENTA AL ENTREGAR EL PEDIDO
+            #
+            # IMPORTANTE:
+            # La venta solamente se crea cuando el pedido
+            # fue efectivamente entregado.
+            # ====================================================
+
+            venta_uuid = str(uuid.uuid4())
+
+            # Obtener nuevamente los datos del pedido
+            pedido_db = cursor.execute(
+                """
+                SELECT
+                    cliente_id,
+                    total
+                FROM pedidos
+                WHERE id = ?
+                """,
+                (pedido_id,)
+            ).fetchone()
+
+            if not pedido_db:
+
+                raise Exception(
+                    "No se pudieron obtener los datos "
+                    "del pedido para crear la venta."
+                )
+
+            cliente_id_pedido = pedido_db[0]
+            total_pedido = float(
+                pedido_db[1] or 0
+            )
+
+            # ====================================================
+            # CREAR VENTA
+            # ====================================================
+
+            cursor.execute(
+                """
+                INSERT INTO ventas(
+                    uuid,
+                    fecha,
+                    total,
+                    forma_pago,
+                    cliente_id,
+                    estado,
+                    descuento,
+                    usuario,
+                    pago_efectivo,
+                    pago_transferencia,
+                    pago_tarjeta,
+                    pago_cuenta
+                )
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    venta_uuid,
+                    fecha_pago,
+                    total_pedido,
+                    pago["forma"],
+                    cliente_id_pedido,
+                    "ACTIVA",
+                    0,
+                    "Administrador",
+                    pago["efectivo"],
+                    pago["transferencia"],
+                    0,
+                    0
+                )
+            )
+
+            venta_id = cursor.lastrowid
+
+            if not venta_id:
+
+                raise Exception(
+                    "No se pudo crear la venta "
+                    "correspondiente al pedido."
+                )
+
+            # ====================================================
+            # COPIAR LOS PRODUCTOS DEL PEDIDO A LA VENTA
+            # ====================================================
+
+            detalles_pedido = cursor.execute(
+                """
+                SELECT
+                    producto,
+                    cantidad,
+                    precio,
+                    subtotal,
+                    codigo
+                FROM detalle_pedidos
+                WHERE pedido_id = ?
+                ORDER BY id
+                """,
+                (pedido_id,)
+            ).fetchall()
+
+            if not detalles_pedido:
+
+                raise Exception(
+                    "El pedido no tiene productos para "
+                    "crear el detalle de la venta."
+                )
+
+            for detalle in detalles_pedido:
+
+                cursor.execute(
+                    """
+                    INSERT INTO detalle_ventas(
+                        venta_id,
+                        producto,
+                        cantidad,
+                        precio,
+                        subtotal,
+                        codigo
+                    )
+                    VALUES(?,?,?,?,?,?)
+                    """,
+                    (
+                        venta_id,
+                        detalle[0],
+                        detalle[1],
+                        detalle[2],
+                        detalle[3],
+                        detalle[4]
+                    )
+                )
+
+            # ====================================================
+            # REGISTRAR VENTA PARA SINCRONIZACION
+            # ====================================================
+
+            datos_venta_sync = {
+                "uuid": venta_uuid,
+                "fecha": fecha_pago,
+                "total": total_pedido,
+                "forma_pago": pago["forma"],
+                "cliente_id": cliente_id_pedido,
+                "estado": "ACTIVA",
+                "descuento": 0,
+                "usuario": "Administrador",
+                "pago_efectivo": pago["efectivo"],
+                "pago_transferencia": pago["transferencia"],
+                "pago_tarjeta": 0,
+                "pago_cuenta": 0
+            }
+
+            cursor.execute(
+                """
+                INSERT INTO sincronizacion(
+                    tabla,
+                    registro_uuid,
+                    accion,
+                    datos,
+                    fecha,
+                    sincronizado
+                )
+                VALUES(
+                    ?, ?, ?, ?, datetime('now'), 0
+                )
+                """,
+                (
+                    "ventas",
+                    venta_uuid,
+                    "CREATE",
+                    json.dumps(datos_venta_sync)
+                )
+            )
             # ====================================================
             # CONFIRMAR TODO JUNTO
             # ====================================================
