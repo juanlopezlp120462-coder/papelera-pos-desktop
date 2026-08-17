@@ -207,40 +207,83 @@ def borrar_producto(id_producto: int):
 # =========================
 @app.get("/ventas")
 def obtener_ventas():
+
     conn = create_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT
-            id,
-            uuid,
-            fecha,
-            total,
-            forma_pago,
-            cliente_id,
-            descuento,
-            usuario
-        FROM ventas
-        ORDER BY id
-    """)
+    try:
 
-    ventas = cursor.fetchall()
-    conn.close()
+        cursor.execute("""
+            SELECT
+                id,
+                uuid,
+                fecha,
+                total,
+                forma_pago,
+                cliente_id,
+                estado,
+                descuento,
+                usuario,
+                pago_efectivo,
+                pago_transferencia,
+                pago_tarjeta,
+                pago_cuenta,
+                origen,
+                pedido_id
+            FROM ventas
+            ORDER BY id
+        """)
 
-    return [
-        {
-            "id": v[0],
-            "uuid": v[1],
-            "fecha": v[2],
-            "total": v[3],
-            "forma_pago": v[4],
-            "cliente_id": v[5],
-            "descuento": v[6],
-            "usuario": v[7]
+        ventas = cursor.fetchall()
+
+        resultado = []
+
+        for v in ventas:
+
+            resultado.append({
+                "id": v[0],
+                "uuid": v[1],
+                "fecha": v[2],
+                "total": v[3],
+                "forma_pago": v[4],
+                "cliente_id": v[5],
+                "estado": v[6],
+                "descuento": v[7],
+                "usuario": v[8],
+
+                # =========================
+                # FORMAS DE PAGO
+                # =========================
+
+                "pago_efectivo": v[9],
+                "pago_transferencia": v[10],
+                "pago_tarjeta": v[11],
+                "pago_cuenta": v[12],
+
+                # =========================
+                # ORIGEN DE LA VENTA
+                # =========================
+
+                "origen": v[13],
+                "pedido_id": v[14]
+            })
+
+        return resultado
+
+    except Exception as error:
+
+        print(
+            "Error obteniendo ventas:",
+            error
+        )
+
+        return {
+            "error": str(error)
         }
-        for v in ventas
-    ]
 
+    finally:
+
+        conn.close()
 
 # =========================
 # ENDPOINT DE SYNC DE VENTAS

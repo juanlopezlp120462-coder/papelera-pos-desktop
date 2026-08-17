@@ -31,10 +31,10 @@ def hay_internet():
         return False
 
 
-# =========================================================
+# ==========================================
 # 1. SUBIDA DE VENTAS
 #    LOCAL -> NUBE
-# =========================================================
+# ==========================================
 
 def sincronizar_ventas():
 
@@ -45,6 +45,50 @@ def sincronizar_ventas():
 
     conexion = create_connection()
     cursor = conexion.cursor()
+
+    # ==========================================================
+    # ASEGURAR COLUMNAS NUEVAS EN ventas
+    # ==========================================================
+
+    columnas_ventas = [
+        fila[1]
+        for fila in cursor.execute(
+            "PRAGMA table_info(ventas)"
+        ).fetchall()
+    ]
+
+    if "tipo" not in columnas_ventas:
+
+        cursor.execute(
+            """
+            ALTER TABLE ventas
+            ADD COLUMN tipo TEXT
+            """
+        )
+
+    if "origen" not in columnas_ventas:
+
+        cursor.execute(
+            """
+            ALTER TABLE ventas
+            ADD COLUMN origen TEXT
+            """
+        )
+
+    if "pedido_id" not in columnas_ventas:
+
+        cursor.execute(
+            """
+            ALTER TABLE ventas
+            ADD COLUMN pedido_id INTEGER
+            """
+        )
+
+    conexion.commit()
+
+    # ==========================================================
+    # OBTENER VENTAS PENDIENTES
+    # ==========================================================
 
     pendientes = cursor.execute(
         """
@@ -63,6 +107,10 @@ def sincronizar_ventas():
     ).fetchall()
 
     sincronizadas = 0
+
+    # ==========================================================
+    # RECORRER VENTAS
+    # ==========================================================
 
     for fila in pendientes:
 
@@ -94,20 +142,99 @@ def sincronizar_ventas():
                 datos_json
             )
 
-        except Exception as e:
+            # ==================================================
+            # DETERMINAR TIPO
+            #
+            # Primero usamos el JSON de sincronización.
+            # Si no existe, buscamos directamente en ventas.
+            # ==================================================
 
-            print(
-                "Error leyendo datos de venta:",
-                e
+            tipo = str(
+                venta.get(
+                    "tipo",
+                    ""
+                ) or ""
+            ).strip().upper()
+
+            origen = str(
+                venta.get(
+                    "origen",
+                    ""
+                ) or ""
+            ).strip().upper()
+
+            pedido_id = venta.get(
+                "pedido_id"
             )
 
-            continue
+            # ==================================================
+            # SI EL JSON VIEJO NO TIENE LOS DATOS,
+            # BUSCARLOS DIRECTAMENTE EN LA VENTA LOCAL
+            # ==================================================
 
-        try:
+            if (
+                not tipo
+                or not origen
+                or pedido_id is None
+            ):
 
-            # =================================================
-            # DATOS DE LA VENTA
-            # =================================================
+                venta_local = cursor.execute(
+                    """
+                    SELECT
+                        tipo,
+                        origen,
+                        pedido_id
+                    FROM ventas
+                    WHERE uuid=?
+                    LIMIT 1
+                    """,
+                    (
+                        registro_uuid,
+                    )
+                ).fetchone()
+
+                if venta_local:
+
+                    if not tipo:
+
+                        tipo = str(
+                            venta_local[0] or ""
+                        ).strip().upper()
+
+                    if not origen:
+
+                        origen = str(
+                            venta_local[1] or ""
+                        ).strip().upper()
+
+                    if pedido_id is None:
+
+                        pedido_id = venta_local[2]
+
+            # ==================================================
+            # SI ES PEDIDO, FORZAR IDENTIFICACIÓN
+            # ==================================================
+
+            if (
+                tipo == "PEDIDO"
+                or origen == "PEDIDO"
+                or pedido_id is not None
+            ):
+
+                tipo = "PEDIDO"
+                origen = "PEDIDO"
+
+            else:
+
+                tipo = "VENTA"
+
+                if not origen:
+
+                    origen = "VENTA"
+
+            # ==================================================
+            # ARMAR DATOS PARA EL SERVIDOR
+            # ==================================================
 
             datos = {
 
@@ -129,6 +256,11 @@ def sincronizar_ventas():
 
                 "cliente_id": venta.get(
                     "cliente_id"
+                ),
+
+                "estado": venta.get(
+                    "estado",
+                    "ACTIVA"
                 ),
 
                 "descuento": venta.get(
@@ -161,27 +293,19 @@ def sincronizar_ventas():
                     0
                 ),
 
-                # =================================================
-                # IMPORTANTE PARA PEDIDOS
-                # =================================================
+                # ==================================================
+                # CLASIFICACIÓN
+                # ==================================================
 
-                "origen": venta.get(
-                    "origen",
-                    "VENTA"
-                ),
+                "tipo": tipo,
 
-                "pedido_id": venta.get(
-                    "pedido_id"
-                ),
+                "origen": origen,
 
-                "tipo": venta.get(
-                    "tipo",
-                    "VENTA"
-                ),
+                "pedido_id": pedido_id,
 
-                # =================================================
-                # DETALLE DE PRODUCTOS
-                # =================================================
+                # ==================================================
+                # PRODUCTOS
+                # ==================================================
 
                 "items": venta.get(
                     "items",
@@ -189,9 +313,9 @@ def sincronizar_ventas():
                 )
             }
 
-            # =================================================
-            # UNA VENTA DEBE TENER ITEMS
-            # =================================================
+            # ==================================================
+            # VERIFICAR PRODUCTOS
+            # ==================================================
 
             if not datos["items"]:
 
@@ -202,22 +326,24 @@ def sincronizar_ventas():
 
                 continue
 
-            # =================================================
-            # MOSTRAR QUÉ SE ESTÁ SINCRONIZANDO
-            # =================================================
+            # ==================================================
+            # DEBUG
+            # ==================================================
 
             print(
-                "SINCRONIZANDO VENTA:",
+                "SYNC VENTA:",
                 registro_uuid,
-                "| ORIGEN:",
-                datos["origen"],
-                "| PEDIDO:",
-                datos["pedido_id"]
+                "TIPO:",
+                tipo,
+                "ORIGEN:",
+                origen,
+                "PEDIDO_ID:",
+                pedido_id
             )
 
-            # =================================================
-            # ENVIAR A RAILWAY
-            # =================================================
+            # ==================================================
+            # ENVIAR AL SERVIDOR
+            # ==================================================
 
             respuesta = requests.post(
                 f"{SERVIDOR}/ventas/sync",
@@ -225,42 +351,34 @@ def sincronizar_ventas():
                 timeout=15
             )
 
-            # =================================================
+            # ==================================================
             # RESPUESTA CORRECTA
-            # =================================================
+            # ==================================================
 
-            if respuesta.status_code in (200, 201):
+            if respuesta.status_code in (
+                200,
+                201
+            ):
 
-                resultado = respuesta.json()
-
-                # -------------------------------------------------
-                # Si ya existía, también consideramos sincronizada
-                # -------------------------------------------------
-
-                if (
-                    resultado.get("creada")
-                    or resultado.get("duplicada")
-                ):
-
-                    cursor.execute(
-                        """
-                        UPDATE sincronizacion
-                        SET sincronizado=1
-                        WHERE id=?
-                        """,
-                        (
-                            sync_id,
-                        )
+                cursor.execute(
+                    """
+                    UPDATE sincronizacion
+                    SET sincronizado=1
+                    WHERE id=?
+                    """,
+                    (
+                        sync_id,
                     )
+                )
 
-                    sincronizadas += 1
+                sincronizadas += 1
 
-                    print(
-                        "Venta sincronizada:",
-                        registro_uuid,
-                        "|",
-                        resultado
-                    )
+                print(
+                    "Venta sincronizada:",
+                    registro_uuid,
+                    "TIPO:",
+                    tipo
+                )
 
             else:
 
@@ -1043,12 +1161,14 @@ def descargar_productos():
         return 0
 
 
-# =========================================================
+# ==========================================
 # 6. DESCARGA DE VENTAS
 #    NUBE -> LOCAL
-# =========================================================
+# ==========================================
 
 def descargar_ventas():
+
+    init_db()
 
     if not hay_internet():
         return 0
@@ -1080,7 +1200,8 @@ def descargar_ventas():
         ):
 
             print(
-                "Error: respuesta de ventas no es una lista"
+                "Error: respuesta de ventas "
+                "no es una lista"
             )
 
             return 0
@@ -1088,9 +1209,49 @@ def descargar_ventas():
         conexion = create_connection()
         cursor = conexion.cursor()
 
-        # =====================================================
-        # ÚLTIMO ARQUEO DE CADA DÍA
-        # =====================================================
+        # ==========================================================
+        # ASEGURAR COLUMNAS NECESARIAS
+        # ==========================================================
+
+        columnas_ventas = [
+            fila[1]
+            for fila in cursor.execute(
+                "PRAGMA table_info(ventas)"
+            ).fetchall()
+        ]
+
+        if "tipo" not in columnas_ventas:
+
+            cursor.execute(
+                """
+                ALTER TABLE ventas
+                ADD COLUMN tipo TEXT
+                """
+            )
+
+        if "origen" not in columnas_ventas:
+
+            cursor.execute(
+                """
+                ALTER TABLE ventas
+                ADD COLUMN origen TEXT
+                """
+            )
+
+        if "pedido_id" not in columnas_ventas:
+
+            cursor.execute(
+                """
+                ALTER TABLE ventas
+                ADD COLUMN pedido_id INTEGER
+                """
+            )
+
+        conexion.commit()
+
+        # ==========================================================
+        # OBTENER EL ÚLTIMO ARQUEO DE CADA DÍA
+        # ==========================================================
 
         ultimos_arqueos = {}
 
@@ -1125,13 +1286,19 @@ def descargar_ventas():
             ultimos_arqueos
         )
 
+        # ==========================================================
+        # RECORRER VENTAS REMOTAS
+        # ==========================================================
+
         actualizadas = 0
 
-        # =====================================================
-        # RECORRER VENTAS REMOTAS
-        # =====================================================
-
         for venta in ventas_remotas:
+
+            if not isinstance(
+                venta,
+                dict
+            ):
+                continue
 
             uuid_venta = venta.get(
                 "uuid"
@@ -1151,20 +1318,24 @@ def descargar_ventas():
                 fecha_venta
             )
 
-            fecha_dia_venta = fecha_venta[:10]
+            fecha_dia_venta = (
+                fecha_venta[:10]
+            )
 
-            # =================================================
+            # ======================================================
             # CONVERTIR FECHA
-            # =================================================
+            # ======================================================
 
             try:
 
                 from datetime import datetime
 
-                fecha_venta_dt = datetime.fromisoformat(
-                    fecha_venta.replace(
-                        "Z",
-                        ""
+                fecha_venta_dt = (
+                    datetime.fromisoformat(
+                        fecha_venta.replace(
+                            "Z",
+                            ""
+                        )
                     )
                 )
 
@@ -1172,20 +1343,26 @@ def descargar_ventas():
 
                 fecha_venta_dt = None
 
-            # =================================================
+            # ======================================================
             # DETERMINAR ESTADO
-            # =================================================
+            # ======================================================
 
-            arqueo_fecha = ultimos_arqueos.get(
-                fecha_dia_venta
+            arqueo_fecha = (
+                ultimos_arqueos.get(
+                    fecha_dia_venta
+                )
             )
 
-            estado_remoto = venta.get(
-                "estado",
-                "ACTIVA"
-            )
+            estado_remoto = str(
+                venta.get(
+                    "estado",
+                    "ACTIVA"
+                ) or "ACTIVA"
+            ).upper()
 
-            estado_final = estado_remoto
+            estado_final = (
+                estado_remoto
+            )
 
             if arqueo_fecha:
 
@@ -1193,25 +1370,33 @@ def descargar_ventas():
 
                     from datetime import datetime
 
-                    fecha_arqueo_dt = datetime.fromisoformat(
-                        str(
-                            arqueo_fecha
-                        ).replace(
-                            "T",
-                            " "
+                    fecha_arqueo_dt = (
+                        datetime.fromisoformat(
+                            str(
+                                arqueo_fecha
+                            ).replace(
+                                "T",
+                                " "
+                            )
                         )
                     )
 
                     if (
                         fecha_venta_dt
-                        and fecha_venta_dt <= fecha_arqueo_dt
+                        and
+                        fecha_venta_dt
+                        <= fecha_arqueo_dt
                     ):
 
-                        estado_final = "ARCHIVADA"
+                        estado_final = (
+                            "ARCHIVADA"
+                        )
 
                     else:
 
-                        estado_final = "ACTIVA"
+                        estado_final = (
+                            "ACTIVA"
+                        )
 
                 except Exception as e:
 
@@ -1220,15 +1405,80 @@ def descargar_ventas():
                         e
                     )
 
-                    estado_final = estado_remoto
+                    estado_final = (
+                        estado_remoto
+                    )
 
-            # =================================================
+            # ======================================================
+            # DETERMINAR TIPO
+            #
+            # Esto es lo que evita que un pedido aparezca
+            # como Venta diaria en la otra PC.
+            # ======================================================
+
+            tipo_remoto = str(
+                venta.get(
+                    "tipo",
+                    ""
+                ) or ""
+            ).strip().upper()
+
+            origen_remoto = str(
+                venta.get(
+                    "origen",
+                    ""
+                ) or ""
+            ).strip().upper()
+
+            pedido_id_remoto = (
+                venta.get(
+                    "pedido_id"
+                )
+            )
+
+            # ======================================================
+            # SI VIENE MARCADO COMO PEDIDO
+            # ======================================================
+
+            if (
+                tipo_remoto == "PEDIDO"
+                or
+                origen_remoto == "PEDIDO"
+                or
+                pedido_id_remoto is not None
+            ):
+
+                tipo_final = "PEDIDO"
+                origen_final = "PEDIDO"
+
+            else:
+
+                tipo_final = "VENTA"
+
+                if origen_remoto:
+
+                    origen_final = (
+                        origen_remoto
+                    )
+
+                else:
+
+                    origen_final = (
+                        "VENTA"
+                    )
+
+            # ======================================================
             # BUSCAR VENTA LOCAL
-            # =================================================
+            # ======================================================
 
             existente = cursor.execute(
                 """
-                SELECT id, estado
+                SELECT
+                    id,
+                    estado,
+                    COALESCE(tipo, ''),
+                    COALESCE(origen, ''),
+                    pedido_id
                 FROM ventas
                 WHERE uuid=?
                 """,
@@ -1237,13 +1487,56 @@ def descargar_ventas():
                 )
             ).fetchone()
 
-            # =================================================
-            # ACTUALIZAR VENTA EXISTENTE
-            # =================================================
+            # ======================================================
+            # SI YA EXISTE
+            # ======================================================
 
             if existente:
 
                 venta_id = existente[0]
+
+                # ==================================================
+                # PROTECCIÓN EXTRA
+                #
+                # Si localmente ya sabemos que es PEDIDO,
+                # jamás lo convertimos en Venta.
+                # ==================================================
+
+                tipo_local = str(
+                    existente[2] or ""
+                ).strip().upper()
+
+                origen_local = str(
+                    existente[3] or ""
+                ).strip().upper()
+
+                pedido_id_local = (
+                    existente[4]
+                )
+
+                if (
+                    tipo_local == "PEDIDO"
+                    or
+                    origen_local == "PEDIDO"
+                    or
+                    pedido_id_local is not None
+                ):
+
+                    tipo_final = "PEDIDO"
+                    origen_final = "PEDIDO"
+
+                    if (
+                        pedido_id_remoto
+                        is None
+                    ):
+
+                        pedido_id_remoto = (
+                            pedido_id_local
+                        )
+
+                # ==================================================
+                # ACTUALIZAR VENTA
+                # ==================================================
 
                 cursor.execute(
                     """
@@ -1260,6 +1553,7 @@ def descargar_ventas():
                         pago_transferencia=?,
                         pago_tarjeta=?,
                         pago_cuenta=?,
+                        tipo=?,
                         origen=?,
                         pedido_id=?
                     WHERE id=?
@@ -1313,18 +1607,11 @@ def descargar_ventas():
                             0
                         ),
 
-                        # =========================================
-                        # IMPORTANTE PARA PEDIDOS
-                        # =========================================
+                        tipo_final,
 
-                        venta.get(
-                            "origen",
-                            "VENTA"
-                        ),
+                        origen_final,
 
-                        venta.get(
-                            "pedido_id"
-                        ),
+                        pedido_id_remoto,
 
                         venta_id
                     )
@@ -1332,9 +1619,9 @@ def descargar_ventas():
 
                 actualizadas += 1
 
-            # =================================================
-            # INSERTAR VENTA NUEVA
-            # =================================================
+            # ======================================================
+            # VENTA NUEVA
+            # ======================================================
 
             else:
 
@@ -1354,11 +1641,16 @@ def descargar_ventas():
                         pago_transferencia,
                         pago_tarjeta,
                         pago_cuenta,
+                        tipo,
                         origen,
                         pedido_id
                     )
                     VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?
+                    )
                     """,
                     (
                         uuid_venta,
@@ -1411,22 +1703,212 @@ def descargar_ventas():
                             0
                         ),
 
-                        # =========================================
-                        # IMPORTANTE PARA PEDIDOS
-                        # =========================================
+                        tipo_final,
 
-                        venta.get(
-                            "origen",
-                            "VENTA"
-                        ),
+                        origen_final,
 
-                        venta.get(
-                            "pedido_id"
-                        )
+                        pedido_id_remoto
                     )
                 )
 
                 actualizadas += 1
+
+            # ======================================================
+            # DETALLES DE LA VENTA
+            #
+            # Los productos se mantienen como en tu sincronización
+            # actual. Esta parte no cambia la clasificación.
+            # ======================================================
+
+            detalles = venta.get(
+                "items",
+                []
+            )
+
+            if detalles:
+
+                venta_local_id = cursor.execute(
+                    """
+                    SELECT id
+                    FROM ventas
+                    WHERE uuid=?
+                    LIMIT 1
+                    """,
+                    (
+                        uuid_venta,
+                    )
+                ).fetchone()
+
+                if venta_local_id:
+
+                    venta_id_local = (
+                        venta_local_id[0]
+                    )
+
+                    # ----------------------------------------------
+                    # EVITAR DUPLICAR DETALLES
+                    # ----------------------------------------------
+
+                    existe_detalle = cursor.execute(
+                        """
+                        SELECT 1
+                        FROM detalle_ventas
+                        WHERE venta_id=?
+                        LIMIT 1
+                        """,
+                        (
+                            venta_id_local,
+                        )
+                    ).fetchone()
+
+                    if not existe_detalle:
+
+                        for item in detalles:
+
+                            cursor.execute(
+                                """
+                                INSERT INTO detalle_ventas(
+                                    venta_id,
+                                    producto,
+                                    cantidad,
+                                    precio,
+                                    subtotal,
+                                    codigo
+                                )
+                                VALUES(
+                                    ?, ?, ?, ?, ?, ?
+                                )
+                                """,
+                                (
+                                    venta_id_local,
+
+                                    item.get(
+                                        "producto",
+                                        ""
+                                    ),
+
+                                    int(
+                                        item.get(
+                                            "cantidad",
+                                            0
+                                        ) or 0
+                                    ),
+
+                                    float(
+                                        item.get(
+                                            "precio",
+                                            0
+                                        ) or 0
+                                    ),
+
+                                    float(
+                                        item.get(
+                                            "subtotal",
+                                            0
+                                        ) or 0
+                                    ),
+
+                                    item.get(
+                                        "codigo",
+                                        ""
+                                    ) or ""
+                                )
+                            )
+
+            print(
+                "VENTA DESCARGADA:",
+                uuid_venta,
+                "TIPO:",
+                tipo_final,
+                "ORIGEN:",
+                origen_final,
+                "PEDIDO_ID:",
+                pedido_id_remoto
+            )
+
+        # ==========================================================
+        # GUARDAR TODO
+        # ==========================================================
+
+        conexion.commit()
+
+        print(
+            "Ventas descargadas:",
+            actualizadas
+        )
+
+        # ==========================================================
+        # MOSTRAR CUÁNTAS QUEDAN ACTIVAS
+        # ==========================================================
+
+        activas = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM ventas
+            WHERE estado='ACTIVA'
+            """
+        ).fetchone()[0]
+
+        archivadas = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM ventas
+            WHERE estado='ARCHIVADA'
+            """
+        ).fetchone()[0]
+
+        pedidos = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM ventas
+            WHERE UPPER(
+                TRIM(
+                    COALESCE(tipo, '')
+                )
+            ) = 'PEDIDO'
+            """
+        ).fetchone()[0]
+
+        print(
+            "VENTAS ACTIVAS:",
+            activas
+        )
+
+        print(
+            "VENTAS ARCHIVADAS:",
+            archivadas
+        )
+
+        print(
+            "PEDIDOS:",
+            pedidos
+        )
+
+        print(
+            "DESCARGA DE VENTAS OK"
+        )
+
+        conexion.close()
+        conexion = None
+
+        return actualizadas
+
+    except Exception as e:
+
+        if conexion:
+
+            try:
+                conexion.rollback()
+                conexion.close()
+            except Exception:
+                pass
+
+        print(
+            "Error descargando ventas:",
+            repr(e)
+        )
+
+        return 0
 
         # =====================================================
         # GUARDAR

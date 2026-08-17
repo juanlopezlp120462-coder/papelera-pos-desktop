@@ -1014,20 +1014,53 @@ class Historial(QWidget):
 
                 # ==================================================
                 # BUSCAR LOCAL
+                #
+                # IMPORTANTE:
+                # También recuperamos pedido_id para no perder
+                # la identificación de los pedidos durante
+                # la sincronización.
                 # ==================================================
 
-                venta_local = cur.execute(
-                    """
-                    SELECT
-                        id,
-                        estado,
-                        COALESCE(tipo, '')
-                    FROM ventas
-                    WHERE uuid=?
-                    LIMIT 1
-                    """,
-                    (uuid_venta,)
-                ).fetchone()
+                columnas_ventas_actuales = self._columnas_tabla(
+                    cur,
+                    "ventas"
+                )
+
+                tiene_pedido_id = (
+                    "pedido_id" in columnas_ventas_actuales
+                )
+
+                if tiene_pedido_id:
+
+                    venta_local = cur.execute(
+                        """
+                        SELECT
+                            id,
+                            estado,
+                            COALESCE(tipo, ''),
+                            pedido_id
+                        FROM ventas
+                        WHERE uuid=?
+                        LIMIT 1
+                        """,
+                        (uuid_venta,)
+                    ).fetchone()
+
+                else:
+
+                    venta_local = cur.execute(
+                        """
+                        SELECT
+                            id,
+                            estado,
+                            COALESCE(tipo, ''),
+                            NULL
+                        FROM ventas
+                        WHERE uuid=?
+                        LIMIT 1
+                        """,
+                        (uuid_venta,)
+                    ).fetchone()
 
                 estado_remoto = v.get(
                     "estado",
@@ -1058,6 +1091,18 @@ class Historial(QWidget):
 
                 # ==================================================
                 # TIPO FINAL
+                #
+                # Un registro es PEDIDO si cualquiera de estas
+                # condiciones lo identifica como tal:
+                #
+                # 1. La nube informa tipo = PEDIDO
+                # 2. La nube informa origen = PEDIDO
+                # 3. La nube informa pedido_id
+                # 4. La copia local ya tiene tipo = PEDIDO
+                # 5. La copia local ya tiene pedido_id
+                #
+                # Esto evita que una sincronización convierta
+                # accidentalmente un PEDIDO en VENTA DIARIA.
                 # ==================================================
 
                 tipo_remoto = str(
@@ -1067,17 +1112,57 @@ class Historial(QWidget):
                     ) or ""
                 ).strip().upper()
 
-                if tipo_remoto == "PEDIDO":
+                origen_remoto = str(
+                    v.get(
+                        "origen",
+                        ""
+                    ) or ""
+                ).strip().upper()
 
-                    tipo_final = "PEDIDO"
+                pedido_id_remoto = v.get(
+                    "pedido_id"
+                )
 
-                elif (
-                    venta_local
-                    and
-                    str(
+                tipo_local = ""
+
+                pedido_id_local = None
+
+                if venta_local:
+
+                    tipo_local = str(
                         venta_local[2] or ""
-                    ).strip().upper() == "PEDIDO"
-                ):
+                    ).strip().upper()
+
+                    pedido_id_local = venta_local[3]
+
+
+                # ==================================================
+                # DETERMINAR SI ES PEDIDO
+                # ==================================================
+
+                es_pedido = (
+
+                    tipo_remoto == "PEDIDO"
+
+                    or
+
+                    origen_remoto == "PEDIDO"
+
+                    or
+
+                    pedido_id_remoto is not None
+
+                    or
+
+                    tipo_local == "PEDIDO"
+
+                    or
+
+                    pedido_id_local is not None
+                )
+
+
+                if es_pedido:
 
                     tipo_final = "PEDIDO"
 
@@ -1085,6 +1170,23 @@ class Historial(QWidget):
 
                     tipo_final = "VENTA"
 
+
+                print(
+                    "TIPO SINCRONIZADO:",
+                    uuid_venta,
+                    "| remoto:",
+                    tipo_remoto,
+                    "| origen:",
+                    origen_remoto,
+                    "| pedido_id remoto:",
+                    pedido_id_remoto,
+                    "| tipo local:",
+                    tipo_local,
+                    "| pedido_id local:",
+                    pedido_id_local,
+                    "| FINAL:",
+                    tipo_final
+                )
                 # ==================================================
                 # ACTUALIZAR EXISTENTE
                 # ==================================================
@@ -1106,51 +1208,22 @@ class Historial(QWidget):
                             pago_transferencia=?,
                             pago_tarjeta=?,
                             pago_cuenta=?,
-                            tipo=?
+                            tipo=?,
+                            pedido_id=?
                         WHERE id=?
                         """,
                         (
                             fecha_venta,
-
-                            v.get(
-                                "total",
-                                0
-                            ),
-
-                            v.get(
-                                "forma_pago",
-                                ""
-                            ),
-
-                            v.get(
-                                "cliente_id",
-                                0
-                            ),
-
+                            v.get("total", 0),
+                            v.get("forma_pago", ""),
+                            v.get("cliente_id", 0),
                             estado_final,
-
-                            v.get(
-                                "pago_efectivo",
-                                0
-                            ),
-
-                            v.get(
-                                "pago_transferencia",
-                                0
-                            ),
-
-                            v.get(
-                                "pago_tarjeta",
-                                0
-                            ),
-
-                            v.get(
-                                "pago_cuenta",
-                                0
-                            ),
-
+                            v.get("pago_efectivo", 0),
+                            v.get("pago_transferencia", 0),
+                            v.get("pago_tarjeta", 0),
+                            v.get("pago_cuenta", 0),
                             tipo_final,
-
+                            pedido_id_remoto,
                             venta_id_local
                         )
                     )
