@@ -11,21 +11,33 @@ from ui.db import (
 SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
 
 
+# =========================================================
+# INTERNET
+# =========================================================
+
 def hay_internet():
+
     try:
+
         requests.get(
             SERVIDOR,
             timeout=5
         )
+
         return True
+
     except Exception:
+
         return False
 
 
-# ==========================================
-# 1. SUBIDA DE VENTAS (LOCAL -> NUBE)
-# ==========================================
+# =========================================================
+# 1. SUBIDA DE VENTAS
+#    LOCAL -> NUBE
+# =========================================================
+
 def sincronizar_ventas():
+
     init_db()
 
     if not hay_internet():
@@ -59,59 +71,153 @@ def sincronizar_ventas():
         datos_json = fila[5]
 
         if not registro_uuid:
-            print("Venta sin UUID:", fila[2])
+
+            print(
+                "Venta sin UUID:",
+                fila[2]
+            )
+
             continue
 
         if not datos_json:
-            print("Venta sin datos:", fila[2])
+
+            print(
+                "Venta sin datos:",
+                fila[2]
+            )
+
             continue
 
         try:
 
-            venta = json.loads(datos_json)
+            venta = json.loads(
+                datos_json
+            )
+
+        except Exception as e:
+
+            print(
+                "Error leyendo datos de venta:",
+                e
+            )
+
+            continue
+
+        try:
+
+            # =================================================
+            # DATOS DE LA VENTA
+            # =================================================
 
             datos = {
+
                 "uuid": registro_uuid,
-                "fecha": venta.get("fecha"),
-                "total": venta.get("total", 0),
+
+                "fecha": venta.get(
+                    "fecha"
+                ),
+
+                "total": venta.get(
+                    "total",
+                    0
+                ),
+
                 "forma_pago": venta.get(
                     "forma_pago",
                     "EFECTIVO"
                 ),
-                "cliente_id": venta.get("cliente_id"),
-                "descuento": venta.get("descuento", 0),
+
+                "cliente_id": venta.get(
+                    "cliente_id"
+                ),
+
+                "descuento": venta.get(
+                    "descuento",
+                    0
+                ),
+
                 "usuario": venta.get(
                     "usuario",
                     "Administrador"
                 ),
+
                 "pago_efectivo": venta.get(
                     "pago_efectivo",
                     0
                 ),
+
                 "pago_transferencia": venta.get(
                     "pago_transferencia",
                     0
                 ),
+
                 "pago_tarjeta": venta.get(
                     "pago_tarjeta",
                     0
                 ),
+
                 "pago_cuenta": venta.get(
                     "pago_cuenta",
                     0
                 ),
+
+                # =================================================
+                # IMPORTANTE PARA PEDIDOS
+                # =================================================
+
+                "origen": venta.get(
+                    "origen",
+                    "VENTA"
+                ),
+
+                "pedido_id": venta.get(
+                    "pedido_id"
+                ),
+
+                "tipo": venta.get(
+                    "tipo",
+                    "VENTA"
+                ),
+
+                # =================================================
+                # DETALLE DE PRODUCTOS
+                # =================================================
+
                 "items": venta.get(
                     "items",
                     []
                 )
             }
 
+            # =================================================
+            # UNA VENTA DEBE TENER ITEMS
+            # =================================================
+
             if not datos["items"]:
+
                 print(
                     "Venta sin items:",
                     fila[2]
                 )
+
                 continue
+
+            # =================================================
+            # MOSTRAR QUÉ SE ESTÁ SINCRONIZANDO
+            # =================================================
+
+            print(
+                "SINCRONIZANDO VENTA:",
+                registro_uuid,
+                "| ORIGEN:",
+                datos["origen"],
+                "| PEDIDO:",
+                datos["pedido_id"]
+            )
+
+            # =================================================
+            # ENVIAR A RAILWAY
+            # =================================================
 
             respuesta = requests.post(
                 f"{SERVIDOR}/ventas/sync",
@@ -119,23 +225,42 @@ def sincronizar_ventas():
                 timeout=15
             )
 
+            # =================================================
+            # RESPUESTA CORRECTA
+            # =================================================
+
             if respuesta.status_code in (200, 201):
 
-                cursor.execute(
-                    """
-                    UPDATE sincronizacion
-                    SET sincronizado=1
-                    WHERE id=?
-                    """,
-                    (sync_id,)
-                )
+                resultado = respuesta.json()
 
-                sincronizadas += 1
+                # -------------------------------------------------
+                # Si ya existía, también consideramos sincronizada
+                # -------------------------------------------------
 
-                print(
-                    "Venta sincronizada:",
-                    registro_uuid
-                )
+                if (
+                    resultado.get("creada")
+                    or resultado.get("duplicada")
+                ):
+
+                    cursor.execute(
+                        """
+                        UPDATE sincronizacion
+                        SET sincronizado=1
+                        WHERE id=?
+                        """,
+                        (
+                            sync_id,
+                        )
+                    )
+
+                    sincronizadas += 1
+
+                    print(
+                        "Venta sincronizada:",
+                        registro_uuid,
+                        "|",
+                        resultado
+                    )
 
             else:
 
@@ -158,9 +283,11 @@ def sincronizar_ventas():
     return sincronizadas
 
 
-# ==========================================
-# 2. SUBIDA DE PRODUCTOS (LOCAL -> NUBE)
-# ==========================================
+# =========================================================
+# 2. SUBIDA DE PRODUCTOS
+#    LOCAL -> NUBE
+# =========================================================
+
 def sincronizar_productos():
 
     init_db()
@@ -206,9 +333,9 @@ def sincronizar_productos():
 
         try:
 
-            # ======================================================
-            # ELIMINAR PRODUCTO EN RAILWAY
-            # ======================================================
+            # =====================================================
+            # ELIMINAR PRODUCTO
+            # =====================================================
 
             if accion == "eliminar":
 
@@ -230,7 +357,9 @@ def sincronizar_productos():
                         SET sincronizado=1
                         WHERE id=?
                         """,
-                        (sync_id,)
+                        (
+                            sync_id,
+                        )
                     )
 
                     sincronizados += 1
@@ -250,9 +379,9 @@ def sincronizar_productos():
 
                 continue
 
-            # ======================================================
-            # CREAR / ACTUALIZAR PRODUCTO EN RAILWAY
-            # ======================================================
+            # =====================================================
+            # CREAR / ACTUALIZAR PRODUCTO
+            # =====================================================
 
             if not datos_json:
 
@@ -268,6 +397,7 @@ def sincronizar_productos():
             )
 
             datos = {
+
                 "uuid": producto_uuid,
 
                 "codigo_barras": producto.get(
@@ -320,7 +450,9 @@ def sincronizar_productos():
                     SET sincronizado=1
                     WHERE id=?
                     """,
-                    (sync_id,)
+                    (
+                        sync_id,
+                    )
                 )
 
                 sincronizados += 1
@@ -350,10 +482,14 @@ def sincronizar_productos():
 
     return sincronizados
 
-# ==========================================
-# 3. SUBIDA DE ARQUEOS (LOCAL -> NUBE)
-# ==========================================
+
+# =========================================================
+# 3. SUBIDA DE ARQUEOS
+#    LOCAL -> NUBE
+# =========================================================
+
 def sincronizar_arqueos():
+
     init_db()
 
     if not hay_internet():
@@ -395,52 +531,68 @@ def sincronizar_arqueos():
             )
 
             datos = {
+
                 "uuid": arqueo_uuid,
-                "fecha": arqueo.get("fecha"),
+
+                "fecha": arqueo.get(
+                    "fecha"
+                ),
+
                 "apertura": arqueo.get(
                     "apertura",
                     0
                 ),
+
                 "esperado": arqueo.get(
                     "esperado",
                     0
                 ),
+
                 "real": arqueo.get(
                     "real",
                     0
                 ),
+
                 "diferencia": arqueo.get(
                     "diferencia",
                     0
                 ),
+
                 "usuario": arqueo.get(
                     "usuario",
                     "Administrador"
                 ),
+
                 "observaciones": arqueo.get(
                     "observaciones",
                     ""
                 ),
+
                 "ventas_total": arqueo.get(
                     "ventas_total",
                     0
                 ),
+
                 "ventas_efectivo": arqueo.get(
                     "ventas_efectivo",
                     0
                 ),
+
                 "ventas_transferencia": arqueo.get(
                     "ventas_transferencia",
                     0
                 ),
+
                 "ventas_tarjeta": arqueo.get(
                     "ventas_tarjeta",
                     0
                 ),
+
                 "ventas_cuenta": arqueo.get(
                     "ventas_cuenta",
                     0
                 ),
+
                 "cantidad_ventas": arqueo.get(
                     "cantidad_ventas",
                     0
@@ -461,7 +613,9 @@ def sincronizar_arqueos():
                     SET sincronizado=1
                     WHERE id=?
                     """,
-                    (sync_id,)
+                    (
+                        sync_id,
+                    )
                 )
 
                 arqueos_sincronizados += 1
@@ -492,11 +646,11 @@ def sincronizar_arqueos():
     return arqueos_sincronizados
 
 
-
-# ==========================================
+# =========================================================
 # 4. SUBIDA DE MOVIMIENTOS DE CAJA
 #    LOCAL -> NUBE
-# ==========================================
+# =========================================================
+
 def sincronizar_movimientos_caja():
 
     init_db()
@@ -542,17 +696,21 @@ def sincronizar_movimientos_caja():
             continue
 
         if not movimiento_uuid:
+
             print(
                 "Movimiento de caja sin UUID:",
                 sync_id
             )
+
             continue
 
         if not datos_json:
+
             print(
                 "Movimiento de caja sin datos:",
                 movimiento_uuid
             )
+
             continue
 
         try:
@@ -562,22 +720,28 @@ def sincronizar_movimientos_caja():
             )
 
             datos = {
+
                 "uuid": movimiento_uuid,
+
                 "fecha": movimiento.get(
                     "fecha"
                 ),
+
                 "tipo": movimiento.get(
                     "tipo",
                     "INGRESO"
                 ),
+
                 "importe": movimiento.get(
                     "importe",
                     0
                 ),
+
                 "concepto": movimiento.get(
                     "concepto",
                     ""
                 ),
+
                 "usuario": movimiento.get(
                     "usuario",
                     "Administrador"
@@ -623,7 +787,9 @@ def sincronizar_movimientos_caja():
                     SET sincronizado=1
                     WHERE id=?
                     """,
-                    (sync_id,)
+                    (
+                        sync_id,
+                    )
                 )
 
             conexion.commit()
@@ -659,10 +825,11 @@ def sincronizar_movimientos_caja():
     return resultado
 
 
-# ==========================================
+# =========================================================
 # 5. DESCARGA DE PRODUCTOS
 #    NUBE -> LOCAL
-# ==========================================
+# =========================================================
+
 def descargar_productos():
 
     if not hay_internet():
@@ -685,20 +852,20 @@ def descargar_productos():
 
         actualizados = 0
 
-        # ==========================================================
-        # UUID DE TODOS LOS PRODUCTOS QUE EXISTEN EN RAILWAY
-        # ==========================================================
-
         uuids_remotos = set()
 
         for prod in productos_remotos:
 
-            uuid_prod = prod.get("uuid")
+            uuid_prod = prod.get(
+                "uuid"
+            )
 
             if not uuid_prod:
                 continue
 
-            uuids_remotos.add(uuid_prod)
+            uuids_remotos.add(
+                uuid_prod
+            )
 
             codigo = prod.get(
                 "codigo_barras",
@@ -735,22 +902,16 @@ def descargar_productos():
                 5
             )
 
-            # ======================================================
-            # BUSCAR PRODUCTO LOCAL
-            # ======================================================
-
             existente = cursor.execute(
                 """
                 SELECT id
                 FROM productos
                 WHERE uuid=?
                 """,
-                (uuid_prod,)
+                (
+                    uuid_prod,
+                )
             ).fetchone()
-
-            # ======================================================
-            # ACTUALIZAR PRODUCTO EXISTENTE
-            # ======================================================
 
             if existente:
 
@@ -780,10 +941,6 @@ def descargar_productos():
                 )
 
                 actualizados += 1
-
-            # ======================================================
-            # CREAR PRODUCTO NUEVO
-            # ======================================================
 
             else:
 
@@ -816,9 +973,9 @@ def descargar_productos():
 
                 actualizados += 1
 
-        # ==========================================================
-        # ELIMINAR PRODUCTOS LOCALES QUE YA NO EXISTEN EN RAILWAY
-        # ==========================================================
+        # =====================================================
+        # ELIMINAR PRODUCTOS QUE YA NO EXISTEN EN RAILWAY
+        # =====================================================
 
         productos_locales = cursor.execute(
             """
@@ -838,17 +995,8 @@ def descargar_productos():
             if not uuid_local:
                 continue
 
-            # ------------------------------------------------------
-            # Si existe en Railway, se mantiene
-            # ------------------------------------------------------
-
             if uuid_local in uuids_remotos:
                 continue
-
-            # ------------------------------------------------------
-            # No existe en Railway:
-            # eliminarlo localmente.
-            # ------------------------------------------------------
 
             print(
                 "PRODUCTO ELIMINADO LOCALMENTE:",
@@ -861,7 +1009,9 @@ def descargar_productos():
                 DELETE FROM productos
                 WHERE id=?
                 """,
-                (id_local,)
+                (
+                    id_local,
+                )
             )
 
             eliminados += 1
@@ -892,10 +1042,12 @@ def descargar_productos():
 
         return 0
 
-# ==========================================
+
+# =========================================================
 # 6. DESCARGA DE VENTAS
 #    NUBE -> LOCAL
-# ==========================================
+# =========================================================
+
 def descargar_ventas():
 
     if not hay_internet():
@@ -922,7 +1074,10 @@ def descargar_ventas():
 
         ventas_remotas = respuesta.json()
 
-        if not isinstance(ventas_remotas, list):
+        if not isinstance(
+            ventas_remotas,
+            list
+        ):
 
             print(
                 "Error: respuesta de ventas no es una lista"
@@ -933,9 +1088,9 @@ def descargar_ventas():
         conexion = create_connection()
         cursor = conexion.cursor()
 
-        # ==========================================
-        # OBTENER EL ÚLTIMO ARQUEO DE CADA DÍA
-        # ==========================================
+        # =====================================================
+        # ÚLTIMO ARQUEO DE CADA DÍA
+        # =====================================================
 
         ultimos_arqueos = {}
 
@@ -961,18 +1116,20 @@ def descargar_ventas():
 
             fecha_dia = fecha_arqueo[:10]
 
-            ultimos_arqueos[fecha_dia] = fecha_arqueo
+            ultimos_arqueos[
+                fecha_dia
+            ] = fecha_arqueo
 
         print(
             "ULTIMOS ARQUEOS:",
             ultimos_arqueos
         )
 
-        # ==========================================
-        # RECORRER VENTAS REMOTAS
-        # ==========================================
-
         actualizadas = 0
+
+        # =====================================================
+        # RECORRER VENTAS REMOTAS
+        # =====================================================
 
         for venta in ventas_remotas:
 
@@ -996,9 +1153,9 @@ def descargar_ventas():
 
             fecha_dia_venta = fecha_venta[:10]
 
-            # ==========================================
-            # CONVERTIR FECHA DE VENTA A DATETIME
-            # ==========================================
+            # =================================================
+            # CONVERTIR FECHA
+            # =================================================
 
             try:
 
@@ -1015,9 +1172,9 @@ def descargar_ventas():
 
                 fecha_venta_dt = None
 
-            # ==========================================
-            # DETERMINAR SI LA VENTA ESTÁ CERRADA
-            # ==========================================
+            # =================================================
+            # DETERMINAR ESTADO
+            # =================================================
 
             arqueo_fecha = ultimos_arqueos.get(
                 fecha_dia_venta
@@ -1037,7 +1194,9 @@ def descargar_ventas():
                     from datetime import datetime
 
                     fecha_arqueo_dt = datetime.fromisoformat(
-                        str(arqueo_fecha).replace(
+                        str(
+                            arqueo_fecha
+                        ).replace(
                             "T",
                             " "
                         )
@@ -1063,9 +1222,9 @@ def descargar_ventas():
 
                     estado_final = estado_remoto
 
-            # ==========================================
-            # BUSCAR VENTA LOCAL POR UUID
-            # ==========================================
+            # =================================================
+            # BUSCAR VENTA LOCAL
+            # =================================================
 
             existente = cursor.execute(
                 """
@@ -1073,23 +1232,18 @@ def descargar_ventas():
                 FROM ventas
                 WHERE uuid=?
                 """,
-                (uuid_venta,)
+                (
+                    uuid_venta,
+                )
             ).fetchone()
 
-            # ==========================================
-            # SI YA EXISTE
-            # ==========================================
+            # =================================================
+            # ACTUALIZAR VENTA EXISTENTE
+            # =================================================
 
             if existente:
 
                 venta_id = existente[0]
-
-                # Nunca reactivar una venta que ya fue
-                # archivada por un arqueo anterior.
-                #
-                # EXCEPCIÓN:
-                # si la venta es posterior al último
-                # arqueo, debe quedar ACTIVA.
 
                 cursor.execute(
                     """
@@ -1105,7 +1259,9 @@ def descargar_ventas():
                         pago_efectivo=?,
                         pago_transferencia=?,
                         pago_tarjeta=?,
-                        pago_cuenta=?
+                        pago_cuenta=?,
+                        origen=?,
+                        pedido_id=?
                     WHERE id=?
                     """,
                     (
@@ -1157,15 +1313,28 @@ def descargar_ventas():
                             0
                         ),
 
+                        # =========================================
+                        # IMPORTANTE PARA PEDIDOS
+                        # =========================================
+
+                        venta.get(
+                            "origen",
+                            "VENTA"
+                        ),
+
+                        venta.get(
+                            "pedido_id"
+                        ),
+
                         venta_id
                     )
                 )
 
                 actualizadas += 1
 
-            # ==========================================
-            # VENTA NUEVA
-            # ==========================================
+            # =================================================
+            # INSERTAR VENTA NUEVA
+            # =================================================
 
             else:
 
@@ -1184,10 +1353,12 @@ def descargar_ventas():
                         pago_efectivo,
                         pago_transferencia,
                         pago_tarjeta,
-                        pago_cuenta
+                        pago_cuenta,
+                        origen,
+                        pedido_id
                     )
                     VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         uuid_venta,
@@ -1238,15 +1409,28 @@ def descargar_ventas():
                         venta.get(
                             "pago_cuenta",
                             0
+                        ),
+
+                        # =========================================
+                        # IMPORTANTE PARA PEDIDOS
+                        # =========================================
+
+                        venta.get(
+                            "origen",
+                            "VENTA"
+                        ),
+
+                        venta.get(
+                            "pedido_id"
                         )
                     )
                 )
 
                 actualizadas += 1
 
-        # ==========================================
+        # =====================================================
         # GUARDAR
-        # ==========================================
+        # =====================================================
 
         conexion.commit()
 
@@ -1255,9 +1439,9 @@ def descargar_ventas():
             actualizadas
         )
 
-        # ==========================================
-        # MOSTRAR CUÁNTAS QUEDAN ACTIVAS
-        # ==========================================
+        # =====================================================
+        # MOSTRAR ACTIVAS / ARCHIVADAS
+        # =====================================================
 
         activas = cursor.execute(
             """
@@ -1299,8 +1483,10 @@ def descargar_ventas():
         if conexion:
 
             try:
+
                 conexion.rollback()
                 conexion.close()
+
             except:
                 pass
 
@@ -1311,10 +1497,12 @@ def descargar_ventas():
 
         return 0
 
-# ==========================================
+
+# =========================================================
 # 7. DESCARGA DE ARQUEOS
 #    NUBE -> LOCAL
-# ==========================================
+# =========================================================
+
 def descargar_arqueos():
 
     init_db()
@@ -1349,14 +1537,12 @@ def descargar_arqueos():
 
         for arqueo in arqueos_remotos:
 
-            arqueo_uuid = arqueo.get("uuid")
+            arqueo_uuid = arqueo.get(
+                "uuid"
+            )
 
             if not arqueo_uuid:
                 continue
-
-            # ==========================================
-            # VERIFICAR SI EL ARQUEO YA EXISTE
-            # ==========================================
 
             existente = cursor.execute(
                 """
@@ -1364,15 +1550,13 @@ def descargar_arqueos():
                 FROM arqueos
                 WHERE uuid=?
                 """,
-                (arqueo_uuid,)
+                (
+                    arqueo_uuid,
+                )
             ).fetchone()
 
             if existente:
                 continue
-
-            # ==========================================
-            # GUARDAR ARQUEO LOCAL
-            # ==========================================
 
             cursor.execute(
                 """
@@ -1398,39 +1582,66 @@ def descargar_arqueos():
                 """,
                 (
                     arqueo_uuid,
-                    arqueo.get("fecha"),
-                    arqueo.get("apertura", 0),
-                    arqueo.get("esperado", 0),
-                    arqueo.get("real", 0),
-                    arqueo.get("diferencia", 0),
+
+                    arqueo.get(
+                        "fecha"
+                    ),
+
+                    arqueo.get(
+                        "apertura",
+                        0
+                    ),
+
+                    arqueo.get(
+                        "esperado",
+                        0
+                    ),
+
+                    arqueo.get(
+                        "real",
+                        0
+                    ),
+
+                    arqueo.get(
+                        "diferencia",
+                        0
+                    ),
+
                     arqueo.get(
                         "usuario",
                         "Administrador"
                     ),
+
                     arqueo.get(
                         "observaciones",
                         ""
                     ),
+
                     arqueo.get(
                         "ventas_total",
                         0
                     ),
+
                     arqueo.get(
                         "ventas_efectivo",
                         0
                     ),
+
                     arqueo.get(
                         "ventas_transferencia",
                         0
                     ),
+
                     arqueo.get(
                         "ventas_tarjeta",
                         0
                     ),
+
                     arqueo.get(
                         "ventas_cuenta",
                         0
                     ),
+
                     arqueo.get(
                         "cantidad_ventas",
                         0
@@ -1440,11 +1651,9 @@ def descargar_arqueos():
 
             descargados += 1
 
-            # ==========================================
-            # GUARDAR FECHA PARA ARCHIVAR DESPUÉS
-            # ==========================================
-
-            fecha_arqueo = arqueo.get("fecha")
+            fecha_arqueo = arqueo.get(
+                "fecha"
+            )
 
             if fecha_arqueo:
 
@@ -1456,22 +1665,13 @@ def descargar_arqueos():
                     fecha_dia
                 )
 
-        # ==========================================
-        # GUARDAR ARQUEOS
-        # ==========================================
-
         conexion.commit()
-
-        # ==========================================
-        # CERRAR SQLITE ANTES DE ARCHIVAR VENTAS
-        # ==========================================
 
         conexion.close()
 
-        # ==========================================
-        # ARCHIVAR VENTAS DESPUÉS DE CERRAR
-        # LA CONEXIÓN ANTERIOR
-        # ==========================================
+        # =====================================================
+        # ARCHIVAR VENTAS POR ARQUEO REMOTO
+        # =====================================================
 
         for fecha_dia in fechas_para_archivar:
 
@@ -1510,10 +1710,11 @@ def descargar_arqueos():
         return 0
 
 
-# ==========================================
+# =========================================================
 # 8. DESCARGA DE MOVIMIENTOS DE CAJA
 #    NUBE -> LOCAL
-# ==========================================
+# =========================================================
+
 def descargar_movimientos_caja():
 
     init_db()
@@ -1560,7 +1761,9 @@ def descargar_movimientos_caja():
                 FROM movimientos_caja
                 WHERE uuid=?
                 """,
-                (movimiento_uuid,)
+                (
+                    movimiento_uuid,
+                )
             ).fetchone()
 
             if existente:
@@ -1584,22 +1787,27 @@ def descargar_movimientos_caja():
                     movimiento.get(
                         "fecha"
                     ),
+
                     movimiento.get(
                         "tipo",
                         "INGRESO"
                     ),
+
                     movimiento.get(
                         "importe",
                         0
                     ),
+
                     movimiento.get(
                         "concepto",
                         ""
                     ),
+
                     movimiento.get(
                         "usuario",
                         "Administrador"
                     ),
+
                     movimiento_uuid
                 )
             )
@@ -1626,11 +1834,15 @@ def descargar_movimientos_caja():
         return 0
 
 
-
-# ==========================================
+# =========================================================
 # FUNCIÓN PRINCIPAL DE SINCRONIZACIÓN
-# ==========================================
+# =========================================================
+
 def sincronizar():
+
+    # =====================================================
+    # SUBIR DATOS LOCALES
+    # =====================================================
 
     ventas_subidas = sincronizar_ventas()
 
@@ -1640,6 +1852,10 @@ def sincronizar():
 
     movimientos_subidos = sincronizar_movimientos_caja()
 
+    # =====================================================
+    # BAJAR DATOS DESDE RAILWAY
+    # =====================================================
+
     productos_bajados = descargar_productos()
 
     arqueos_bajados = descargar_arqueos()
@@ -1648,13 +1864,33 @@ def sincronizar():
 
     movimientos_bajados = descargar_movimientos_caja()
 
+    # =====================================================
+    # RESULTADO
+    # =====================================================
+
     return {
-        "ventas_subidas": ventas_subidas,
-        "productos_subidos": productos_subidos,
-        "arqueos_subidos": arqueos_subidos,
-        "movimientos_subidos": movimientos_subidos,
-        "productos_bajados": productos_bajados,
-        "ventas_bajadas": ventas_bajadas,
-        "arqueos_bajados": arqueos_bajados,
-        "movimientos_bajados": movimientos_bajados
+
+        "ventas_subidas":
+            ventas_subidas,
+
+        "productos_subidos":
+            productos_subidos,
+
+        "arqueos_subidos":
+            arqueos_subidos,
+
+        "movimientos_subidos":
+            movimientos_subidos,
+
+        "productos_bajados":
+            productos_bajados,
+
+        "ventas_bajadas":
+            ventas_bajadas,
+
+        "arqueos_bajados":
+            arqueos_bajados,
+
+        "movimientos_bajados":
+            movimientos_bajados
     }

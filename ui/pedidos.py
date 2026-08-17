@@ -2922,6 +2922,21 @@ class Pedidos(QWidget):
                     )
                 )
 
+            # ====================================================
+            # PREPARAR PRODUCTOS PARA SINCRONIZACIÓN
+            # ====================================================
+
+            items_sync = []
+
+            for detalle in detalles_pedido:
+
+                items_sync.append({
+                    "producto": detalle[0],
+                    "cantidad": int(detalle[1] or 0),
+                    "precio": float(detalle[2] or 0),
+                    "subtotal": float(detalle[3] or 0),
+                    "codigo": detalle[4] or ""
+                })
 
             # ====================================================
             # REGISTRAR VENTA PARA SINCRONIZACIÓN
@@ -2953,14 +2968,25 @@ class Pedidos(QWidget):
 
                 "pago_cuenta": 0,
 
+                # =================================================
+                # IDENTIFICACIÓN DEL ORIGEN
+                # =================================================
+
                 "origen": "PEDIDO",
 
                 "pedido_id": pedido_id,
 
-                # ================================================
-                # CLAVE PARA EL HISTORIAL
-                # ================================================
-                "tipo": "PEDIDO"
+                # =================================================
+                # TIPO PARA EL HISTORIAL
+                # =================================================
+
+                "tipo": "PEDIDO",
+
+                # =================================================
+                # DETALLE DE LOS PRODUCTOS
+                # =================================================
+
+                "items": items_sync
             }
 
 
@@ -2980,20 +3006,18 @@ class Pedidos(QWidget):
                 """,
                 (
                     "ventas",
-
                     venta_uuid,
-
                     "CREATE",
-
                     json.dumps(
                         datos_venta_sync,
                         ensure_ascii=False
                     )
                 )
             )
+
             # ====================================================
             # CONFIRMAR TODO JUNTO
-            # ====================================================
+            # ========================================================================================================
 
             conexion.commit()
 
