@@ -2815,13 +2815,27 @@ class Pedidos(QWidget):
             # REGISTRAR VENTA PARA SINCRONIZACION
             # ====================================================
 
+            # Preparar los productos de la venta
+            items_sync = []
+
+            for detalle in detalles_pedido:
+
+                items_sync.append({
+                    "producto": detalle[0],
+                    "cantidad": detalle[1],
+                    "precio": detalle[2],
+                    "subtotal": detalle[3],
+                    "codigo": detalle[4]
+                })
+
+
             datos_venta_sync = {
+                "items": items_sync,
                 "uuid": venta_uuid,
                 "fecha": fecha_pago,
                 "total": total_pedido,
                 "forma_pago": pago["forma"],
                 "cliente_id": cliente_id_pedido,
-                "estado": "ACTIVA",
                 "descuento": 0,
                 "usuario": "Administrador",
                 "pago_efectivo": pago["efectivo"],
@@ -2834,22 +2848,34 @@ class Pedidos(QWidget):
                 """
                 INSERT INTO sincronizacion(
                     tabla,
+                    registro,
                     registro_uuid,
                     accion,
                     datos,
                     fecha,
                     sincronizado
                 )
-                VALUES(
-                    ?, ?, ?, ?, datetime('now'), 0
-                )
+                VALUES(?,?,?,?,?,?,?)
                 """,
                 (
                     "ventas",
+                    venta_id,
                     venta_uuid,
-                    "CREATE",
-                    json.dumps(datos_venta_sync)
+                    "INSERT",
+                    json.dumps(
+                        datos_venta_sync,
+                        ensure_ascii=False
+                    ),
+                    fecha_pago,
+                    0
                 )
+            )
+
+            print(
+                "DEBUG SYNC VENTA PEDIDO:",
+                venta_id,
+                venta_uuid,
+                "INSERT"
             )
             # ====================================================
             # CONFIRMAR TODO JUNTO
