@@ -4,7 +4,7 @@ import sqlite3
 import datetime
 import json
 import uuid
-from PySide6.QtCore import Qt, QDate, QSize, QMarginsF
+from PySide6.QtCore import Qt, QDate, QSize, QMarginsF, Signal
 from PySide6.QtGui import (
     QFont,
     QColor,
@@ -384,6 +384,15 @@ class DialogoPagoPedido(QDialog):
 # ============================================================
 
 class Pedidos(QWidget):
+
+    # ============================================================
+    # SEÑAL PARA AVISAR AL DASHBOARD
+    #
+    # Se emite inmediatamente después de entregar
+    # correctamente un pedido.
+    # ============================================================
+
+    pedido_entregado = Signal()
 
     def __init__(self):
         super().__init__()
@@ -1872,31 +1881,41 @@ class Pedidos(QWidget):
             # ====================================================
 
             # ====================================================
-            # CONFIRMAR TODO
+            # CONFIRMAR TODO JUNTO
             # ====================================================
 
             conexion.commit()
 
-        except Exception as error:
+            # ====================================================
+            # AVISAR INMEDIATAMENTE AL DASHBOARD
+            #
+            # En este punto:
+            # - el pedido ya está ENTREGADO
+            # - el stock ya fue descontado
+            # - la venta ya fue creada
+            # - la venta ya está identificada como PEDIDO
+            # - SQLite ya confirmó todos los cambios
+            #
+            # El Dashboard puede actualizar las ventas
+            # de hoy sin esperar al backend.
+            # ====================================================
 
-            # ====================================================
-            # SI ALGO FALLA, DESHACER TODO
-            # ====================================================
+            self.pedido_entregado.emit()
+
+        except Exception as error:
 
             conexion.rollback()
 
             QMessageBox.critical(
                 self,
-                "No se pudo guardar el pedido",
+                "No se pudo entregar el pedido",
                 f"{error}\n\n"
-                "El pedido NO fue guardado "
-                "y el stock NO fue modificado."
+                "El pedido NO fue entregado.\n"
+                "El stock NO fue modificado.\n"
+                "El pago NO fue registrado."
             )
 
-            conexion.close()
-
             return
-
         # ========================================================
         # CERRAR CONEXIÓN
         # ========================================================
@@ -3017,9 +3036,25 @@ class Pedidos(QWidget):
 
             # ====================================================
             # CONFIRMAR TODO JUNTO
-            # ========================================================================================================
+            # ====================================================
 
             conexion.commit()
+
+            # ====================================================
+            # AVISAR INMEDIATAMENTE AL DASHBOARD
+            #
+            # En este punto:
+            # - el pedido ya está ENTREGADO
+            # - el stock ya fue descontado
+            # - la venta ya fue creada
+            # - la venta ya está identificada como PEDIDO
+            # - SQLite ya confirmó todos los cambios
+            #
+            # El Dashboard puede actualizar las ventas
+            # de hoy sin esperar al backend.
+            # ====================================================
+
+            self.pedido_entregado.emit()
 
         except Exception as error:
 

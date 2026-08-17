@@ -3,7 +3,7 @@ import datetime
 import requests
 from core.version import obtener_version_actual
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 from ui.db import BASE_DATOS, init_db, archivar_ventas, get_setting, registrar_sincronizacion, nuevo_uuid
 from ui.productos import Productos
@@ -264,34 +264,111 @@ class Dashboard(QMainWindow):
         return False
 
     def actualizar(self):
-        # Verificar si hay eventos pendientes en la red antes de calcular
-        self.verificar_sincronizacion_remota()
+        """
+        Actualización rápida del inicio.
+
+        IMPORTANTE:
+        Primero lee SQLite LOCAL.
+        No espera al backend para actualizar
+        las tarjetas de ventas.
+        """
 
         hoy = datetime.datetime.now().strftime('%Y-%m-%d')
 
         c = sqlite3.connect(BASE_DATOS)
         q = c.cursor()
 
-        ventas = q.execute(
-            "SELECT COALESCE(SUM(total),0) FROM ventas "
-            "WHERE fecha LIKE ? AND COALESCE(estado,'ACTIVA')='ACTIVA'",
-            (hoy + '%',)
-        ).fetchone()[0]
+        try:
 
-        prod = q.execute('SELECT COUNT(*) FROM productos').fetchone()[0]
+            # ============================================
+            # VENTAS DE HOY
+            # ============================================
 
-        ef = q.execute(
-            "SELECT COALESCE(SUM(CASE WHEN COALESCE(pago_efectivo,0)>0 THEN pago_efectivo "
-            "ELSE CASE WHEN LOWER(TRIM(COALESCE(forma_pago,'')))='efectivo' THEN total ELSE 0 END END),0) "
-            "FROM ventas WHERE fecha LIKE ? AND COALESCE(estado,'ACTIVA')='ACTIVA'",
-            (hoy + '%',)
-        ).fetchone()[0]
+            ventas = q.execute(
+                """
+                SELECT COALESCE(SUM(total), 0)
+                FROM ventas
+                WHERE fecha LIKE ?
+                AND COALESCE(estado, 'ACTIVA') = 'ACTIVA'
+                """,
+                (hoy + '%',)
+            ).fetchone()[0]
 
-        c.close()
+            # ============================================
+            # PRODUCTOS
+            # ============================================
 
-        self.v.setText(f'${ventas:,.2f}')
-        self.p.setText(str(prod))
-        self.e.setText(f'${ef:,.2f}')
+            prod = q.execute(
+                """
+                SELECT COUNT(*)
+                FROM productos
+                """
+            ).fetchone()[0]
+
+            # ============================================
+            # EFECTIVO ESPERADO
+            # ============================================
+
+            ef = q.execute(
+                """
+                SELECT COALESCE(
+                    SUM(
+                        CASE
+                            WHEN COALESCE(pago_efectivo, 0) > 0
+                            THEN pago_efectivo
+
+                            ELSE
+                                CASE
+                                    WHEN LOWER(
+                                        TRIM(
+                                            COALESCE(forma_pago, '')
+                                        )
+                                    ) = 'efectivo'
+                                    THEN total
+                                    ELSE 0
+                                END
+                        END
+                    ),
+                    0
+                )
+                FROM ventas
+                WHERE fecha LIKE ?
+                AND COALESCE(estado, 'ACTIVA') = 'ACTIVA'
+                """,
+                (hoy + '%',)
+            ).fetchone()[0]
+
+        finally:
+            c.close()
+
+        # ============================================
+        # ACTUALIZAR PANTALLA INMEDIATAMENTE
+        # ============================================
+
+        self.v.setText(
+            f'${float(ventas or 0):,.2f}'
+        )
+
+        self.p.setText(
+            str(prod or 0)
+        )
+
+        self.e.setText(
+            f'${float(ef or 0):,.2f}'
+        )
+
+        # ============================================
+        # SINCRONIZACIÓN REMOTA
+        #
+        # NO BLOQUEA LA ACTUALIZACIÓN LOCAL.
+        # Se ejecuta después de que la pantalla
+        # ya recibió los datos locales.
+        # ============================================
+
+        QTimer.singleShot(
+            100,
+            self.verificar_sincronizacion_remota
+        )
 
     def reiniciar_hoy(self):
         hoy = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -346,38 +423,98 @@ class Dashboard(QMainWindow):
         self.stack.setCurrentWidget(self.home)
 
     def openw(self, cls):
+
         if not hasattr(self, '_module_cache'):
             self._module_cache = {}
 
         w = self._module_cache.get(cls)
 
         if w is None:
+
             w = cls()
+
             w.setMinimumSize(0, 0)
-            w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+            w.setSizePolicy(
+                QSizePolicy.Expanding,
+                QSizePolicy.Expanding
+            )
+
             self.stack.addWidget(w)
+
             self._module_cache[cls] = w
 
+            # ============================================
+            # VENTAS
+            # ============================================
+
             if cls is Ventas:
-                w.venta_realizada.connect(self.actualizar)
+
+                w.venta_realizada.connect(
+                    self.actualizar
+                )
+
+            # ============================================
+            # PEDIDOS
+            #
+            # Cuando un pedido se entrega,
+            # Pedidos avisa inmediatamente al Dashboard.
+            # ============================================
+
+            if cls is Pedidos:
+
+                w.pedido_entregado.connect(
+                    self.actualizar
+                )
+
+            # ============================================
+            # CAJA
+            # ============================================
+
             if cls is Caja:
-                w.arqueo_realizado.connect(self.actualizar)
+
+                w.arqueo_realizado.connect(
+                    self.actualizar
+                )
 
         self.stack.setCurrentWidget(w)
 
-        if cls is Ventas:
-            self.scroll.verticalScrollBar().setValue(0)
-            self.scroll.horizontalScrollBar().setValue(0)
-            self.stack.setMinimumSize(self.scroll.viewport().size())
-            self.stack.resize(self.scroll.viewport().size())
+        # ============================================
+        # VENTAS
+        # ============================================
 
-            if hasattr(w, 'refresh_layout_on_return'):
+        if cls is Ventas:
+
+            self.scroll.verticalScrollBar().setValue(0)
+
+            self.scroll.horizontalScrollBar().setValue(0)
+
+            self.stack.setMinimumSize(
+                self.scroll.viewport().size()
+            )
+
+            self.stack.resize(
+                self.scroll.viewport().size()
+            )
+
+            if hasattr(
+                w,
+                'refresh_layout_on_return'
+            ):
                 w.refresh_layout_on_return()
 
             self.scroll.viewport().update()
+
             self.stack.updateGeometry()
 
-        if hasattr(w, 'actualizar_datos') and cls is not Ventas:
+        # ============================================
+        # OTROS MÓDULOS
+        # ============================================
+
+        if (
+            hasattr(w, 'actualizar_datos')
+            and cls is not Ventas
+        ):
             w.actualizar_datos()
 
         return w
