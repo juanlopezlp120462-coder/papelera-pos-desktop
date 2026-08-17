@@ -1,24 +1,47 @@
 import sqlite3
-import os
 import requests
 
-from PySide6.QtWidgets import *
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QComboBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
+    QToolButton,
+    QDialog,
+    QTextBrowser,
+    QFileDialog,
+    QMessageBox
+)
 from PySide6.QtCore import Qt
 
 from ui.db import BASE_DATOS, init_db, get_setting
-from ui.ticket import generar_ticket, imprimir_ticket, guardar_pdf
+from ui.ticket import (
+    generar_ticket,
+    imprimir_ticket,
+    guardar_pdf
+)
 
 
-# ==================================================
+# ============================================================
 # PRUEBA DE RUTA DE BASE DE DATOS
-# ==================================================
+# ============================================================
 
 try:
+
     with open(
         "ruta_db_prueba.txt",
         "w",
         encoding="utf-8"
     ) as f:
+
         f.write(BASE_DATOS)
 
     print(
@@ -27,6 +50,7 @@ try:
     )
 
 except Exception as e:
+
     print(
         "ERROR ESCRIBIENDO RUTA:",
         e
@@ -45,64 +69,84 @@ class Historial(QWidget):
             "Historial"
         )
 
+        # ====================================================
+        # MAPEO INTERNO DE FILAS
+        #
+        # Guarda de qué tabla proviene cada fila.
+        #
+        # Ejemplo:
+        # self._origenes_fila[0] =
+        # ("ventas", 25)
+        #
+        # self._origenes_fila[1] =
+        # ("ventas_archivo", 10)
+        #
+        # Esto evita borrar una venta incorrecta
+        # cuando dos tablas tienen el mismo ID.
+        # ====================================================
+
+        self._origenes_fila = []
 
         self.setStyleSheet("""
-        QWidget{
-            background:#f8fafc;
-            font-family:"Segoe UI";
-            color:#0f172a
+        QWidget {
+            background: #f8fafc;
+            font-family: "Segoe UI";
+            color: #0f172a;
         }
 
-        QLineEdit,QComboBox{
-            background:white;
-            border:1px solid #cbd5e1;
-            border-radius:10px;
-            padding:10px
+        QLineEdit, QComboBox {
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 10px;
         }
 
-        QPushButton{
-            background:#0ea5e9;
-            color:white;
-            border:0;
-            border-radius:9px;
-            padding:10px 14px;
-            font-weight:700
+        QPushButton {
+            background: #0ea5e9;
+            color: white;
+            border: 0;
+            border-radius: 9px;
+            padding: 10px 14px;
+            font-weight: 700;
         }
 
-        QPushButton.secondary{
-            background:#e2e8f0;
-            color:#334155
+        QPushButton.secondary {
+            background: #e2e8f0;
+            color: #334155;
         }
 
-        QPushButton.danger{
-            background:#dc2626;
-            color:white
+        QPushButton.danger {
+            background: #dc2626;
+            color: white;
         }
 
-        QTableWidget{
-            background:white;
-            border:1px solid #e2e8f0;
-            border-radius:12px;
-            gridline-color:#e2e8f0
+        QTableWidget {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            gridline-color: #e2e8f0;
         }
 
-        QHeaderView::section{
-            background:#0f172a;
-            color:white;
-            padding:10px;
-            border:0;
-            font-weight:bold
+        QHeaderView::section {
+            background: #0f172a;
+            color: white;
+            padding: 10px;
+            border: 0;
+            font-weight: bold;
         }
 
-        QToolButton{
-            font-size:20px;
-            padding:2px;
-            background:transparent;
-            border:none;
+        QToolButton {
+            font-size: 20px;
+            padding: 2px;
+            background: transparent;
+            border: none;
         }
 
+        QToolButton:hover {
+            background: #e2e8f0;
+            border-radius: 6px;
+        }
         """)
-
 
         layout = QVBoxLayout(self)
 
@@ -117,22 +161,27 @@ class Historial(QWidget):
             14
         )
 
+        # ====================================================
+        # TITULO
+        # ====================================================
 
         titulo = QLabel(
             "🕘 Historial"
         )
 
         titulo.setStyleSheet(
-            "font-size:28px;font-weight:900"
+            "font-size:28px;font-weight:900;"
         )
 
         layout.addWidget(
             titulo
         )
 
+        # ====================================================
+        # BARRA DE FILTROS
+        # ====================================================
 
         barra = QHBoxLayout()
-
 
         self.buscar = QLineEdit()
 
@@ -149,13 +198,13 @@ class Historial(QWidget):
             4
         )
 
-
         self.tipo = QComboBox()
 
         self.tipo.addItems(
             [
                 "Todos",
                 "Venta diaria",
+                "Pedido",
                 "Arqueo"
             ]
         )
@@ -167,7 +216,6 @@ class Historial(QWidget):
         barra.addWidget(
             self.tipo
         )
-
 
         self.pago = QComboBox()
 
@@ -189,27 +237,35 @@ class Historial(QWidget):
             self.pago
         )
 
+        # ====================================================
+        # ACTUALIZAR / SINCRONIZAR
+        # ====================================================
 
         boton_actualizar = QPushButton(
             "🔄 Actualizar"
         )
 
+        boton_actualizar.setToolTip(
+            "Sincronizar ventas y arqueos y actualizar el historial"
+        )
+
         boton_actualizar.clicked.connect(
-            self.cargar_historial
+            self.actualizar_completo
         )
 
         barra.addWidget(
             boton_actualizar
         )
 
-
         layout.addLayout(
             barra
         )
 
+        # ====================================================
+        # ACCIONES
+        # ====================================================
 
         acciones = QHBoxLayout()
-
 
         self.seleccionar = QPushButton(
             "☑ Seleccionar todas"
@@ -228,7 +284,6 @@ class Historial(QWidget):
             self.seleccionar
         )
 
-
         self.eliminar = QPushButton(
             "🗑 Eliminar ventas seleccionadas"
         )
@@ -246,19 +301,29 @@ class Historial(QWidget):
             self.eliminar
         )
 
-
         acciones.addStretch()
-
 
         layout.addLayout(
             acciones
         )
+
+        # ====================================================
+        # RESUMEN
+        # ====================================================
+
         resumen = QHBoxLayout()
 
-        self.cant = QLabel()
-        self.total = QLabel()
-        self.prom = QLabel()
+        self.cant = QLabel(
+            "Ventas: 0"
+        )
 
+        self.total = QLabel(
+            "Total ventas: $ 0.00"
+        )
+
+        self.prom = QLabel(
+            "Promedio: $ 0.00"
+        )
 
         for x in (
             self.cant,
@@ -272,23 +337,26 @@ class Historial(QWidget):
                 border:1px solid #e2e8f0;
                 border-radius:12px;
                 padding:12px;
-                font-weight:bold
+                font-weight:bold;
                 """
             )
 
-            resumen.addWidget(x)
-
+            resumen.addWidget(
+                x
+            )
 
         layout.addLayout(
             resumen
         )
 
+        # ====================================================
+        # TABLA
+        # ====================================================
 
         self.tabla = QTableWidget(
             0,
             8
         )
-
 
         self.tabla.setHorizontalHeaderLabels(
             [
@@ -303,71 +371,442 @@ class Historial(QWidget):
             ]
         )
 
+        # ====================================================
+        # ANCHOS DE COLUMNAS
+        # ====================================================
 
-        self.tabla.horizontalHeader().setSectionResizeMode(
+        header = self.tabla.horizontalHeader()
+
+        header.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            1,
+            QHeaderView.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            3,
             QHeaderView.Stretch
         )
 
+        header.setSectionResizeMode(
+            4,
+            QHeaderView.Stretch
+        )
+
+        header.setSectionResizeMode(
+            5,
+            QHeaderView.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            6,
+            QHeaderView.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            7,
+            QHeaderView.ResizeToContents
+        )
 
         self.tabla.setSelectionMode(
             QAbstractItemView.NoSelection
         )
 
-
-        self.tabla.cellDoubleClicked.connect(
-            lambda r,c: self.ver_ticket(r) if self.tabla.item(r,0) and self.tabla.item(r,0).text()=="Venta diaria" else self.ver_arqueo(r)
+        self.tabla.setAlternatingRowColors(
+            True
         )
 
+        self.tabla.cellDoubleClicked.connect(
+            self._doble_click_fila
+        )
 
         layout.addWidget(
             self.tabla
         )
 
+        # ====================================================
+        # CARGA INICIAL
+        # ====================================================
 
         self.cargar_historial()
 
+    # ========================================================
+    # ACTUALIZAR TODO
+    # ========================================================
 
+    def actualizar_completo(self):
 
-    # ==========================================
+        try:
+
+            QApplication.setOverrideCursor(
+                Qt.WaitCursor
+            )
+
+            print(
+                "========================================"
+            )
+
+            print(
+                "ACTUALIZACION MANUAL DEL HISTORIAL"
+            )
+
+            self.sincronizar_ventas_nube()
+
+            self.sincronizar_arqueos_nube()
+
+            print(
+                "RECARGANDO HISTORIAL LOCAL"
+            )
+
+            self.cargar_historial()
+
+            print(
+                "ACTUALIZACION COMPLETA OK"
+            )
+
+            print(
+                "========================================"
+            )
+
+        except Exception as e:
+
+            print(
+                "ERROR ACTUALIZANDO HISTORIAL:",
+                repr(e)
+            )
+
+            QMessageBox.warning(
+                self,
+                "Actualización",
+                "No se pudo completar la actualización:\n"
+                + str(e)
+            )
+
+        finally:
+
+            QApplication.restoreOverrideCursor()
+
+    # ========================================================
+    # DOBLE CLICK
+    # ========================================================
+
+    def _doble_click_fila(
+        self,
+        fila,
+        columna
+    ):
+
+        item = self.tabla.item(
+            fila,
+            0
+        )
+
+        if not item:
+
+            return
+
+        tipo = item.text()
+
+        if tipo in (
+            "Venta diaria",
+            "Pedido"
+        ):
+
+            self.ver_ticket(
+                fila
+            )
+
+        elif tipo == "Arqueo":
+
+            self.ver_arqueo(
+                fila
+            )
+
+    # ========================================================
+    # UTILIDADES
+    # ========================================================
+
+    def _tabla_existe(
+        self,
+        cursor,
+        nombre
+    ):
+
+        return cursor.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table'
+            AND name=?
+            """,
+            (nombre,)
+        ).fetchone() is not None
+
+    # ========================================================
+
+    def _columnas_tabla(
+        self,
+        cursor,
+        nombre
+    ):
+
+        if not self._tabla_existe(
+            cursor,
+            nombre
+        ):
+
+            return []
+
+        return [
+            fila[1]
+            for fila in cursor.execute(
+                f"PRAGMA table_info({nombre})"
+            ).fetchall()
+        ]
+
+    # ========================================================
+
+    def _tipo_venta_texto(
+        self,
+        valor
+    ):
+
+        texto = str(
+            valor or ""
+        ).strip().upper()
+
+        if texto == "PEDIDO":
+
+            return "Pedido"
+
+        return "Venta diaria"
+
+    # ========================================================
+
+    def _es_venta(
+        self,
+        tipo
+    ):
+
+        return tipo in (
+            "Venta diaria",
+            "Pedido"
+        )
+
+    # ========================================================
+
+    def _dinero(
+        self,
+        valor
+    ):
+
+        try:
+
+            return f"$ {float(valor or 0):,.2f}"
+
+        except Exception:
+
+            return "$ 0.00"
+
+    # ========================================================
+    # FORMA DE PAGO SIMPLE
+    # ========================================================
+
+    def _forma_pago_coincide(
+        self,
+        forma_pago,
+        filtro
+    ):
+
+        if filtro == "Todas":
+
+            return True
+
+        texto = str(
+            forma_pago or ""
+        ).strip().lower()
+
+        if filtro == "Efectivo":
+
+            return (
+                "efectivo" in texto
+            )
+
+        if filtro == "Transferencia":
+
+            return (
+                "transfer" in texto
+                or
+                "transf" in texto
+            )
+
+        if filtro == "Tarjeta":
+
+            return (
+                "tarjeta" in texto
+            )
+
+        if filtro == "Cuenta corriente":
+
+            return (
+                "cuenta" in texto
+            )
+
+        return False
+
+    # ========================================================
+    # PAGO DETALLADO COINCIDE
+    # ========================================================
+
+    def _pago_detallado_coincide(
+        self,
+        pago_row,
+        filtro
+    ):
+
+        if filtro == "Todas":
+
+            return True
+
+        e = float(
+            pago_row[0] or 0
+        )
+
+        t = float(
+            pago_row[1] or 0
+        )
+
+        ta = float(
+            pago_row[2] or 0
+        )
+
+        c = float(
+            pago_row[3] or 0
+        )
+
+        if filtro == "Efectivo":
+
+            return e > 0
+
+        if filtro == "Transferencia":
+
+            return t > 0
+
+        if filtro == "Tarjeta":
+
+            return ta > 0
+
+        if filtro == "Cuenta corriente":
+
+            return c > 0
+
+        return False
+
+    # ========================================================
+    # TEXTO DE FORMA DE PAGO
+    # ========================================================
+
+    def pago_texto(
+        self,
+        pay
+    ):
+
+        e, t, ta, c = pay
+
+        partes = []
+
+        if float(e or 0):
+
+            partes.append(
+                f"Efectivo $ {float(e):,.2f}"
+            )
+
+        if float(t or 0):
+
+            partes.append(
+                f"Transf. $ {float(t):,.2f}"
+            )
+
+        if float(ta or 0):
+
+            partes.append(
+                f"Tarjeta $ {float(ta):,.2f}"
+            )
+
+        if float(c or 0):
+
+            partes.append(
+                f"Cuenta $ {float(c):,.2f}"
+            )
+
+        return (
+            " | ".join(partes)
+            if partes
+            else "—"
+        )
+
+    # ========================================================
     # ACTUALIZAR AL VOLVER A ABRIR
-    # ==========================================
+    # ========================================================
 
-    def showEvent(self,event):
+    def showEvent(
+        self,
+        event
+    ):
 
-        super().showEvent(event)
+        super().showEvent(
+            event
+        )
 
+        # Solo recarga local.
+        #
+        # NO hacemos sincronización aquí porque showEvent
+        # puede ejecutarse muchas veces y no queremos hacer
+        # peticiones HTTP automáticamente.
         self.cargar_historial()
 
-
-
-    # ==========================================
+    # ========================================================
     # SINCRONIZAR VENTAS DESDE LA NUBE
-    # ==========================================
+    # ========================================================
 
-    # ==========================================
-    # SINCRONIZAR VENTAS Y DETALLES DESDE NUBE
-    # ==========================================
+    def sincronizar_ventas_nube(
+        self
+    ):
 
-    # ==========================================
-    # SINCRONIZAR VENTAS DESDE LA NUBE
-    # ==========================================
-
-    def sincronizar_ventas_nube(self):
         con = None
 
         try:
+
             api_url = get_setting(
-                'api_url',
-                'https://papelera-pos-backend-production.up.railway.app'
+                "api_url",
+                "https://papelera-pos-backend-production.up.railway.app"
             ).rstrip("/")
 
-            print("========================================")
-            print("SINCRONIZANDO VENTAS DESDE LA NUBE")
-            print("SERVIDOR:", api_url)
+            print(
+                "========================================"
+            )
 
-            # ------------------------------------------
-            # 1. OBTENER TODAS LAS VENTAS REMOTAS
-            # ------------------------------------------
+            print(
+                "SINCRONIZANDO VENTAS DESDE LA NUBE"
+            )
+
+            print(
+                "SERVIDOR:",
+                api_url
+            )
+
+            # ==================================================
+            # OBTENER VENTAS
+            # ==================================================
 
             response = requests.get(
                 f"{api_url}/ventas",
@@ -375,17 +814,26 @@ class Historial(QWidget):
             )
 
             if response.status_code != 200:
+
                 print(
                     "ERROR OBTENIENDO VENTAS:",
                     response.status_code,
                     response.text[:500]
                 )
+
                 return
 
             ventas_remotas = response.json()
 
-            if not isinstance(ventas_remotas, list):
-                print("ERROR: respuesta de ventas no es una lista")
+            if not isinstance(
+                ventas_remotas,
+                list
+            ):
+
+                print(
+                    "ERROR: respuesta de ventas no es una lista"
+                )
+
                 return
 
             print(
@@ -393,101 +841,168 @@ class Historial(QWidget):
                 len(ventas_remotas)
             )
 
-            # ------------------------------------------
-            # 2. ABRIR SQLITE
-            # ------------------------------------------
+            # ==================================================
+            # SQLITE
+            # ==================================================
 
-            con = sqlite3.connect(BASE_DATOS)
+            con = sqlite3.connect(
+                BASE_DATOS
+            )
+
             cur = con.cursor()
 
-            # ------------------------------------------
-            # 3. ASEGURAR COLUMNAS NECESARIAS
-            # ------------------------------------------
+            # ==================================================
+            # ASEGURAR TABLA VENTAS
+            # ==================================================
 
-            columnas = [
-                row[1]
-                for row in cur.execute(
-                    "PRAGMA table_info(ventas)"
-                ).fetchall()
-            ]
+            if not self._tabla_existe(
+                cur,
+                "ventas"
+            ):
 
-            if "uuid" not in columnas:
-                cur.execute(
-                    "ALTER TABLE ventas ADD COLUMN uuid TEXT"
+                print(
+                    "ERROR: no existe tabla ventas"
                 )
 
-            columnas_detalle = [
-                row[1]
-                for row in cur.execute(
-                    "PRAGMA table_info(detalle_ventas)"
-                ).fetchall()
-            ]
+                return
 
-            if "codigo" not in columnas_detalle:
+            # ==================================================
+            # ASEGURAR UUID
+            # ==================================================
+
+            columnas = self._columnas_tabla(
+                cur,
+                "ventas"
+            )
+
+            if "uuid" not in columnas:
+
                 cur.execute(
-                    "ALTER TABLE detalle_ventas ADD COLUMN codigo TEXT"
+                    """
+                    ALTER TABLE ventas
+                    ADD COLUMN uuid TEXT
+                    """
+                )
+
+                columnas = self._columnas_tabla(
+                    cur,
+                    "ventas"
+                )
+
+            # ==================================================
+            # ASEGURAR TIPO
+            # ==================================================
+
+            if "tipo" not in columnas:
+
+                cur.execute(
+                    """
+                    ALTER TABLE ventas
+                    ADD COLUMN tipo TEXT
+                    """
+                )
+
+                columnas = self._columnas_tabla(
+                    cur,
+                    "ventas"
+                )
+
+            # ==================================================
+            # DETALLE
+            # ==================================================
+
+            columnas_detalle = self._columnas_tabla(
+                cur,
+                "detalle_ventas"
+            )
+
+            if (
+                columnas_detalle
+                and
+                "codigo" not in columnas_detalle
+            ):
+
+                cur.execute(
+                    """
+                    ALTER TABLE detalle_ventas
+                    ADD COLUMN codigo TEXT
+                    """
                 )
 
             con.commit()
 
-            # ------------------------------------------
-            # 4. OBTENER FECHAS QUE YA TIENEN ARQUEO
-            # ------------------------------------------
+            # ==================================================
+            # FECHAS CERRADAS
+            # ==================================================
 
             fechas_cerradas = set()
 
-            filas_arqueos = cur.execute(
-                """
-                SELECT fecha
-                FROM arqueos
-                WHERE fecha IS NOT NULL
-                """
-            ).fetchall()
+            if self._tabla_existe(
+                cur,
+                "arqueos"
+            ):
 
-            for fila in filas_arqueos:
+                filas_arqueos = cur.execute(
+                    """
+                    SELECT fecha
+                    FROM arqueos
+                    WHERE fecha IS NOT NULL
+                    """
+                ).fetchall()
 
-                fecha_arqueo = fila[0]
+                for fila in filas_arqueos:
 
-                if fecha_arqueo:
+                    fecha_arqueo = fila[0]
 
-                    fecha_dia = str(
-                        fecha_arqueo
-                    )[:10]
+                    if fecha_arqueo:
 
-                    fechas_cerradas.add(
-                        fecha_dia
-                    )
+                        fecha_dia = str(
+                            fecha_arqueo
+                        )[:10]
+
+                        fechas_cerradas.add(
+                            fecha_dia
+                        )
 
             print(
                 "FECHAS CERRADAS:",
                 sorted(fechas_cerradas)
             )
 
-            # ------------------------------------------
-            # 5. SINCRONIZAR CADA VENTA
-            # ------------------------------------------
-
             ventas_nuevas = 0
             ventas_actualizadas = 0
             detalles_nuevos = 0
             errores_detalle = 0
 
+            # ==================================================
+            # CADA VENTA REMOTA
+            # ==================================================
+
             for v in ventas_remotas:
 
-                uuid_venta = v.get("uuid")
+                if not isinstance(
+                    v,
+                    dict
+                ):
+
+                    continue
+
+                uuid_venta = v.get(
+                    "uuid"
+                )
 
                 if not uuid_venta:
+
                     print(
                         "VENTA REMOTA SIN UUID:",
                         v
                     )
+
                     continue
 
-                fecha_venta = v.get("fecha")
-
-                # --------------------------------------
-                # FECHA DEL DIA DE LA VENTA
-                # --------------------------------------
+                fecha_venta = v.get(
+                    "fecha"
+                )
 
                 fecha_dia_venta = ""
 
@@ -497,45 +1012,43 @@ class Historial(QWidget):
                         fecha_venta
                     )[:10]
 
-                # --------------------------------------
-                # BUSCAR VENTA LOCAL
-                # --------------------------------------
+                # ==================================================
+                # BUSCAR LOCAL
+                # ==================================================
 
                 venta_local = cur.execute(
                     """
-                    SELECT id, estado
+                    SELECT
+                        id,
+                        estado,
+                        COALESCE(tipo, '')
                     FROM ventas
-                    WHERE uuid = ?
+                    WHERE uuid=?
                     LIMIT 1
                     """,
                     (uuid_venta,)
                 ).fetchone()
-
-                # --------------------------------------
-                # ESTADO REMOTO
-                # --------------------------------------
 
                 estado_remoto = v.get(
                     "estado",
                     "ACTIVA"
                 )
 
-                # --------------------------------------
-                # DETERMINAR ESTADO FINAL
-                #
-                # IMPORTANTE:
-                #
-                # ARCHIVADA NUNCA VUELVE A ACTIVA
-                #
-                # Si existe arqueo para ese día,
-                # toda venta de ese día queda archivada.
-                # --------------------------------------
+                # ==================================================
+                # ESTADO FINAL
+                # ==================================================
 
                 if fecha_dia_venta in fechas_cerradas:
 
                     estado_final = "ARCHIVADA"
 
-                elif venta_local and venta_local[1] == "ARCHIVADA":
+                elif (
+                    venta_local
+                    and
+                    str(
+                        venta_local[1] or ""
+                    ).upper() == "ARCHIVADA"
+                ):
 
                     estado_final = "ARCHIVADA"
 
@@ -543,9 +1056,38 @@ class Historial(QWidget):
 
                     estado_final = estado_remoto
 
-                # --------------------------------------
-                # VENTA EXISTE LOCALMENTE
-                # --------------------------------------
+                # ==================================================
+                # TIPO FINAL
+                # ==================================================
+
+                tipo_remoto = str(
+                    v.get(
+                        "tipo",
+                        ""
+                    ) or ""
+                ).strip().upper()
+
+                if tipo_remoto == "PEDIDO":
+
+                    tipo_final = "PEDIDO"
+
+                elif (
+                    venta_local
+                    and
+                    str(
+                        venta_local[2] or ""
+                    ).strip().upper() == "PEDIDO"
+                ):
+
+                    tipo_final = "PEDIDO"
+
+                else:
+
+                    tipo_final = "VENTA"
+
+                # ==================================================
+                # ACTUALIZAR EXISTENTE
+                # ==================================================
 
                 if venta_local:
 
@@ -555,16 +1097,17 @@ class Historial(QWidget):
                         """
                         UPDATE ventas
                         SET
-                            fecha = ?,
-                            total = ?,
-                            forma_pago = ?,
-                            cliente_id = ?,
-                            estado = ?,
-                            pago_efectivo = ?,
-                            pago_transferencia = ?,
-                            pago_tarjeta = ?,
-                            pago_cuenta = ?
-                        WHERE id = ?
+                            fecha=?,
+                            total=?,
+                            forma_pago=?,
+                            cliente_id=?,
+                            estado=?,
+                            pago_efectivo=?,
+                            pago_transferencia=?,
+                            pago_tarjeta=?,
+                            pago_cuenta=?,
+                            tipo=?
+                        WHERE id=?
                         """,
                         (
                             fecha_venta,
@@ -606,21 +1149,23 @@ class Historial(QWidget):
                                 0
                             ),
 
+                            tipo_final,
+
                             venta_id_local
                         )
                     )
 
                     ventas_actualizadas += 1
 
-                # --------------------------------------
+                # ==================================================
                 # VENTA NUEVA
-                # --------------------------------------
+                # ==================================================
 
                 else:
 
                     cur.execute(
                         """
-                        INSERT INTO ventas (
+                        INSERT INTO ventas(
                             uuid,
                             fecha,
                             total,
@@ -630,9 +1175,13 @@ class Historial(QWidget):
                             pago_efectivo,
                             pago_transferencia,
                             pago_tarjeta,
-                            pago_cuenta
+                            pago_cuenta,
+                            tipo
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES(
+                            ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?
+                        )
                         """,
                         (
                             uuid_venta,
@@ -674,7 +1223,9 @@ class Historial(QWidget):
                             v.get(
                                 "pago_cuenta",
                                 0
-                            )
+                            ),
+
+                            tipo_final
                         )
                     )
 
@@ -682,11 +1233,13 @@ class Historial(QWidget):
 
                     ventas_nuevas += 1
 
-                # ------------------------------------------
-                # 6. OBTENER DETALLE DE LA VENTA
-                # ------------------------------------------
+                # ==================================================
+                # DETALLE
+                # ==================================================
 
-                id_venta_remota = v.get("id")
+                id_venta_remota = v.get(
+                    "id"
+                )
 
                 if not id_venta_remota:
 
@@ -694,6 +1247,13 @@ class Historial(QWidget):
                         "VENTA SIN ID REMOTO:",
                         uuid_venta
                     )
+
+                    continue
+
+                if not self._tabla_existe(
+                    cur,
+                    "detalle_ventas"
+                ):
 
                     continue
 
@@ -726,23 +1286,41 @@ class Historial(QWidget):
 
                         continue
 
-                    # ----------------------------------
-                    # ELIMINAR DETALLE ACTUAL
-                    # ----------------------------------
+                    # ==================================================
+                    # BORRAR DETALLE ANTERIOR
+                    # ==================================================
 
                     cur.execute(
                         """
                         DELETE FROM detalle_ventas
-                        WHERE venta_id = ?
+                        WHERE venta_id=?
                         """,
                         (venta_id_local,)
                     )
 
-                    # ----------------------------------
-                    # INSERTAR DETALLES REMOTOS
-                    # ----------------------------------
+                    columnas_detalle = self._columnas_tabla(
+                        cur,
+                        "detalle_ventas"
+                    )
+
+                    tiene_codigo = (
+                        "codigo"
+                        in
+                        columnas_detalle
+                    )
+
+                    # ==================================================
+                    # INSERTAR DETALLE
+                    # ==================================================
 
                     for d in detalles_remotos:
+
+                        if not isinstance(
+                            d,
+                            dict
+                        ):
+
+                            continue
 
                         producto = d.get(
                             "producto",
@@ -768,27 +1346,55 @@ class Historial(QWidget):
                             "codigo"
                         )
 
-                        cur.execute(
-                            """
-                            INSERT INTO detalle_ventas (
-                                venta_id,
-                                producto,
-                                cantidad,
-                                precio,
-                                subtotal,
-                                codigo
+                        if tiene_codigo:
+
+                            cur.execute(
+                                """
+                                INSERT INTO detalle_ventas(
+                                    venta_id,
+                                    producto,
+                                    cantidad,
+                                    precio,
+                                    subtotal,
+                                    codigo
+                                )
+                                VALUES(
+                                    ?, ?, ?, ?, ?, ?
+                                )
+                                """,
+                                (
+                                    venta_id_local,
+                                    str(producto),
+                                    cantidad,
+                                    precio,
+                                    subtotal,
+                                    codigo
+                                )
                             )
-                            VALUES (?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                venta_id_local,
-                                str(producto),
-                                cantidad,
-                                precio,
-                                subtotal,
-                                codigo
+
+                        else:
+
+                            cur.execute(
+                                """
+                                INSERT INTO detalle_ventas(
+                                    venta_id,
+                                    producto,
+                                    cantidad,
+                                    precio,
+                                    subtotal
+                                )
+                                VALUES(
+                                    ?, ?, ?, ?, ?
+                                )
+                                """,
+                                (
+                                    venta_id_local,
+                                    str(producto),
+                                    cantidad,
+                                    precio,
+                                    subtotal
+                                )
                             )
-                        )
 
                         detalles_nuevos += 1
 
@@ -802,13 +1408,11 @@ class Historial(QWidget):
                         e
                     )
 
-            # ------------------------------------------
-            # 7. GUARDAR TODO
-            # ------------------------------------------
-
             con.commit()
 
-            print("----------------------------------------")
+            print(
+                "----------------------------------------"
+            )
 
             print(
                 "VENTAS NUEVAS:",
@@ -836,7 +1440,10 @@ class Historial(QWidget):
                     """
                     SELECT COUNT(*)
                     FROM ventas
-                    WHERE COALESCE(estado,'ACTIVA')='ACTIVA'
+                    WHERE COALESCE(
+                        estado,
+                        'ACTIVA'
+                    )='ACTIVA'
                     """
                 ).fetchone()[0]
             )
@@ -852,13 +1459,25 @@ class Historial(QWidget):
                 ).fetchone()[0]
             )
 
-            print("SINCRONIZACION DE VENTAS OK")
-            print("========================================")
+            print(
+                "SINCRONIZACION DE VENTAS OK"
+            )
+
+            print(
+                "========================================"
+            )
 
         except Exception as e:
 
             if con:
-                con.rollback()
+
+                try:
+
+                    con.rollback()
+
+                except Exception:
+
+                    pass
 
             print(
                 "ERROR AL SINCRONIZAR VENTAS:",
@@ -870,111 +1489,180 @@ class Historial(QWidget):
             if con:
 
                 try:
+
                     con.close()
+
                 except Exception:
+
                     pass
 
-    def sincronizar_arqueos_nube(self):
+    # ========================================================
+    # SINCRONIZAR ARQUEOS
+    # ========================================================
+
+    def sincronizar_arqueos_nube(
+        self
+    ):
+
+        con = None
+
         try:
-            api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
-            response = requests.get(f"{api_url}/caja/arqueos", timeout=3)
-            if response.status_code == 200:
-                arqueos_remotos = response.json()
-                con = sqlite3.connect(BASE_DATOS)
-                cur = con.cursor()
-                
-                # Asegurar que la tabla tenga columna uuid por seguridad
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS arqueos (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        uuid TEXT UNIQUE,
-                        fecha TEXT,
-                        apertura REAL,
-                        esperado REAL,
-                        real REAL,
-                        diferencia REAL,
-                        usuario TEXT,
-                        observaciones TEXT,
-                        ventas_total REAL,
-                        ventas_efectivo REAL,
-                        cantidad_ventas INTEGER
+
+            api_url = get_setting(
+                "api_url",
+                "https://papelera-pos-backend-production.up.railway.app"
+            ).rstrip("/")
+
+            response = requests.get(
+                f"{api_url}/caja/arqueos",
+                timeout=5
+            )
+
+            if response.status_code != 200:
+
+                print(
+                    "ERROR OBTENIENDO ARQUEOS:",
+                    response.status_code
+                )
+
+                return
+
+            arqueos_remotos = response.json()
+
+            if not isinstance(
+                arqueos_remotos,
+                list
+            ):
+
+                print(
+                    "ERROR: respuesta de arqueos no es una lista"
+                )
+
+                return
+
+            con = sqlite3.connect(
+                BASE_DATOS
+            )
+
+            cur = con.cursor()
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS arqueos(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uuid TEXT UNIQUE,
+                    fecha TEXT,
+                    apertura REAL,
+                    esperado REAL,
+                    real REAL,
+                    diferencia REAL,
+                    usuario TEXT,
+                    observaciones TEXT,
+                    ventas_total REAL,
+                    ventas_efectivo REAL,
+                    cantidad_ventas INTEGER
+                )
+                """
+            )
+
+            for arq in arqueos_remotos:
+
+                if not isinstance(
+                    arq,
+                    dict
+                ):
+
+                    continue
+
+                uuid = arq.get(
+                    "uuid"
+                )
+
+                if not uuid:
+
+                    continue
+
+                cur.execute(
+                    """
+                    INSERT OR IGNORE INTO arqueos(
+                        uuid,
+                        fecha,
+                        apertura,
+                        esperado,
+                        real,
+                        diferencia,
+                        usuario,
+                        observaciones,
+                        ventas_total,
+                        ventas_efectivo,
+                        cantidad_ventas
                     )
-                """)
+                    VALUES(
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (
+                        uuid,
+                        arq.get("fecha"),
+                        arq.get("apertura"),
+                        arq.get("esperado"),
+                        arq.get("real"),
+                        arq.get("diferencia"),
+                        arq.get("usuario"),
+                        arq.get("observaciones"),
+                        arq.get("ventas_total"),
+                        arq.get("ventas_efectivo"),
+                        arq.get("cantidad_ventas")
+                    )
+                )
 
-                for arq in arqueos_remotos:
-                    cur.execute("""
-                        INSERT OR IGNORE INTO arqueos (
-                            uuid, fecha, apertura, esperado, real, diferencia, 
-                            usuario, observaciones, ventas_total, ventas_efectivo, cantidad_ventas
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        arq.get('uuid'),
-                        arq.get('fecha'),
-                        arq.get('apertura'),
-                        arq.get('esperado'),
-                        arq.get('real'),
-                        arq.get('diferencia'),
-                        arq.get('usuario'),
-                        arq.get('observaciones'),
-                        arq.get('ventas_total'),
-                        arq.get('ventas_efectivo'),
-                        arq.get('cantidad_ventas')
-                    ))
-                con.commit()
-                con.close()
+            con.commit()
+
+            print(
+                "SINCRONIZACION DE ARQUEOS OK"
+            )
+
         except Exception as e:
-            print("No se pudieron sincronizar los arqueos desde la nube:", e)
 
+            if con:
 
+                try:
 
-    # ==========================================
-    # TEXTO DE FORMA DE PAGO
-    # ==========================================
+                    con.rollback()
 
-    def pago_texto(self,pay):
+                except Exception:
 
-        e,t,ta,c = pay
+                    pass
 
-        partes=[]
-
-
-        if float(e or 0):
-            partes.append(
-                f"Efectivo $ {float(e):,.2f}"
+            print(
+                "No se pudieron sincronizar los arqueos desde la nube:",
+                e
             )
 
+        finally:
 
-        if float(t or 0):
-            partes.append(
-                f"Transf. $ {float(t):,.2f}"
-            )
+            if con:
 
+                try:
 
-        if float(ta or 0):
-            partes.append(
-                f"Tarjeta $ {float(ta):,.2f}"
-            )
+                    con.close()
 
+                except Exception:
 
-        if float(c or 0):
-            partes.append(
-                f"Cuenta $ {float(c):,.2f}"
-            )
+                    pass
 
-
-        return " | ".join(partes) if partes else "—"
-
-
-
-    # ==========================================
+    # ========================================================
     # CARGAR HISTORIAL
-    # ==========================================
+    # ========================================================
 
-    def cargar_historial(self):
+    def cargar_historial(
+        self
+    ):
+
+        c = None
 
         try:
-            # Sincronizamos ventas y arqueos de la nube antes de pintar la tabla
-            
 
             c = sqlite3.connect(
                 BASE_DATOS
@@ -982,229 +1670,437 @@ class Historial(QWidget):
 
             q = c.cursor()
 
-
             termino = self.buscar.text().strip()
 
-            tipo = self.tipo.currentText()
+            tipo_filtro = self.tipo.currentText()
 
-            pago = self.pago.currentText()
+            pago_filtro = self.pago.currentText()
 
+            filas = []
 
-            filas=[]
-
-
-
-            # ===============================
+            # ==================================================
             # VENTAS
-            # ===============================
+            # ==================================================
 
-            if tipo in (
+            if tipo_filtro in (
                 "Todos",
-                "Venta diaria"
+                "Venta diaria",
+                "Pedido"
             ):
 
-
                 tablas = [
-                    ("ventas","ACTIVA"),
-                    ("ventas_archivo","ARCHIVADA")
+                    ("ventas", "ACTIVA"),
+                    ("ventas_archivo", "ARCHIVADA")
                 ]
 
+                for tabla, estado_defecto in tablas:
 
-                for tabla,estado in tablas:
+                    if not self._tabla_existe(
+                        q,
+                        tabla
+                    ):
 
-
-                    # Verifica si existe la tabla
-                    existe = q.execute(
-                        """
-                        SELECT name 
-                        FROM sqlite_master
-                        WHERE type='table'
-                        AND name=?
-                        """,
-                        (tabla,)
-                    ).fetchone()
-
-
-                    if not existe:
                         continue
 
+                    columnas = self._columnas_tabla(
+                        q,
+                        tabla
+                    )
 
+                    tiene_tipo = (
+                        "tipo" in columnas
+                    )
 
-                    sql=f"""
+                    # ==================================================
+                    # TIPO
+                    # ==================================================
+
+                    if tiene_tipo:
+
+                        expresion_tipo = """
+                            CASE
+                                WHEN UPPER(
+                                    TRIM(
+                                        COALESCE(
+                                            v.tipo,
+                                            ''
+                                        )
+                                    )
+                                ) = 'PEDIDO'
+                                THEN 'PEDIDO'
+                                ELSE 'VENTA'
+                            END
+                        """
+
+                    else:
+
+                        expresion_tipo = "'VENTA'"
+
+                    # ==================================================
+                    # SQL BASE
+                    # ==================================================
+
+                    sql = f"""
                     SELECT
-                    'Venta diaria',
-                    v.id,
-                    v.fecha,
-                    COALESCE(cl.nombre,'Consumidor final'),
-                    COALESCE(v.forma_pago,''),
-                    v.total,
-                    COALESCE(v.estado,'{estado}')
+                        {expresion_tipo},
+                        v.id,
+                        v.fecha,
+                        COALESCE(
+                            cl.nombre,
+                            'Consumidor final'
+                        ),
+                        COALESCE(
+                            v.forma_pago,
+                            ''
+                        ),
+                        COALESCE(
+                            v.total,
+                            0
+                        ),
+                        COALESCE(
+                            v.estado,
+                            '{estado_defecto}'
+                        )
                     FROM {tabla} v
                     LEFT JOIN clientes cl
-                    ON cl.id=v.cliente_id
+                        ON cl.id = v.cliente_id
                     WHERE 1=1
                     """
 
+                    datos = []
 
-
-                    datos=[]
-
-
+                    # ==================================================
+                    # BUSQUEDA
+                    # ==================================================
 
                     if termino:
 
-
                         sql += """
                         AND (
-                        CAST(v.id AS TEXT) LIKE ?
-                        OR v.fecha LIKE ?
-                        OR cl.nombre LIKE ?
-                        OR v.forma_pago LIKE ?
+                            CAST(v.id AS TEXT) LIKE ?
+                            OR v.fecha LIKE ?
+                            OR cl.nombre LIKE ?
+                            OR v.forma_pago LIKE ?
                         )
                         """
 
+                        buscar = (
+                            "%"
+                            + termino
+                            + "%"
+                        )
 
-                        buscar = "%" + termino + "%"
+                        datos.extend(
+                            [
+                                buscar,
+                                buscar,
+                                buscar,
+                                buscar
+                            ]
+                        )
 
+                    # ==================================================
+                    # FILTRO TIPO
+                    # ==================================================
 
-                        datos += [
-                            buscar,
-                            buscar,
-                            buscar,
-                            buscar
-                        ]
+                    if tipo_filtro == "Pedido":
 
+                        if tiene_tipo:
 
+                            sql += """
+                            AND UPPER(
+                                TRIM(
+                                    COALESCE(
+                                        v.tipo,
+                                        ''
+                                    )
+                                )
+                            ) = 'PEDIDO'
+                            """
+
+                        else:
+
+                            continue
+
+                    elif tipo_filtro == "Venta diaria":
+
+                        if tiene_tipo:
+
+                            sql += """
+                            AND (
+                                UPPER(
+                                    TRIM(
+                                        COALESCE(
+                                            v.tipo,
+                                            ''
+                                        )
+                                    )
+                                ) <> 'PEDIDO'
+                                OR v.tipo IS NULL
+                                OR TRIM(v.tipo) = ''
+                            )
+                            """
+
+                    # ==================================================
+                    # RESULTADOS
+                    # ==================================================
 
                     resultado = q.execute(
                         sql,
                         datos
                     ).fetchall()
 
+                    # ==================================================
+                    # COLUMNAS DE PAGO
+                    # ==================================================
 
+                    tiene_pagos = all(
+                        columna in columnas
+                        for columna in (
+                            "pago_efectivo",
+                            "pago_transferencia",
+                            "pago_tarjeta",
+                            "pago_cuenta"
+                        )
+                    )
+
+                    # ==================================================
+                    # PROCESAR FILAS
+                    # ==================================================
 
                     for fila in resultado:
 
-
-                        pago_row = q.execute(
-                            f"""
-                            SELECT
-                            COALESCE(pago_efectivo,0),
-                            COALESCE(pago_transferencia,0),
-                            COALESCE(pago_tarjeta,0),
-                            COALESCE(pago_cuenta,0)
-
-                            FROM {tabla}
-
-                            WHERE id=?
-                            """,
-                            (fila[1],)
-                        ).fetchone()
-
-
-
-                        if pago_row and sum(
-                            float(x or 0)
-                            for x in pago_row
-                        ) > 0:
-
-
-                            fila = (
-                                fila[0],
-                                fila[1],
-                                fila[2],
-                                fila[3],
-                                self.pago_texto(pago_row),
-                                fila[5],
-                                fila[6]
+                        tipo_mostrar = (
+                            self._tipo_venta_texto(
+                                fila[0]
                             )
-
-
-                        filas.append(
-                            fila
                         )
 
+                        fila_base = (
+                            tipo_mostrar,
+                            fila[1],
+                            fila[2],
+                            fila[3],
+                            fila[4],
+                            fila[5],
+                            fila[6]
+                        )
 
+                        # ==================================================
+                        # FILTRO DE PAGO
+                        # ==================================================
 
-            # ===============================
+                        if pago_filtro != "Todas":
+
+                            if tiene_pagos:
+
+                                pago_row = q.execute(
+                                    f"""
+                                    SELECT
+                                        COALESCE(
+                                            pago_efectivo,
+                                            0
+                                        ),
+                                        COALESCE(
+                                            pago_transferencia,
+                                            0
+                                        ),
+                                        COALESCE(
+                                            pago_tarjeta,
+                                            0
+                                        ),
+                                        COALESCE(
+                                            pago_cuenta,
+                                            0
+                                        )
+                                    FROM {tabla}
+                                    WHERE id=?
+                                    """,
+                                    (fila[1],)
+                                ).fetchone()
+
+                                if not pago_row:
+
+                                    continue
+
+                                if not self._pago_detallado_coincide(
+                                    pago_row,
+                                    pago_filtro
+                                ):
+
+                                    continue
+
+                            else:
+
+                                if not self._forma_pago_coincide(
+                                    fila[4],
+                                    pago_filtro
+                                ):
+
+                                    continue
+
+                        # ==================================================
+                        # MOSTRAR PAGO DETALLADO
+                        # ==================================================
+
+                        if tiene_pagos:
+
+                            pago_row = q.execute(
+                                f"""
+                                SELECT
+                                    COALESCE(
+                                        pago_efectivo,
+                                        0
+                                    ),
+                                    COALESCE(
+                                        pago_transferencia,
+                                        0
+                                    ),
+                                    COALESCE(
+                                        pago_tarjeta,
+                                        0
+                                    ),
+                                    COALESCE(
+                                        pago_cuenta,
+                                        0
+                                    )
+                                FROM {tabla}
+                                WHERE id=?
+                                """,
+                                (fila[1],)
+                            ).fetchone()
+
+                            if pago_row:
+
+                                suma_pagos = sum(
+                                    float(x or 0)
+                                    for x in pago_row
+                                )
+
+                                if suma_pagos > 0:
+
+                                    fila_base = (
+                                        fila_base[0],
+                                        fila_base[1],
+                                        fila_base[2],
+                                        fila_base[3],
+                                        self.pago_texto(
+                                            pago_row
+                                        ),
+                                        fila_base[5],
+                                        fila_base[6]
+                                    )
+
+                        # ==================================================
+                        # AGREGAR FILA
+                        #
+                        # Guardamos también la tabla origen.
+                        # ==================================================
+
+                        filas.append(
+                            (
+                                fila_base,
+                                tabla
+                            )
+                        )
+
+            # ==================================================
             # ARQUEOS
-            # ===============================
+            # ==================================================
 
-            if tipo in (
+            if tipo_filtro in (
                 "Todos",
                 "Arqueo"
             ):
 
+                if self._tabla_existe(
+                    q,
+                    "arqueos"
+                ):
 
-                sql="""
-
-                SELECT
-
-                'Arqueo',
-                id,
-                fecha,
-
-                (
-                'Efectivo: $ ' ||
-                printf('%.2f',COALESCE(ventas_efectivo,0))
-
-                ),
-
-                'Todos los medios',
-
-                COALESCE(ventas_total,0),
-
-                'GUARDADO'
-
-
-                FROM arqueos
-
-                WHERE 1=1
-
-                """
-
-
-                datos=[]
-
-
-
-                if termino:
-
-                    sql += """
-                    AND (
-                    CAST(id AS TEXT) LIKE ?
-                    OR fecha LIKE ?
-                    )
+                    sql = """
+                    SELECT
+                        'Arqueo',
+                        id,
+                        fecha,
+                        (
+                            'Efectivo: $ ' ||
+                            printf(
+                                '%.2f',
+                                COALESCE(
+                                    ventas_efectivo,
+                                    0
+                                )
+                            )
+                        ),
+                        'Todos los medios',
+                        COALESCE(
+                            ventas_total,
+                            0
+                        ),
+                        'GUARDADO'
+                    FROM arqueos
+                    WHERE 1=1
                     """
 
-                    buscar="%"+termino+"%"
+                    datos = []
 
-                    datos += [
-                        buscar,
-                        buscar
-                    ]
+                    if termino:
 
+                        sql += """
+                        AND (
+                            CAST(id AS TEXT) LIKE ?
+                            OR fecha LIKE ?
+                        )
+                        """
 
+                        buscar = (
+                            "%"
+                            + termino
+                            + "%"
+                        )
 
-                filas += q.execute(
-                    sql,
-                    datos
-                ).fetchall()
+                        datos.extend(
+                            [
+                                buscar,
+                                buscar
+                            ]
+                        )
 
+                    resultados_arqueos = q.execute(
+                        sql,
+                        datos
+                    ).fetchall()
 
+                    for fila in resultados_arqueos:
 
-            c.close()
+                        filas.append(
+                            (
+                                fila,
+                                "arqueos"
+                            )
+                        )
 
+            # ==================================================
+            # ORDENAR
+            # ==================================================
 
             filas.sort(
-                key=lambda x:x[2],
+                key=lambda x: str(
+                    x[0][2] or ""
+                ),
                 reverse=True
             )
 
+            # ==================================================
+            # LIMPIAR TABLA
+            # ==================================================
 
             self.tabla.setRowCount(
                 0
             )
+
+            self._origenes_fila = []
 
             print(
                 "CREANDO TABLA CON:",
@@ -1212,42 +2108,82 @@ class Historial(QWidget):
                 "REGISTROS"
             )
 
+            total_ventas = 0
+            cantidad_ventas = 0
 
-            total=0
-            ventas=0
+            # ==================================================
+            # PINTAR TABLA
+            # ==================================================
 
+            for i, registro in enumerate(
+                filas
+            ):
 
-
-            for i,fila in enumerate(filas):
+                fila = registro[0]
+                origen = registro[1]
 
                 print(
                     "FILA TABLA:",
-                    fila
+                    fila,
+                    "ORIGEN:",
+                    origen
                 )
 
-                self.tabla.insertRow(i)
+                self.tabla.insertRow(
+                    i
+                )
 
+                tipo_fila = str(
+                    fila[0]
+                )
 
-                for j,valor in enumerate(
+                # ==================================================
+                # GUARDAR ORIGEN DE LA FILA
+                # ==================================================
+
+                self._origenes_fila.append(
+                    (
+                        origen,
+                        fila[1]
+                    )
+                )
+
+                # ==================================================
+                # CELDAS
+                # ==================================================
+
+                for j, valor in enumerate(
                     fila[:7]
                 ):
 
+                    if j == 5:
 
-                    texto = (
-                        f"$ {valor:,.2f}"
-                        if j==5
-                        else str(valor)
-                    )
+                        texto = self._dinero(
+                            valor
+                        )
 
+                    else:
+
+                        texto = str(
+                            valor
+                            if valor is not None
+                            else ""
+                        )
 
                     item = QTableWidgetItem(
                         texto
                     )
 
+                    # ==================================================
+                    # CHECKBOX
+                    # ==================================================
 
                     if (
-                        j==0
-                        and fila[0]=="Venta diaria"
+                        j == 0
+                        and
+                        self._es_venta(
+                            tipo_fila
+                        )
                     ):
 
                         item.setFlags(
@@ -1260,87 +2196,217 @@ class Historial(QWidget):
                             Qt.Unchecked
                         )
 
-
                     self.tabla.setItem(
                         i,
                         j,
                         item
                     )
 
+                # ==================================================
+                # ACCIONES
+                # ==================================================
 
-                # ==========================================
-                # ACCIONES EN LA ÚLTIMA COLUMNA (ÍNDICE 7)
-                # ==========================================
                 widget_acciones = QWidget()
-                layout_acciones = QHBoxLayout(widget_acciones)
-                layout_acciones.setContentsMargins(4, 2, 4, 2)
-                layout_acciones.setSpacing(4)
-                layout_acciones.setAlignment(Qt.AlignCenter)
 
-                if fila[0] == "Venta diaria":
-                    btn_ver = QToolButton()
-                    btn_ver.setText("👁")
-                    btn_ver.setToolTip("Ver ticket")
-                    btn_ver.clicked.connect(lambda checked, r=i: self.ver_ticket(r))
-
-                    btn_pdf = QToolButton()
-                    btn_pdf.setText("💾")
-                    btn_pdf.setToolTip("Guardar PDF")
-                    btn_pdf.clicked.connect(lambda checked, r=i: self.pdf_ticket(r))
-
-                    btn_print = QToolButton()
-                    btn_print.setText("🖨️")
-                    btn_print.setToolTip("Imprimir ticket")
-                    btn_print.clicked.connect(lambda checked, r=i: self.imprimir(r))
-                else:
-                    btn_ver = QToolButton()
-                    btn_ver.setText("👁")
-                    btn_ver.setToolTip("Ver arqueo")
-                    btn_ver.clicked.connect(lambda checked, r=i: self.ver_arqueo(r))
-
-                    btn_pdf = QToolButton()
-                    btn_pdf.setText("💾")
-                    btn_pdf.setToolTip("Guardar arqueo PDF")
-                    btn_pdf.clicked.connect(lambda checked, r=i: self.pdf_arqueo(r))
-
-                    btn_print = QToolButton()
-                    btn_print.setText("🖨️")
-                    btn_print.setToolTip("Imprimir arqueo")
-                    btn_print.clicked.connect(lambda checked, r=i: self.imprimir_arqueo(r))
-
-                layout_acciones.addWidget(btn_ver)
-                layout_acciones.addWidget(btn_pdf)
-                layout_acciones.addWidget(btn_print)
-
-                self.tabla.setCellWidget(i, 7, widget_acciones)
-
-
-                total += float(
-                    fila[5] or 0
+                layout_acciones = QHBoxLayout(
+                    widget_acciones
                 )
 
+                layout_acciones.setContentsMargins(
+                    4,
+                    2,
+                    4,
+                    2
+                )
 
-                if fila[0]=="Venta diaria":
-                    ventas += 1
+                layout_acciones.setSpacing(
+                    4
+                )
 
+                layout_acciones.setAlignment(
+                    Qt.AlignCenter
+                )
 
+                # ==================================================
+                # VENTA / PEDIDO
+                # ==================================================
+
+                if self._es_venta(
+                    tipo_fila
+                ):
+
+                    btn_ver = QToolButton()
+
+                    btn_ver.setText(
+                        "👁"
+                    )
+
+                    btn_ver.setToolTip(
+                        "Ver ticket"
+                    )
+
+                    btn_ver.clicked.connect(
+                        lambda checked=False,
+                        r=i:
+                        self.ver_ticket(r)
+                    )
+
+                    btn_pdf = QToolButton()
+
+                    btn_pdf.setText(
+                        "💾"
+                    )
+
+                    btn_pdf.setToolTip(
+                        "Guardar PDF"
+                    )
+
+                    btn_pdf.clicked.connect(
+                        lambda checked=False,
+                        r=i:
+                        self.pdf_ticket(r)
+                    )
+
+                    btn_print = QToolButton()
+
+                    btn_print.setText(
+                        "🖨️"
+                    )
+
+                    btn_print.setToolTip(
+                        "Imprimir ticket"
+                    )
+
+                    btn_print.clicked.connect(
+                        lambda checked=False,
+                        r=i:
+                        self.imprimir(r)
+                    )
+
+                # ==================================================
+                # ARQUEO
+                # ==================================================
+
+                else:
+
+                    btn_ver = QToolButton()
+
+                    btn_ver.setText(
+                        "👁"
+                    )
+
+                    btn_ver.setToolTip(
+                        "Ver arqueo"
+                    )
+
+                    btn_ver.clicked.connect(
+                        lambda checked=False,
+                        r=i:
+                        self.ver_arqueo(r)
+                    )
+
+                    btn_pdf = QToolButton()
+
+                    btn_pdf.setText(
+                        "💾"
+                    )
+
+                    btn_pdf.setToolTip(
+                        "Guardar arqueo PDF"
+                    )
+
+                    btn_pdf.clicked.connect(
+                        lambda checked=False,
+                        r=i:
+                        self.pdf_arqueo(r)
+                    )
+
+                    btn_print = QToolButton()
+
+                    btn_print.setText(
+                        "🖨️"
+                    )
+
+                    btn_print.setToolTip(
+                        "Imprimir arqueo"
+                    )
+
+                    btn_print.clicked.connect(
+                        lambda checked=False,
+                        r=i:
+                        self.imprimir_arqueo(r)
+                    )
+
+                layout_acciones.addWidget(
+                    btn_ver
+                )
+
+                layout_acciones.addWidget(
+                    btn_pdf
+                )
+
+                layout_acciones.addWidget(
+                    btn_print
+                )
+
+                self.tabla.setCellWidget(
+                    i,
+                    7,
+                    widget_acciones
+                )
+
+                # ==================================================
+                # RESUMEN
+                #
+                # IMPORTANTE:
+                # Los arqueos NO se suman al total de ventas.
+                # ==================================================
+
+                if self._es_venta(
+                    tipo_fila
+                ):
+
+                    try:
+
+                        total_ventas += float(
+                            fila[5] or 0
+                        )
+
+                    except Exception:
+
+                        pass
+
+                    cantidad_ventas += 1
+
+            # ====================================================
+            # RESUMEN FINAL
+            # ====================================================
 
             self.cant.setText(
-                f"Ventas: {ventas}"
+                f"Ventas: {cantidad_ventas}"
             )
 
             self.total.setText(
-                f"Total ventas: $ {total:,.2f}"
+                "Total ventas: "
+                + self._dinero(
+                    total_ventas
+                )
+            )
+
+            promedio = (
+                total_ventas / cantidad_ventas
+                if cantidad_ventas
+                else 0
             )
 
             self.prom.setText(
-                f"Promedio: $ {(total/ventas if ventas else 0):,.2f}"
+                "Promedio: "
+                + self._dinero(
+                    promedio
+                )
             )
 
-
-
         except Exception as e:
-
 
             try:
 
@@ -1351,15 +2417,17 @@ class Historial(QWidget):
                 ) as archivo:
 
                     archivo.write(
-                        str(e)
+                        repr(e)
                     )
 
-
-            except:
+            except Exception:
 
                 pass
 
-
+            print(
+                "ERROR CARGANDO HISTORIAL:",
+                repr(e)
+            )
 
             QMessageBox.critical(
                 self,
@@ -1367,11 +2435,26 @@ class Historial(QWidget):
                 "No se pudo cargar historial:\n"
                 + str(e)
             )
-    # ==========================================
-    # SELECCIONAR TODAS LAS VENTAS
-    # ==========================================
 
-    def seleccionar_todas(self):
+        finally:
+
+            if c:
+
+                try:
+
+                    c.close()
+
+                except Exception:
+
+                    pass
+
+    # ========================================================
+    # SELECCIONAR TODAS
+    # ========================================================
+
+    def seleccionar_todas(
+        self
+    ):
 
         for r in range(
             self.tabla.rowCount()
@@ -1384,23 +2467,25 @@ class Historial(QWidget):
 
             if (
                 item
-                and item.text()=="Venta diaria"
+                and
+                self._es_venta(
+                    item.text()
+                )
             ):
 
                 item.setCheckState(
                     Qt.Checked
                 )
 
+    # ========================================================
+    # ELIMINAR VENTAS SELECCIONADAS
+    # ========================================================
 
+    def eliminar_seleccionadas(
+        self
+    ):
 
-    # ==========================================
-    # ELIMINAR VENTAS
-    # ==========================================
-
-    def eliminar_seleccionadas(self):
-
-        ids=[]
-
+        registros = []
 
         for r in range(
             self.tabla.rowCount()
@@ -1411,27 +2496,73 @@ class Historial(QWidget):
                 0
             )
 
-
             numero = self.tabla.item(
                 r,
                 1
             )
 
-
-            if (
+            if not (
                 tipo
-                and numero
-                and tipo.text()=="Venta diaria"
-                and tipo.checkState()==Qt.Checked
+                and
+                numero
             ):
 
-                ids.append(
-                    int(numero.text())
+                continue
+
+            if not self._es_venta(
+                tipo.text()
+            ):
+
+                continue
+
+            if (
+                tipo.checkState()
+                != Qt.Checked
+            ):
+
+                continue
+
+            try:
+
+                numero_id = int(
+                    numero.text()
                 )
 
+            except Exception:
 
+                continue
 
-        if not ids:
+            # ==================================================
+            # OBTENER TABLA REAL DE ORIGEN
+            # ==================================================
+
+            if (
+                r >= len(
+                    self._origenes_fila
+                )
+            ):
+
+                continue
+
+            origen, id_origen = (
+                self._origenes_fila[r]
+            )
+
+            if origen not in (
+                "ventas",
+                "ventas_archivo"
+            ):
+
+                continue
+
+            registros.append(
+                (
+                    origen,
+                    numero_id
+                )
+            )
+
+        if not registros:
 
             QMessageBox.information(
                 self,
@@ -1441,115 +2572,191 @@ class Historial(QWidget):
 
             return
 
-
-
         confirmar = QMessageBox.question(
             self,
             "Eliminar ventas",
-            f"Se eliminarán {len(ids)} ventas.\n¿Continuar?",
+            (
+                f"Se eliminarán {len(registros)} ventas.\n\n"
+                "Esta acción eliminará también sus detalles.\n\n"
+                "¿Continuar?"
+            ),
             QMessageBox.Yes |
             QMessageBox.No
         )
-
 
         if confirmar != QMessageBox.Yes:
 
             return
 
-
+        con = None
 
         try:
 
-            c = sqlite3.connect(
+            con = sqlite3.connect(
                 BASE_DATOS
             )
 
+            # ==================================================
+            # AGRUPAR POR TABLA
+            # ==================================================
 
-            marcas = ",".join(
-                "?" for _ in ids
-            )
+            por_tabla = {}
 
+            for tabla, numero_id in registros:
 
-            tablas = [
-                "detalle_ventas",
-                "detalle_ventas_archivo",
-                "ventas",
-                "ventas_archivo"
-            ]
+                por_tabla.setdefault(
+                    tabla,
+                    []
+                ).append(
+                    numero_id
+                )
 
+            # ==================================================
+            # ELIMINAR CADA VENTA
+            # DE SU TABLA CORRESPONDIENTE
+            # ==================================================
 
-            for tabla in tablas:
+            for tabla_ventas, ids in por_tabla.items():
 
-                existe = c.execute(
-                    """
-                    SELECT name
-                    FROM sqlite_master
-                    WHERE type='table'
-                    AND name=?
+                if not self._tabla_existe(
+                    con,
+                    tabla_ventas
+                ):
+
+                    continue
+
+                # ==================================================
+                # TABLA DE DETALLES CORRESPONDIENTE
+                # ==================================================
+
+                if tabla_ventas == "ventas":
+
+                    tabla_detalle = "detalle_ventas"
+
+                else:
+
+                    tabla_detalle = "detalle_ventas_archivo"
+
+                marcas = ",".join(
+                    "?"
+                    for _ in ids
+                )
+
+                # ==================================================
+                # BORRAR DETALLES
+                # ==================================================
+
+                if self._tabla_existe(
+                    con,
+                    tabla_detalle
+                ):
+
+                    con.execute(
+                        f"""
+                        DELETE FROM {tabla_detalle}
+                        WHERE venta_id IN ({marcas})
+                        """,
+                        ids
+                    )
+
+                # ==================================================
+                # BORRAR VENTAS
+                # ==================================================
+
+                con.execute(
+                    f"""
+                    DELETE FROM {tabla_ventas}
+                    WHERE id IN ({marcas})
                     """,
-                    (tabla,)
-                ).fetchone()
+                    ids
+                )
 
+            con.commit()
 
-                if existe:
-
-                    if "detalle" in tabla:
-
-                        c.execute(
-                            f"""
-                            DELETE FROM {tabla}
-                            WHERE venta_id IN ({marcas})
-                            """,
-                            ids
-                        )
-
-                    else:
-
-                        c.execute(
-                            f"""
-                            DELETE FROM {tabla}
-                            WHERE id IN ({marcas})
-                            """,
-                            ids
-                        )
-
-
-            c.commit()
-
-            c.close()
-
+            QMessageBox.information(
+                self,
+                "Historial",
+                (
+                    f"Se eliminaron correctamente "
+                    f"{len(registros)} ventas."
+                )
+            )
 
             self.cargar_historial()
 
-
-
         except Exception as e:
+
+            if con:
+
+                try:
+
+                    con.rollback()
+
+                except Exception:
+
+                    pass
 
             QMessageBox.critical(
                 self,
                 "Error",
-                str(e)
+                "No se pudieron eliminar las ventas:\n"
+                + str(e)
             )
 
+        finally:
 
+            if con:
 
-    # ==========================================
+                try:
+
+                    con.close()
+
+                except Exception:
+
+                    pass
+
+    # ========================================================
     # VER TICKET
-    # ==========================================
+    # ========================================================
 
-    def ver_ticket(self,r):
+    def ver_ticket(
+        self,
+        r
+    ):
 
-        if self.tabla.item(r,0).text()!="Venta diaria":
+        item_tipo = self.tabla.item(
+            r,
+            0
+        )
+
+        item_numero = self.tabla.item(
+            r,
+            1
+        )
+
+        if not item_tipo or not item_numero:
 
             return
 
+        if not self._es_venta(
+            item_tipo.text()
+        ):
 
-        numero=int(
-            self.tabla.item(r,1).text()
+            return
+
+        try:
+
+            numero = int(
+                item_numero.text()
+            )
+
+        except Exception:
+
+            return
+
+        d = QDialog(
+            self
         )
-
-
-        d=QDialog(self)
 
         d.setWindowTitle(
             "Ticket"
@@ -1560,24 +2767,34 @@ class Historial(QWidget):
             650
         )
 
-
-        layout=QVBoxLayout(d)
-
-
-        visor=QTextBrowser()
-
-
-        visor.setHtml(
-            generar_ticket(numero)
+        layout = QVBoxLayout(
+            d
         )
 
+        visor = QTextBrowser()
+
+        try:
+
+            html = generar_ticket(
+                numero
+            )
+
+        except Exception as e:
+
+            html = (
+                "<h2>Error generando ticket</h2>"
+                f"<p>{e}</p>"
+            )
+
+        visor.setHtml(
+            html
+        )
 
         layout.addWidget(
             visor
         )
 
-
-        boton=QPushButton(
+        boton = QPushButton(
             "Cerrar"
         )
 
@@ -1589,57 +2806,129 @@ class Historial(QWidget):
             boton
         )
 
-
         d.exec()
 
-
-
-    # ==========================================
+    # ========================================================
     # GUARDAR PDF TICKET
-    # ==========================================
+    # ========================================================
 
-    def pdf_ticket(self,r):
+    def pdf_ticket(
+        self,
+        r
+    ):
 
-        numero=int(
-            self.tabla.item(r,1).text()
+        item_tipo = self.tabla.item(
+            r,
+            0
         )
 
+        item_numero = self.tabla.item(
+            r,
+            1
+        )
 
-        ruta,_=QFileDialog.getSaveFileName(
+        if not item_tipo or not item_numero:
+
+            return
+
+        if not self._es_venta(
+            item_tipo.text()
+        ):
+
+            return
+
+        try:
+
+            numero = int(
+                item_numero.text()
+            )
+
+        except Exception:
+
+            return
+
+        ruta, _ = QFileDialog.getSaveFileName(
             self,
             "Guardar ticket PDF",
             f"ticket_{numero:06d}.pdf",
             "PDF (*.pdf)"
         )
 
+        if not ruta:
 
-        if ruta:
+            return
+
+        try:
 
             guardar_pdf(
-                generar_ticket(numero),
+                generar_ticket(
+                    numero
+                ),
                 ruta
             )
 
+            QMessageBox.information(
+                self,
+                "PDF",
+                "El ticket fue guardado correctamente."
+            )
 
+        except Exception as e:
 
-    # ==========================================
+            QMessageBox.critical(
+                self,
+                "PDF",
+                "No se pudo guardar el PDF:\n"
+                + str(e)
+            )
+
+    # ========================================================
     # IMPRIMIR TICKET
-    # ==========================================
+    # ========================================================
 
-    def imprimir(self,r):
+    def imprimir(
+        self,
+        r
+    ):
 
-        numero=int(
-            self.tabla.item(r,1).text()
+        item_tipo = self.tabla.item(
+            r,
+            0
         )
 
+        item_numero = self.tabla.item(
+            r,
+            1
+        )
+
+        if not item_tipo or not item_numero:
+
+            return
+
+        if not self._es_venta(
+            item_tipo.text()
+        ):
+
+            return
+
+        try:
+
+            numero = int(
+                item_numero.text()
+            )
+
+        except Exception:
+
+            return
 
         try:
 
             imprimir_ticket(
-                generar_ticket(numero),
+                generar_ticket(
+                    numero
+                ),
                 self
             )
-
 
         except Exception as e:
 
@@ -1649,60 +2938,72 @@ class Historial(QWidget):
                 str(e)
             )
 
-
-
-    # ==========================================
+    # ========================================================
     # ARQUEO HTML
-    # ==========================================
+    # ========================================================
 
-    def arqueo_html(self,r):
+    def arqueo_html(
+        self,
+        r
+    ):
 
-        numero=int(
-            self.tabla.item(r,1).text()
+        item_numero = self.tabla.item(
+            r,
+            1
         )
 
+        if not item_numero:
 
-        con=sqlite3.connect(
-            BASE_DATOS
-        )
-
+            return (
+                "<h2>Arqueo no encontrado</h2>"
+            )
 
         try:
 
-            row=con.execute(
+            numero = int(
+                item_numero.text()
+            )
+
+        except Exception:
+
+            return (
+                "<h2>Arqueo no encontrado</h2>"
+            )
+
+        con = sqlite3.connect(
+            BASE_DATOS
+        )
+
+        try:
+
+            row = con.execute(
                 """
                 SELECT
-                fecha,
-                apertura,
-                esperado,
-                real,
-                diferencia,
-                usuario,
-                observaciones,
-                ventas_total
-
+                    fecha,
+                    apertura,
+                    esperado,
+                    real,
+                    diferencia,
+                    usuario,
+                    observaciones,
+                    ventas_total
                 FROM arqueos
-
                 WHERE id=?
                 """,
                 (numero,)
             ).fetchone()
 
-
         finally:
 
             con.close()
 
-
-
         if not row:
 
-            return "<h2>Arqueo no encontrado</h2>"
-
-
+            return (
+                "<h2>Arqueo no encontrado</h2>"
+            )
 
         return f"""
-
         <html>
 
         <body style="font-family:Arial">
@@ -1752,14 +3053,20 @@ class Historial(QWidget):
         </body>
 
         </html>
-
         """
 
+    # ========================================================
+    # VER ARQUEO
+    # ========================================================
 
+    def ver_arqueo(
+        self,
+        r
+    ):
 
-    def ver_arqueo(self,r):
-
-        d=QDialog(self)
+        d = QDialog(
+            self
+        )
 
         d.setWindowTitle(
             "Arqueo"
@@ -1770,69 +3077,97 @@ class Historial(QWidget):
             520
         )
 
-
-        l=QVBoxLayout(d)
-
-
-        texto=QTextBrowser()
-
-        texto.setHtml(
-            self.arqueo_html(r)
+        l = QVBoxLayout(
+            d
         )
 
+        texto = QTextBrowser()
+
+        texto.setHtml(
+            self.arqueo_html(
+                r
+            )
+        )
 
         l.addWidget(
             texto
         )
 
-
-        boton=QPushButton(
+        boton = QPushButton(
             "Cerrar"
         )
-
 
         boton.clicked.connect(
             d.accept
         )
 
-
         l.addWidget(
             boton
         )
 
-
         d.exec()
 
+    # ========================================================
+    # PDF ARQUEO
+    # ========================================================
 
+    def pdf_arqueo(
+        self,
+        r
+    ):
 
-    def pdf_arqueo(self,r):
-
-        ruta,_=QFileDialog.getSaveFileName(
+        ruta, _ = QFileDialog.getSaveFileName(
             self,
             "Guardar arqueo PDF",
             "arqueo.pdf",
             "PDF (*.pdf)"
         )
 
+        if not ruta:
 
-        if ruta:
+            return
+
+        try:
 
             guardar_pdf(
-                self.arqueo_html(r),
+                self.arqueo_html(
+                    r
+                ),
                 ruta
             )
 
+            QMessageBox.information(
+                self,
+                "PDF",
+                "El arqueo fue guardado correctamente."
+            )
 
+        except Exception as e:
 
-    def imprimir_arqueo(self,r):
+            QMessageBox.critical(
+                self,
+                "PDF",
+                "No se pudo guardar el arqueo:\n"
+                + str(e)
+            )
+
+    # ========================================================
+    # IMPRIMIR ARQUEO
+    # ========================================================
+
+    def imprimir_arqueo(
+        self,
+        r
+    ):
 
         try:
 
             imprimir_ticket(
-                self.arqueo_html(r),
+                self.arqueo_html(
+                    r
+                ),
                 self
             )
-
 
         except Exception as e:
 

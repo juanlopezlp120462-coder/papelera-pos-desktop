@@ -138,11 +138,31 @@ def init_db():
                 )
             )
 
+    # =========================================================
+    # MIGRACIÓN VENTAS
+    # =========================================================
+
     campos = {
-        "pago_efectivo":"REAL DEFAULT 0",
-        "pago_transferencia":"REAL DEFAULT 0",
-        "pago_tarjeta":"REAL DEFAULT 0",
-        "pago_cuenta":"REAL DEFAULT 0"
+        "pago_efectivo": "REAL DEFAULT 0",
+        "pago_transferencia": "REAL DEFAULT 0",
+        "pago_tarjeta": "REAL DEFAULT 0",
+        "pago_cuenta": "REAL DEFAULT 0",
+
+        # -----------------------------------------------------
+        # Identificación del origen de la venta
+        #
+        # VENTA  = venta normal
+        # PEDIDO = venta generada al entregar un pedido
+        # -----------------------------------------------------
+
+        "origen": "TEXT DEFAULT 'VENTA'",
+
+        # -----------------------------------------------------
+        # Pedido relacionado con la venta.
+        # Queda NULL para ventas normales.
+        # -----------------------------------------------------
+
+        "pedido_id": "INTEGER"
     }
 
     columnas = [
@@ -152,7 +172,7 @@ def init_db():
         ).fetchall()
     ]
 
-    for nombre,tipo in campos.items():
+    for nombre, tipo in campos.items():
 
         if nombre not in columnas:
 

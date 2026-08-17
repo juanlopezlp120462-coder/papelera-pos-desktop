@@ -412,6 +412,7 @@ class Pedidos(QWidget):
     def preparar_base_datos(self):
 
         conexion = sqlite3.connect(BASE_DATOS)
+        
         cursor = conexion.cursor()
 
         # Nuevos campos para pedidos.
@@ -2443,8 +2444,8 @@ class Pedidos(QWidget):
 
             for detalle in detalles:
 
-                codigo = detalle[0]
-                nombre_pedido = detalle[1]
+                codigo = str(detalle[0] or "").strip()
+                nombre_pedido = str(detalle[1] or "").strip()
 
                 cantidad = int(
                     detalle[2] or 0
@@ -2458,37 +2459,50 @@ class Pedidos(QWidget):
                     )
 
                 # ------------------------------------------------
-                # BUSCAR PRIMERO POR CÓDIGO
+                # BUSCAR PRODUCTO
+                #
+                # PRIMERO POR CÓDIGO DE BARRAS.
+                # Si no existe código, se busca por nombre.
                 # ------------------------------------------------
 
-                producto_db = cursor.execute("""
-                    SELECT
-                        id,
-                        uuid,
-                        codigo_barras,
-                        nombre,
-                        categoria,
-                        precio_compra,
-                        precio_venta,
-                        stock,
-                        stock_minimo
-                    FROM productos
-                    WHERE LOWER(TRIM(nombre))
-                        = LOWER(TRIM(?))
-                    LIMIT 1
-                """, (
-                    nombre_pedido,
-                )).fetchone()
+                producto_db = None
 
-                # ------------------------------------------------
-                # SI NO EXISTE POR CÓDIGO,
-                # BUSCAR POR NOMBRE
-                # ------------------------------------------------
+                # =================================================
+                # 1. BUSCAR POR CÓDIGO
+                # =================================================
+
+                if codigo:
+
+                    producto_db = cursor.execute(
+                        """
+                        SELECT
+                            id,
+                            uuid,
+                            codigo_barras,
+                            nombre,
+                            categoria,
+                            precio_compra,
+                            precio_venta,
+                            stock,
+                            stock_minimo
+                        FROM productos
+                        WHERE TRIM(COALESCE(codigo_barras, ''))
+                            = TRIM(?)
+                        LIMIT 1
+                        """,
+                        (
+                            codigo,
+                        )
+                    ).fetchone()
+
+                # =================================================
+                # 2. SI NO SE ENCONTRÓ, BUSCAR POR NOMBRE
+                # =================================================
 
                 if not producto_db:
 
-                    
-                    producto_db = cursor.execute("""
+                    producto_db = cursor.execute(
+                        """
                         SELECT
                             id,
                             uuid,
@@ -2503,39 +2517,53 @@ class Pedidos(QWidget):
                         WHERE LOWER(TRIM(nombre))
                             = LOWER(TRIM(?))
                         LIMIT 1
-                    """, (
-                        nombre_pedido,
-                    )).fetchone()
+                        """,
+                        (
+                            nombre_pedido,
+                        )
+                    ).fetchone()
+
+                # =================================================
+                # PRODUCTO NO ENCONTRADO
+                # =================================================
 
                 if not producto_db:
 
                     raise Exception(
                         f"No se encontró el producto:\n\n"
                         f"{nombre_pedido}\n\n"
-                        f"Código: {codigo}"
+                        f"Código: {codigo or 'Sin código'}"
                     )
+
+                # =================================================
+                # DATOS DEL PRODUCTO
+                # =================================================
 
                 producto_id = producto_db[0]
                 producto_uuid = producto_db[1]
                 codigo_db = producto_db[2]
                 nombre_db = producto_db[3]
                 categoria_db = producto_db[4]
+
                 precio_compra_db = float(
                     producto_db[5] or 0
                 )
+
                 precio_venta_db = float(
                     producto_db[6] or 0
                 )
+
                 stock_actual = int(
                     producto_db[7] or 0
                 )
+
                 stock_minimo_db = int(
                     producto_db[8] or 0
                 )
 
-                # ------------------------------------------------
+                # =================================================
                 # VERIFICAR STOCK
-                # ------------------------------------------------
+                # =================================================
 
                 if stock_actual < cantidad:
 
@@ -2545,6 +2573,13 @@ class Pedidos(QWidget):
                         f"Stock disponible: {stock_actual}\n"
                         f"Cantidad necesaria: {cantidad}"
                     )
+
+                # =================================================
+                # GUARDAR CAMBIO A REALIZAR
+                #
+                # TODAVÍA NO MODIFICAMOS LA BASE.
+                # Primero verificamos TODOS los productos.
+                # =================================================
 
                 productos_stock.append({
                     "id": producto_id,
@@ -2686,11 +2721,24 @@ class Pedidos(QWidget):
             # IMPORTANTE:
             # La venta solamente se crea cuando el pedido
             # fue efectivamente entregado.
+            #
+            # Esta venta queda identificada como PEDIDO
+            # para que Historial pueda mostrarla como:
+            #
+            #     Pedido
+            #
+            # en lugar de:
+            #
+            #     Venta diaria
             # ====================================================
 
             venta_uuid = str(uuid.uuid4())
 
-            # Obtener nuevamente los datos del pedido
+
+            # ====================================================
+            # OBTENER DATOS DEL PEDIDO
+            # ====================================================
+
             pedido_db = cursor.execute(
                 """
                 SELECT
@@ -2702,6 +2750,7 @@ class Pedidos(QWidget):
                 (pedido_id,)
             ).fetchone()
 
+
             if not pedido_db:
 
                 raise Exception(
@@ -2709,14 +2758,38 @@ class Pedidos(QWidget):
                     "del pedido para crear la venta."
                 )
 
+
             cliente_id_pedido = pedido_db[0]
+
             total_pedido = float(
                 pedido_db[1] or 0
             )
 
+
             # ====================================================
-            # CREAR VENTA
+            # CREAR CABECERA DE VENTA
             # ====================================================
+
+            # Asegurar que exista la columna tipo.
+            # El historial utiliza esta columna para distinguir
+            # una Venta diaria de un Pedido.
+
+            columnas_ventas = [
+                fila[1]
+                for fila in cursor.execute(
+                    "PRAGMA table_info(ventas)"
+                ).fetchall()
+            ]
+
+            if "tipo" not in columnas_ventas:
+
+                cursor.execute(
+                    """
+                    ALTER TABLE ventas
+                    ADD COLUMN tipo TEXT
+                    """
+                )
+
 
             cursor.execute(
                 """
@@ -2732,27 +2805,55 @@ class Pedidos(QWidget):
                     pago_efectivo,
                     pago_transferencia,
                     pago_tarjeta,
-                    pago_cuenta
+                    pago_cuenta,
+                    origen,
+                    pedido_id,
+                    tipo
                 )
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                VALUES(
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?
+                )
                 """,
                 (
                     venta_uuid,
+
                     fecha_pago,
+
                     total_pedido,
+
                     pago["forma"],
+
                     cliente_id_pedido,
+
                     "ACTIVA",
+
                     0,
+
                     "Administrador",
+
                     pago["efectivo"],
+
                     pago["transferencia"],
+
                     0,
-                    0
+
+                    0,
+
+                    "PEDIDO",
+
+                    pedido_id,
+
+                    # ================================================
+                    # ESTA ES LA CLAVE
+                    # ================================================
+                    "PEDIDO"
                 )
             )
 
             venta_id = cursor.lastrowid
+
 
             if not venta_id:
 
@@ -2761,8 +2862,9 @@ class Pedidos(QWidget):
                     "correspondiente al pedido."
                 )
 
+
             # ====================================================
-            # COPIAR LOS PRODUCTOS DEL PEDIDO A LA VENTA
+            # COPIAR PRODUCTOS DEL PEDIDO A LA VENTA
             # ====================================================
 
             detalles_pedido = cursor.execute(
@@ -2780,12 +2882,14 @@ class Pedidos(QWidget):
                 (pedido_id,)
             ).fetchall()
 
+
             if not detalles_pedido:
 
                 raise Exception(
                     "El pedido no tiene productos para "
                     "crear el detalle de la venta."
                 )
+
 
             for detalle in detalles_pedido:
 
@@ -2799,83 +2903,93 @@ class Pedidos(QWidget):
                         subtotal,
                         codigo
                     )
-                    VALUES(?,?,?,?,?,?)
+                    VALUES(
+                        ?, ?, ?, ?, ?, ?
+                    )
                     """,
                     (
                         venta_id,
+
                         detalle[0],
+
                         detalle[1],
+
                         detalle[2],
+
                         detalle[3],
+
                         detalle[4]
                     )
                 )
 
+
             # ====================================================
-            # REGISTRAR VENTA PARA SINCRONIZACION
+            # REGISTRAR VENTA PARA SINCRONIZACIÓN
             # ====================================================
-
-            # Preparar los productos de la venta
-            items_sync = []
-
-            for detalle in detalles_pedido:
-
-                items_sync.append({
-                    "producto": detalle[0],
-                    "cantidad": detalle[1],
-                    "precio": detalle[2],
-                    "subtotal": detalle[3],
-                    "codigo": detalle[4]
-                })
-
 
             datos_venta_sync = {
-                "items": items_sync,
+
                 "uuid": venta_uuid,
+
                 "fecha": fecha_pago,
+
                 "total": total_pedido,
+
                 "forma_pago": pago["forma"],
+
                 "cliente_id": cliente_id_pedido,
+
+                "estado": "ACTIVA",
+
                 "descuento": 0,
+
                 "usuario": "Administrador",
+
                 "pago_efectivo": pago["efectivo"],
+
                 "pago_transferencia": pago["transferencia"],
+
                 "pago_tarjeta": 0,
-                "pago_cuenta": 0
+
+                "pago_cuenta": 0,
+
+                "origen": "PEDIDO",
+
+                "pedido_id": pedido_id,
+
+                # ================================================
+                # CLAVE PARA EL HISTORIAL
+                # ================================================
+                "tipo": "PEDIDO"
             }
+
 
             cursor.execute(
                 """
                 INSERT INTO sincronizacion(
                     tabla,
-                    registro,
                     registro_uuid,
                     accion,
                     datos,
                     fecha,
                     sincronizado
                 )
-                VALUES(?,?,?,?,?,?,?)
+                VALUES(
+                    ?, ?, ?, ?, datetime('now'), 0
+                )
                 """,
                 (
                     "ventas",
-                    venta_id,
+
                     venta_uuid,
-                    "INSERT",
+
+                    "CREATE",
+
                     json.dumps(
                         datos_venta_sync,
                         ensure_ascii=False
-                    ),
-                    fecha_pago,
-                    0
+                    )
                 )
-            )
-
-            print(
-                "DEBUG SYNC VENTA PEDIDO:",
-                venta_id,
-                venta_uuid,
-                "INSERT"
             )
             # ====================================================
             # CONFIRMAR TODO JUNTO
