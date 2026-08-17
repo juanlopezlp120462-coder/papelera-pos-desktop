@@ -25,15 +25,32 @@ class Producto(BaseModel):
 
 class Venta(BaseModel):
     uuid: str | None = None
-    items: list
+
+    # Puede venir desde una venta normal
+    # o desde un pedido entregado.
+    items: list = []
+
+    fecha: str | None = None
+    total: float = 0
+
     forma_pago: str = "efectivo"
     cliente_id: int = 0
     descuento: float = 0
     usuario: str = "Administrador"
+
     pago_efectivo: float = 0
     pago_transferencia: float = 0
     pago_tarjeta: float = 0
     pago_cuenta: float = 0
+
+    # ==========================================
+    # IDENTIFICACIÓN DEL ORIGEN
+    # ==========================================
+
+    origen: str = "VENTA"
+
+    # Si proviene de un pedido
+    pedido_id: int | None = None
 
 
 @app.get("/")
@@ -228,83 +245,212 @@ def obtener_ventas():
 # =========================
 # ENDPOINT DE SYNC DE VENTAS
 # =========================
+
 @app.post("/ventas/sync")
 def sincronizar_venta_servidor(venta: Venta):
+
     conn = create_connection()
     cursor = conn.cursor()
 
-    if venta.uuid:
-        cursor.execute("SELECT id FROM ventas WHERE uuid=?", (venta.uuid,))
-        existente = cursor.fetchone()
-        if existente:
-            conn.close()
-            return {"mensaje": "La venta ya existe en el servidor", "duplicada": True}
+    try:
 
-    total = sum(item["cantidad"] * item["precio"] for item in venta.items)
+        # ==========================================
+        # EVITAR DUPLICADOS
+        # ==========================================
 
-    cursor.execute("""
-        INSERT INTO ventas
-        (
-            uuid,
-            fecha,
-            total,
-            forma_pago,
-            cliente_id,
-            descuento,
-            usuario,
-            pago_efectivo,
-            pago_transferencia,
-            pago_tarjeta,
-            pago_cuenta
-        )
-        VALUES
-        (
-            ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?
-        )
-    """,
-    (
-        venta.uuid,
-        total,
-        venta.forma_pago,
-        venta.cliente_id,
-        venta.descuento,
-        venta.usuario,
-        venta.pago_efectivo,
-        venta.pago_transferencia,
-        venta.pago_tarjeta,
-        venta.pago_cuenta
-    ))
+        if venta.uuid:
 
-    venta_id = cursor.lastrowid
+            cursor.execute(
+                """
+                SELECT id
+                FROM ventas
+                WHERE uuid=?
+                """,
+                (
+                    venta.uuid,
+                )
+            )
 
-    for item in venta.items:
-        cursor.execute("""
-            INSERT INTO detalle_ventas
+            existente = cursor.fetchone()
+
+            if existente:
+
+                conn.close()
+
+                return {
+                    "mensaje": "La venta ya existe en el servidor",
+                    "duplicada": True
+                }
+
+        # ==========================================
+        # DETERMINAR TOTAL
+        # ==========================================
+
+        if venta.total:
+
+            total = float(
+                venta.total
+            )
+
+        else:
+
+            total = sum(
+                float(item.get("cantidad", 0))
+                * float(item.get("precio", 0))
+                for item in venta.items
+            )
+
+        # ==========================================
+        # FECHA
+        # ==========================================
+
+        fecha = venta.fecha
+
+        if not fecha:
+
+            fecha = cursor.execute(
+                "SELECT datetime('now')"
+            ).fetchone()[0]
+
+        # ==========================================
+        # INSERTAR CABECERA DE VENTA
+        # ==========================================
+
+        cursor.execute(
+            """
+            INSERT INTO ventas
             (
-                venta_id,
-                producto,
-                cantidad,
-                precio,
-                subtotal,
-                codigo
+                uuid,
+                fecha,
+                total,
+                forma_pago,
+                cliente_id,
+                estado,
+                descuento,
+                usuario,
+                pago_efectivo,
+                pago_transferencia,
+                pago_tarjeta,
+                pago_cuenta,
+                origen,
+                pedido_id
             )
             VALUES
-            (?,?,?,?,?,?)
-        """,
-        (
-            venta_id,
-            item["producto"],
-            item["cantidad"],
-            item["precio"],
-            item["cantidad"] * item["precio"],
-            item.get("codigo", "")
-        ))
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                venta.uuid,
 
-    conn.commit()
-    conn.close()
+                fecha,
 
-    return {
-        "mensaje": "Venta sincronizada correctamente en servidor",
-        "creada": True,
-        "id": venta_id
-    }
+                total,
+
+                venta.forma_pago,
+
+                venta.cliente_id,
+
+                "ACTIVA",
+
+                venta.descuento,
+
+                venta.usuario,
+
+                venta.pago_efectivo,
+
+                venta.pago_transferencia,
+
+                venta.pago_tarjeta,
+
+                venta.pago_cuenta,
+
+                # ==================================
+                # MUY IMPORTANTE
+                # ==================================
+
+                venta.origen,
+
+                venta.pedido_id
+            )
+        )
+
+        venta_id = cursor.lastrowid
+
+        # ==========================================
+        # DETALLES
+        # ==========================================
+
+        for item in venta.items:
+
+            cursor.execute(
+                """
+                INSERT INTO detalle_ventas
+                (
+                    venta_id,
+                    producto,
+                    cantidad,
+                    precio,
+                    subtotal,
+                    codigo
+                )
+                VALUES
+                (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    venta_id,
+
+                    item.get(
+                        "producto",
+                        ""
+                    ),
+
+                    item.get(
+                        "cantidad",
+                        0
+                    ),
+
+                    item.get(
+                        "precio",
+                        0
+                    ),
+
+                    (
+                        float(item.get("cantidad", 0))
+                        * float(item.get("precio", 0))
+                    ),
+
+                    item.get(
+                        "codigo",
+                        ""
+                    )
+                )
+            )
+
+        # ==========================================
+        # CONFIRMAR
+        # ==========================================
+
+        conn.commit()
+
+        return {
+            "mensaje": "Venta sincronizada correctamente en servidor",
+            "creada": True,
+            "id": venta_id,
+            "origen": venta.origen,
+            "pedido_id": venta.pedido_id
+        }
+
+    except Exception as error:
+
+        conn.rollback()
+
+        return {
+            "error": str(error),
+            "creada": False
+        }
+
+    finally:
+
+        conn.close()

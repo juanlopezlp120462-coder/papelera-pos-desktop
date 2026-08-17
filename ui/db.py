@@ -148,21 +148,13 @@ def init_db():
         "pago_tarjeta": "REAL DEFAULT 0",
         "pago_cuenta": "REAL DEFAULT 0",
 
-        # -----------------------------------------------------
-        # Identificación del origen de la venta
-        #
-        # VENTA  = venta normal
-        # PEDIDO = venta generada al entregar un pedido
-        # -----------------------------------------------------
-
         "origen": "TEXT DEFAULT 'VENTA'",
 
-        # -----------------------------------------------------
-        # Pedido relacionado con la venta.
-        # Queda NULL para ventas normales.
-        # -----------------------------------------------------
+        "pedido_id": "INTEGER",
 
-        "pedido_id": "INTEGER"
+        # IMPORTANTE:
+        # distingue Venta diaria de Pedido
+        "tipo": "TEXT DEFAULT 'VENTA'"
     }
 
     columnas = [
