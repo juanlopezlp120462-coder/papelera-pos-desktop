@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from PySide6.QtCore import Qt
+import math
 
 from ui.db import BASE_DATOS, init_db, get_setting
 from ui.ticket import (
@@ -62,6 +63,13 @@ class Historial(QWidget):
     def __init__(self):
 
         super().__init__()
+        # ====================================================
+        # PAGINACIÓN DEL HISTORIAL
+        # ====================================================
+
+        self.registros_por_pagina = 50
+        self.pagina_actual = 1
+        self.total_paginas = 1
 
         init_db()
 
@@ -86,6 +94,8 @@ class Historial(QWidget):
         # ====================================================
 
         self._origenes_fila = []
+        self.pagina_actual = 1
+        self.registros_por_pagina = 50      
 
         self.setStyleSheet("""
         QWidget {
@@ -176,6 +186,58 @@ class Historial(QWidget):
         layout.addWidget(
             titulo
         )
+                # ====================================================
+        # PAGINACIÓN
+        # ====================================================
+
+        paginacion = QHBoxLayout()
+
+        paginacion.addStretch()
+
+        self.boton_anterior = QPushButton(
+            "◀ Anterior"
+        )
+
+        self.boton_anterior.clicked.connect(
+            self.pagina_anterior
+        )
+
+        paginacion.addWidget(
+            self.boton_anterior
+        )
+
+        self.info_pagina = QLabel(
+            "Página 1 de 1"
+        )
+
+        self.info_pagina.setStyleSheet(
+            """
+            font-weight:bold;
+            padding:8px 14px;
+            """
+        )
+
+        paginacion.addWidget(
+            self.info_pagina
+        )
+
+        self.boton_siguiente = QPushButton(
+            "Siguiente ▶"
+        )
+
+        self.boton_siguiente.clicked.connect(
+            self.pagina_siguiente
+        )
+
+        paginacion.addWidget(
+            self.boton_siguiente
+        )
+
+        paginacion.addStretch()
+
+        layout.addLayout(
+            paginacion
+        )
 
         # ====================================================
         # BARRA DE FILTROS
@@ -190,9 +252,8 @@ class Historial(QWidget):
         )
 
         self.buscar.textChanged.connect(
-            self.cargar_historial
+            self.filtro_cambiado
         )
-
         barra.addWidget(
             self.buscar,
             4
@@ -210,7 +271,7 @@ class Historial(QWidget):
         )
 
         self.tipo.currentTextChanged.connect(
-            self.cargar_historial
+            self.filtro_cambiado
         )
 
         barra.addWidget(
@@ -230,12 +291,40 @@ class Historial(QWidget):
         )
 
         self.pago.currentTextChanged.connect(
-            self.cargar_historial
+            self.filtro_cambiado
         )
-
         barra.addWidget(
             self.pago
         )
+
+        # ====================================================
+        # ORDENAR HISTORIAL
+        # ====================================================
+
+        self.ordenar = QComboBox()
+
+        self.ordenar.addItems(
+            [
+                "Más recientes",
+                "Más antiguos",
+                "Número menor → mayor",
+                "Número mayor → menor",
+                "Total menor → mayor",
+                "Total mayor → menor"
+            ]
+        )
+
+        self.ordenar.setCurrentText(
+            "Número mayor → menor"
+        )
+
+        self.ordenar.currentTextChanged.connect(
+            self.filtro_cambiado
+        )
+        barra.addWidget(
+            self.ordenar
+        )
+        
 
         # ====================================================
         # ACTUALIZAR / SINCRONIZAR
@@ -432,12 +521,72 @@ class Historial(QWidget):
         layout.addWidget(
             self.tabla
         )
+        # ========================================================
+        # PAGINACION
+        # ========================================================
 
-        # ====================================================
-        # CARGA INICIAL
-        # ====================================================
+        self.pagina_actual = 1
+        self.por_pagina = 15
+        self.total_paginas = 1
 
-        self.cargar_historial()
+        paginacion = QHBoxLayout()
+
+        self.btn_anterior = QPushButton(
+            "◀ Anterior"
+        )
+
+        self.btn_anterior.setProperty(
+            "class",
+            "secondary"
+        )
+
+        self.btn_anterior.clicked.connect(
+            self.pagina_anterior
+        )
+
+        paginacion.addWidget(
+            self.btn_anterior
+        )
+
+        self.lbl_pagina = QLabel(
+            "Página 1 de 1"
+        )
+
+        self.lbl_pagina.setAlignment(
+            Qt.AlignCenter
+        )
+
+        paginacion.addWidget(
+            self.lbl_pagina
+        )
+
+        self.btn_siguiente = QPushButton(
+            "Siguiente ▶"
+        )
+
+        self.btn_siguiente.setProperty(
+            "class",
+            "secondary"
+        )
+
+        self.btn_siguiente.clicked.connect(
+            self.pagina_siguiente
+        )
+
+        paginacion.addWidget(
+            self.btn_siguiente
+        )
+
+        layout.addLayout(
+            paginacion
+        )
+
+    # ====================================================
+    # CARGA INICIAL
+    # ====================================================
+
+    # La primera carga se realiza al mostrarse la ventana.
+    # No cargar aquí para evitar una doble carga.
 
     # ========================================================
     # ACTUALIZAR TODO
@@ -526,10 +675,7 @@ class Historial(QWidget):
             )
 
         elif tipo == "Arqueo":
-
-            self.ver_arqueo(
-                fila
-            )
+            self.ver_arqueo(fila)
 
     # ========================================================
     # UTILIDADES
@@ -753,27 +899,37 @@ class Historial(QWidget):
             if partes
             else "—"
         )
+    # ========================================================
+    # CAMBIO DE FILTRO / BÚSQUEDA
+    # ========================================================
 
+    def filtro_cambiado(
+        self
+    ):
+
+        self.pagina_actual = 1
+
+        self.cargar_historial(
+            mantener_pagina=True
+        )
+        
     # ========================================================
     # ACTUALIZAR AL VOLVER A ABRIR
     # ========================================================
 
-    def showEvent(
-        self,
-        event
-    ):
+    def showEvent(self, event):
 
-        super().showEvent(
-            event
-        )
+        super().showEvent(event)
 
         # Solo recarga local.
         #
         # NO hacemos sincronización aquí porque showEvent
-        # puede ejecutarse muchas veces y no queremos hacer
-        # peticiones HTTP automáticamente.
-        self.cargar_historial()
+        # puede ejecutarse muchas veces.
 
+        self.pagina_actual = 1
+
+        self.cargar_historial()
+        
     # ========================================================
     # SINCRONIZAR VENTAS DESDE LA NUBE
     # ========================================================
@@ -1573,6 +1729,50 @@ class Historial(QWidget):
     # SINCRONIZAR ARQUEOS
     # ========================================================
 
+    def asegurar_columnas_arqueo(self, cur):
+        columnas = {fila[1] for fila in cur.execute("PRAGMA table_info(arqueos)").fetchall()}
+        campos = {
+            "ventas_total": "REAL DEFAULT 0",
+            "ventas_efectivo": "REAL DEFAULT 0",
+            "ventas_transferencia": "REAL DEFAULT 0",
+            "ventas_tarjeta": "REAL DEFAULT 0",
+            "ventas_cuenta": "REAL DEFAULT 0",
+            "cantidad_ventas": "INTEGER DEFAULT 0",
+        }
+        for nombre, tipo in campos.items():
+            if nombre not in columnas:
+                cur.execute(f"ALTER TABLE arqueos ADD COLUMN {nombre} {tipo}")
+
+    def asegurar_columna_movimientos_arqueo(self, cur):
+        existe = cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='movimientos_caja'"
+        ).fetchone()
+        if not existe:
+            return
+
+        columnas = {fila[1] for fila in cur.execute(
+            "PRAGMA table_info(movimientos_caja)"
+        ).fetchall()}
+
+        if "arqueo_id" not in columnas:
+            cur.execute(
+                "ALTER TABLE movimientos_caja ADD COLUMN arqueo_id INTEGER"
+            )
+
+        cur.execute(
+            """
+            UPDATE movimientos_caja
+            SET arqueo_id = (
+                SELECT MIN(a.id)
+                FROM arqueos a
+                WHERE substr(a.fecha,1,10) = substr(movimientos_caja.fecha,1,10)
+                  AND a.fecha >= movimientos_caja.fecha
+            )
+            WHERE arqueo_id IS NULL
+            """
+        )
+
+
     def sincronizar_arqueos_nube(
         self
     ):
@@ -1637,6 +1837,8 @@ class Historial(QWidget):
                 )
                 """
             )
+            self.asegurar_columnas_arqueo(cur)
+            self.asegurar_columna_movimientos_arqueo(cur)
 
             for arq in arqueos_remotos:
 
@@ -1668,11 +1870,14 @@ class Historial(QWidget):
                         observaciones,
                         ventas_total,
                         ventas_efectivo,
+                        ventas_transferencia,
+                        ventas_tarjeta,
+                        ventas_cuenta,
                         cantidad_ventas
                     )
                     VALUES(
                         ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?, ?, ?
                     )
                     """,
                     (
@@ -1686,6 +1891,9 @@ class Historial(QWidget):
                         arq.get("observaciones"),
                         arq.get("ventas_total"),
                         arq.get("ventas_efectivo"),
+                        arq.get("ventas_transferencia", 0),
+                        arq.get("ventas_tarjeta", 0),
+                        arq.get("ventas_cuenta", 0),
                         arq.get("cantidad_ventas")
                     )
                 )
@@ -1724,15 +1932,68 @@ class Historial(QWidget):
                 except Exception:
 
                     pass
+    # ========================================================
+    # PAGINACIÓN
+    # ========================================================
 
+    def actualizar_controles_paginacion(
+        self
+    ):
+
+        self.info_pagina.setText(
+            f"Página {self.pagina_actual} de {self.total_paginas}"
+        )
+
+        self.boton_anterior.setEnabled(
+            self.pagina_actual > 1
+        )
+
+        self.boton_siguiente.setEnabled(
+            self.pagina_actual < self.total_paginas
+        )
+
+
+    def pagina_anterior(
+        self
+    ):
+
+        if self.pagina_actual <= 1:
+
+            return
+
+        self.pagina_actual -= 1
+
+        self.cargar_historial(
+            mantener_pagina=True
+        )
+
+
+
+    def pagina_siguiente(
+        self
+    ):
+
+        if self.pagina_actual >= self.total_paginas:
+
+            return
+
+        self.pagina_actual += 1
+
+        self.cargar_historial(
+            mantener_pagina=True
+        )
+
+
+    def reiniciar_paginacion(
+        self
+    ):
+
+        self.pagina_actual = 1
     # ========================================================
     # CARGAR HISTORIAL
     # ========================================================
 
-    def cargar_historial(
-        self
-    ):
-
+    def cargar_historial(self, mantener_pagina=False):
         c = None
 
         try:
@@ -1744,15 +2005,19 @@ class Historial(QWidget):
             q = c.cursor()
 
             termino = self.buscar.text().strip()
-
             tipo_filtro = self.tipo.currentText()
-
             pago_filtro = self.pago.currentText()
 
             filas = []
 
             # ==================================================
             # VENTAS
+            #
+            # OPTIMIZADO:
+            # - Una sola consulta por tabla.
+            # - Los pagos se obtienen junto con la venta.
+            # - Se eliminan las consultas repetidas dentro
+            #   del for de cada venta.
             # ==================================================
 
             if tipo_filtro in (
@@ -1784,6 +2049,16 @@ class Historial(QWidget):
                         "tipo" in columnas
                     )
 
+                    tiene_pagos = all(
+                        columna in columnas
+                        for columna in (
+                            "pago_efectivo",
+                            "pago_transferencia",
+                            "pago_tarjeta",
+                            "pago_cuenta"
+                        )
+                    )
+
                     # ==================================================
                     # TIPO
                     # ==================================================
@@ -1800,44 +2075,92 @@ class Historial(QWidget):
                                         )
                                     )
                                 ) = 'PEDIDO'
-                                THEN 'PEDIDO'
-                                ELSE 'VENTA'
+                                THEN 'Pedido'
+                                ELSE 'Venta diaria'
                             END
                         """
 
                     else:
 
-                        expresion_tipo = "'VENTA'"
+                        expresion_tipo = "'Venta diaria'"
 
                     # ==================================================
-                    # SQL BASE
+                    # PAGOS
+                    #
+                    # Si existen las columnas, las traemos directamente
+                    # en la misma consulta.
+                    # ==================================================
+
+                    if tiene_pagos:
+
+                        expresion_pago_efectivo = """
+                            COALESCE(
+                                v.pago_efectivo,
+                                0
+                            )
+                        """
+
+                        expresion_pago_transferencia = """
+                            COALESCE(
+                                v.pago_transferencia,
+                                0
+                            )
+                        """
+
+                        expresion_pago_tarjeta = """
+                            COALESCE(
+                                v.pago_tarjeta,
+                                0
+                            )
+                        """
+
+                        expresion_pago_cuenta = """
+                            COALESCE(
+                                v.pago_cuenta,
+                                0
+                            )
+                        """
+
+                    else:
+
+                        expresion_pago_efectivo = "0"
+                        expresion_pago_transferencia = "0"
+                        expresion_pago_tarjeta = "0"
+                        expresion_pago_cuenta = "0"
+
+                    # ==================================================
+                    # SQL
                     # ==================================================
 
                     sql = f"""
-                    SELECT
-                        {expresion_tipo},
-                        v.id,
-                        v.fecha,
-                        COALESCE(
-                            cl.nombre,
-                            'Consumidor final'
-                        ),
-                        COALESCE(
-                            v.forma_pago,
-                            ''
-                        ),
-                        COALESCE(
-                            v.total,
-                            0
-                        ),
-                        COALESCE(
-                            v.estado,
-                            '{estado_defecto}'
-                        )
-                    FROM {tabla} v
-                    LEFT JOIN clientes cl
-                        ON cl.id = v.cliente_id
-                    WHERE 1=1
+                        SELECT
+                            {expresion_tipo},
+                            v.id,
+                            v.fecha,
+                            COALESCE(
+                                cl.nombre,
+                                'Consumidor final'
+                            ),
+                            COALESCE(
+                                v.forma_pago,
+                                ''
+                            ),
+                            COALESCE(
+                                v.total,
+                                0
+                            ),
+                            COALESCE(
+                                v.estado,
+                                '{estado_defecto}'
+                            ),
+                            {expresion_pago_efectivo},
+                            {expresion_pago_transferencia},
+                            {expresion_pago_tarjeta},
+                            {expresion_pago_cuenta}
+                        FROM {tabla} v
+                        LEFT JOIN clientes cl
+                            ON cl.id = v.cliente_id
+                        WHERE 1=1
                     """
 
                     datos = []
@@ -1849,12 +2172,12 @@ class Historial(QWidget):
                     if termino:
 
                         sql += """
-                        AND (
-                            CAST(v.id AS TEXT) LIKE ?
-                            OR v.fecha LIKE ?
-                            OR cl.nombre LIKE ?
-                            OR v.forma_pago LIKE ?
-                        )
+                            AND (
+                                CAST(v.id AS TEXT) LIKE ?
+                                OR v.fecha LIKE ?
+                                OR cl.nombre LIKE ?
+                                OR v.forma_pago LIKE ?
+                            )
                         """
 
                         buscar = (
@@ -1881,14 +2204,14 @@ class Historial(QWidget):
                         if tiene_tipo:
 
                             sql += """
-                            AND UPPER(
-                                TRIM(
-                                    COALESCE(
-                                        v.tipo,
-                                        ''
+                                AND UPPER(
+                                    TRIM(
+                                        COALESCE(
+                                            v.tipo,
+                                            ''
+                                        )
                                     )
-                                )
-                            ) = 'PEDIDO'
+                                ) = 'PEDIDO'
                             """
 
                         else:
@@ -1900,23 +2223,30 @@ class Historial(QWidget):
                         if tiene_tipo:
 
                             sql += """
-                            AND (
-                                UPPER(
-                                    TRIM(
-                                        COALESCE(
-                                            v.tipo,
-                                            ''
+                                AND (
+                                    UPPER(
+                                        TRIM(
+                                            COALESCE(
+                                                v.tipo,
+                                                ''
+                                            )
                                         )
-                                    )
-                                ) <> 'PEDIDO'
-                                OR v.tipo IS NULL
-                                OR TRIM(v.tipo) = ''
-                            )
+                                    ) <> 'PEDIDO'
+                                    OR v.tipo IS NULL
+                                    OR TRIM(v.tipo) = ''
+                                )
                             """
 
                     # ==================================================
-                    # RESULTADOS
+                    # ORDENAR DESDE SQLITE
+                    #
+                    # Así evitamos ordenar posteriormente una cantidad
+                    # grande de registros innecesariamente.
                     # ==================================================
+
+                    sql += """
+                        ORDER BY v.fecha DESC
+                    """
 
                     resultado = q.execute(
                         sql,
@@ -1924,77 +2254,34 @@ class Historial(QWidget):
                     ).fetchall()
 
                     # ==================================================
-                    # COLUMNAS DE PAGO
-                    # ==================================================
-
-                    tiene_pagos = all(
-                        columna in columnas
-                        for columna in (
-                            "pago_efectivo",
-                            "pago_transferencia",
-                            "pago_tarjeta",
-                            "pago_cuenta"
-                        )
-                    )
-
-                    # ==================================================
                     # PROCESAR FILAS
                     # ==================================================
 
                     for fila in resultado:
 
-                        tipo_mostrar = (
-                            self._tipo_venta_texto(
-                                fila[0]
-                            )
+                        tipo_mostrar = str(
+                            fila[0]
+                            or "Venta diaria"
                         )
 
-                        fila_base = (
-                            tipo_mostrar,
-                            fila[1],
-                            fila[2],
-                            fila[3],
-                            fila[4],
-                            fila[5],
-                            fila[6]
+                        # ----------------------------------------------
+                        # PAGOS
+                        # ----------------------------------------------
+
+                        pago_row = (
+                            float(fila[7] or 0),
+                            float(fila[8] or 0),
+                            float(fila[9] or 0),
+                            float(fila[10] or 0)
                         )
 
-                        # ==================================================
+                        # ----------------------------------------------
                         # FILTRO DE PAGO
-                        # ==================================================
+                        # ----------------------------------------------
 
                         if pago_filtro != "Todas":
 
                             if tiene_pagos:
-
-                                pago_row = q.execute(
-                                    f"""
-                                    SELECT
-                                        COALESCE(
-                                            pago_efectivo,
-                                            0
-                                        ),
-                                        COALESCE(
-                                            pago_transferencia,
-                                            0
-                                        ),
-                                        COALESCE(
-                                            pago_tarjeta,
-                                            0
-                                        ),
-                                        COALESCE(
-                                            pago_cuenta,
-                                            0
-                                        )
-                                    FROM {tabla}
-                                    WHERE id=?
-                                    """,
-                                    (fila[1],)
-                                ).fetchone()
-
-                                if not pago_row:
-
-                                    continue
 
                                 if not self._pago_detallado_coincide(
                                     pago_row,
@@ -2012,63 +2299,37 @@ class Historial(QWidget):
 
                                     continue
 
-                        # ==================================================
-                        # MOSTRAR PAGO DETALLADO
-                        # ==================================================
+                        # ----------------------------------------------
+                        # TEXTO DE PAGO
+                        # ----------------------------------------------
+
+                        pago_mostrar = fila[4]
 
                         if tiene_pagos:
 
-                            pago_row = q.execute(
-                                f"""
-                                SELECT
-                                    COALESCE(
-                                        pago_efectivo,
-                                        0
-                                    ),
-                                    COALESCE(
-                                        pago_transferencia,
-                                        0
-                                    ),
-                                    COALESCE(
-                                        pago_tarjeta,
-                                        0
-                                    ),
-                                    COALESCE(
-                                        pago_cuenta,
-                                        0
-                                    )
-                                FROM {tabla}
-                                WHERE id=?
-                                """,
-                                (fila[1],)
-                            ).fetchone()
+                            suma_pagos = sum(
+                                pago_row
+                            )
 
-                            if pago_row:
+                            if suma_pagos > 0:
 
-                                suma_pagos = sum(
-                                    float(x or 0)
-                                    for x in pago_row
+                                pago_mostrar = self.pago_texto(
+                                    pago_row
                                 )
 
-                                if suma_pagos > 0:
+                        # ----------------------------------------------
+                        # FILA FINAL
+                        # ----------------------------------------------
 
-                                    fila_base = (
-                                        fila_base[0],
-                                        fila_base[1],
-                                        fila_base[2],
-                                        fila_base[3],
-                                        self.pago_texto(
-                                            pago_row
-                                        ),
-                                        fila_base[5],
-                                        fila_base[6]
-                                    )
-
-                        # ==================================================
-                        # AGREGAR FILA
-                        #
-                        # Guardamos también la tabla origen.
-                        # ==================================================
+                        fila_base = (
+                            tipo_mostrar,
+                            fila[1],
+                            fila[2],
+                            fila[3],
+                            pago_mostrar,
+                            fila[5],
+                            fila[6]
+                        )
 
                         filas.append(
                             (
@@ -2092,28 +2353,52 @@ class Historial(QWidget):
                 ):
 
                     sql = """
-                    SELECT
-                        'Arqueo',
-                        id,
-                        fecha,
-                        (
-                            'Efectivo: $ ' ||
-                            printf(
-                                '%.2f',
-                                COALESCE(
-                                    ventas_efectivo,
-                                    0
+                        SELECT
+                            'Arqueo',
+                            id,
+                            fecha,
+                            (
+                                'Efectivo: $ ' ||
+                                printf(
+                                    '%.2f',
+                                    COALESCE(
+                                        ventas_efectivo,
+                                        0
+                                    )
+                                ) ||
+                                ' | Transf.: $ ' ||
+                                printf(
+                                    '%.2f',
+                                    COALESCE(
+                                        ventas_transferencia,
+                                        0
+                                    )
+                                ) ||
+                                ' | Tarjeta: $ ' ||
+                                printf(
+                                    '%.2f',
+                                    COALESCE(
+                                        ventas_tarjeta,
+                                        0
+                                    )
+                                ) ||
+                                ' | Cuenta: $ ' ||
+                                printf(
+                                    '%.2f',
+                                    COALESCE(
+                                        ventas_cuenta,
+                                        0
+                                    )
                                 )
-                            )
-                        ),
-                        'Todos los medios',
-                        COALESCE(
-                            ventas_total,
-                            0
-                        ),
-                        'GUARDADO'
-                    FROM arqueos
-                    WHERE 1=1
+                            ),
+                            'Todos los medios',
+                            COALESCE(
+                                ventas_total,
+                                0
+                            ),
+                            'GUARDADO'
+                        FROM arqueos
+                        WHERE 1=1
                     """
 
                     datos = []
@@ -2121,10 +2406,10 @@ class Historial(QWidget):
                     if termino:
 
                         sql += """
-                        AND (
-                            CAST(id AS TEXT) LIKE ?
-                            OR fecha LIKE ?
-                        )
+                            AND (
+                                CAST(id AS TEXT) LIKE ?
+                                OR fecha LIKE ?
+                            )
                         """
 
                         buscar = (
@@ -2139,6 +2424,10 @@ class Historial(QWidget):
                                 buscar
                             ]
                         )
+
+                    sql += """
+                        ORDER BY fecha DESC
+                    """
 
                     resultados_arqueos = q.execute(
                         sql,
@@ -2155,22 +2444,160 @@ class Historial(QWidget):
                         )
 
             # ==================================================
-            # ORDENAR
+            # MOVIMIENTOS DE CAJA
             # ==================================================
 
-            filas.sort(
-                key=lambda x: str(
-                    x[0][2] or ""
-                ),
-                reverse=True
+            if tipo_filtro == "Todos":
+
+                if self._tabla_existe(
+                    q,
+                    "movimientos_caja"
+                ):
+
+                    resultados_mov = q.execute(
+                        """
+                        SELECT
+                            'Movimiento caja',
+                            id,
+                            fecha,
+                            COALESCE(
+                                concepto,
+                                ''
+                            ),
+                            tipo,
+                            importe,
+                            COALESCE(
+                                usuario,
+                                'Administrador'
+                            )
+                        FROM movimientos_caja
+                        ORDER BY fecha DESC
+                        """
+                    ).fetchall()
+
+                    for fila in resultados_mov:
+
+                        filas.append(
+                            (
+                                fila,
+                                "movimientos_caja"
+                            )
+                        )
+
+            # ==================================================
+            # ORDEN FINAL
+            # ==================================================
+            #
+            # Se combinan ventas, pedidos, arqueos y movimientos
+            # en una sola lista.
+            #
+            # El usuario puede elegir cómo ordenarlos.
+            # ==================================================
+
+            orden = self.ordenar.currentText()
+
+            if orden == "Más recientes":
+
+                filas.sort(
+                    key=lambda x: str(
+                        x[0][2] or ""
+                    ),
+                    reverse=True
+                )
+
+            elif orden == "Más antiguos":
+
+                filas.sort(
+                    key=lambda x: str(
+                        x[0][2] or ""
+                    )
+                )
+
+            elif orden == "Número menor → mayor":
+
+                filas.sort(
+                    key=lambda x: (
+                        int(x[0][1])
+                        if str(x[0][1]).isdigit()
+                        else 0
+                    )
+                )
+
+            elif orden == "Número mayor → menor":
+
+                filas.sort(
+                    key=lambda x: (
+                        int(x[0][1])
+                        if str(x[0][1]).isdigit()
+                        else 0
+                    ),
+                    reverse=True
+                )
+
+            elif orden == "Total menor → mayor":
+
+                filas.sort(
+                    key=lambda x: (
+                        float(x[0][5] or 0)
+                    )
+                )
+
+            elif orden == "Total mayor → menor":
+
+                filas.sort(
+                    key=lambda x: (
+                        float(x[0][5] or 0)
+                    ),
+                    reverse=True
+                )
+
+            # ========================================================
+            # PAGINACION
+            # ========================================================
+
+            total_registros = len(filas)
+
+            self.total_paginas = max(
+                1,
+                (total_registros + self.por_pagina - 1)
+                // self.por_pagina
+            )
+            self.lbl_pagina.setText(
+                f"Página {self.pagina_actual} de {self.total_paginas}"
             )
 
-            # ==================================================
+            self.btn_anterior.setEnabled(
+                self.pagina_actual > 1
+            )
+
+            self.btn_siguiente.setEnabled(
+                self.pagina_actual < self.total_paginas
+            )
+
+            self.pagina_actual = min(
+                self.pagina_actual,
+                self.total_paginas
+            )
+
+            inicio = (
+                self.pagina_actual - 1
+            ) * self.por_pagina
+
+            fin = inicio + self.por_pagina
+
+            filas_pagina = filas[
+                inicio:fin
+            ]
+
+            # ========================================================
             # LIMPIAR TABLA
-            # ==================================================
+            # ========================================================
+
+            self.tabla.setUpdatesEnabled(False)
+            self.tabla.setSortingEnabled(False)
 
             self.tabla.setRowCount(
-                0
+                len(filas_pagina)
             )
 
             self._origenes_fila = []
@@ -2189,29 +2616,19 @@ class Historial(QWidget):
             # ==================================================
 
             for i, registro in enumerate(
-                filas
+                filas_pagina
             ):
 
                 fila = registro[0]
                 origen = registro[1]
 
-                print(
-                    "FILA TABLA:",
-                    fila,
-                    "ORIGEN:",
-                    origen
-                )
-
-                self.tabla.insertRow(
-                    i
-                )
 
                 tipo_fila = str(
                     fila[0]
                 )
 
                 # ==================================================
-                # GUARDAR ORIGEN DE LA FILA
+                # ORIGEN
                 # ==================================================
 
                 self._origenes_fila.append(
@@ -2246,10 +2663,6 @@ class Historial(QWidget):
                     item = QTableWidgetItem(
                         texto
                     )
-
-                    # ==================================================
-                    # CHECKBOX
-                    # ==================================================
 
                     if (
                         j == 0
@@ -2360,7 +2773,7 @@ class Historial(QWidget):
                 # ARQUEO
                 # ==================================================
 
-                else:
+                elif tipo_fila == "Arqueo":
 
                     btn_ver = QToolButton()
 
@@ -2410,6 +2823,46 @@ class Historial(QWidget):
                         self.imprimir_arqueo(r)
                     )
 
+                # ==================================================
+                # MOVIMIENTO DE CAJA
+                # ==================================================
+
+                if tipo_fila == "Movimiento caja":
+
+                    btn_ver = QToolButton()
+
+                    btn_ver.setText(
+                        "💰"
+                    )
+
+                    btn_ver.setToolTip(
+                        "Movimiento de caja"
+                    )
+
+                    btn_ver.setEnabled(
+                        False
+                    )
+
+                    btn_pdf = QToolButton()
+
+                    btn_pdf.setText(
+                        ""
+                    )
+
+                    btn_pdf.setEnabled(
+                        False
+                    )
+
+                    btn_print = QToolButton()
+
+                    btn_print.setText(
+                        ""
+                    )
+
+                    btn_print.setEnabled(
+                        False
+                    )
+
                 layout_acciones.addWidget(
                     btn_ver
                 )
@@ -2430,9 +2883,6 @@ class Historial(QWidget):
 
                 # ==================================================
                 # RESUMEN
-                #
-                # IMPORTANTE:
-                # Los arqueos NO se suman al total de ventas.
                 # ==================================================
 
                 if self._es_venta(
@@ -2451,9 +2901,9 @@ class Historial(QWidget):
 
                     cantidad_ventas += 1
 
-            # ====================================================
+            # ==================================================
             # RESUMEN FINAL
-            # ====================================================
+            # ==================================================
 
             self.cant.setText(
                 f"Ventas: {cantidad_ventas}"
@@ -2478,6 +2928,8 @@ class Historial(QWidget):
                     promedio
                 )
             )
+            self.tabla.setUpdatesEnabled(True)
+            self.tabla.viewport().update()
 
         except Exception as e:
 
@@ -2520,7 +2972,34 @@ class Historial(QWidget):
                 except Exception:
 
                     pass
+    # ========================================================
+    # PAGINA ANTERIOR
+    # ========================================================
 
+    def pagina_anterior(
+        self
+    ):
+
+        if self.pagina_actual > 1:
+
+            self.pagina_actual -= 1
+
+            self.cargar_historial()
+
+
+    # ========================================================
+    # PAGINA SIGUIENTE
+    # ========================================================
+
+    def pagina_siguiente(
+        self
+    ):
+
+        if self.pagina_actual < self.total_paginas:
+
+            self.pagina_actual += 1
+
+            self.cargar_historial()
     # ========================================================
     # SELECCIONAR TODAS
     # ========================================================
@@ -3015,117 +3494,92 @@ class Historial(QWidget):
     # ARQUEO HTML
     # ========================================================
 
-    def arqueo_html(
-        self,
-        r
-    ):
-
-        item_numero = self.tabla.item(
-            r,
-            1
-        )
-
-        if not item_numero:
-
-            return (
-                "<h2>Arqueo no encontrado</h2>"
-            )
-
+    def arqueo_html(self, r):
+        item_numero = self.tabla.item(r, 1)
         try:
-
-            numero = int(
-                item_numero.text()
-            )
-
+            numero = int(item_numero.text())
         except Exception:
+            return "<h2>Arqueo no encontrado</h2>"
 
-            return (
-                "<h2>Arqueo no encontrado</h2>"
-            )
-
-        con = sqlite3.connect(
-            BASE_DATOS
-        )
-
+        con = sqlite3.connect(BASE_DATOS)
         try:
-
-            row = con.execute(
-                """
-                SELECT
-                    fecha,
-                    apertura,
-                    esperado,
-                    real,
-                    diferencia,
-                    usuario,
-                    observaciones,
-                    ventas_total
-                FROM arqueos
-                WHERE id=?
-                """,
-                (numero,)
-            ).fetchone()
-
+            cur = con.cursor()
+            self.asegurar_columnas_arqueo(cur)
+            self.asegurar_columna_movimientos_arqueo(cur)
+            con.commit()
+            row = cur.execute("""
+                SELECT fecha, apertura, esperado, real, diferencia, usuario, observaciones,
+                       ventas_total, ventas_efectivo, ventas_transferencia, ventas_tarjeta, ventas_cuenta, cantidad_ventas
+                FROM arqueos WHERE id=?
+            """, (numero,)).fetchone()
         finally:
-
             con.close()
 
         if not row:
+            return "<h2>Arqueo no encontrado</h2>"
 
-            return (
-                "<h2>Arqueo no encontrado</h2>"
-            )
+        # Los movimientos de caja se consultan por la fecha del arqueo.
+        # No se mezclan con el total de ventas: solamente afectan el efectivo esperado.
+        fecha_dia = (row[0] or "")[:10]
+        ingresos = 0.0
+        egresos = 0.0
+        movimientos_html = "<i>Sin movimientos manuales de caja.</i>"
+
+        con = sqlite3.connect(BASE_DATOS)
+        try:
+            movimientos = con.execute("""
+                SELECT fecha, tipo, importe, concepto, usuario
+                FROM movimientos_caja
+                WHERE arqueo_id = ?
+                ORDER BY id ASC
+            """, (numero,)).fetchall()
+
+            if movimientos:
+                filas_mov = []
+                for fecha_mov, tipo, importe, concepto, usuario in movimientos:
+                    importe = float(importe or 0)
+                    if str(tipo).upper() == "INGRESO":
+                        ingresos += importe
+                    elif str(tipo).upper() == "EGRESO":
+                        egresos += importe
+                    filas_mov.append(
+                        f"<tr><td>{fecha_mov}</td><td>{tipo}</td><td>$ {importe:,.2f}</td><td>{concepto or '—'}</td></tr>"
+                    )
+                movimientos_html = (
+                    "<table border='1' cellspacing='0' cellpadding='5' width='100%'>"
+                    "<tr><th>Fecha</th><th>Tipo</th><th>Importe</th><th>Concepto</th></tr>"
+                    + "".join(filas_mov) + "</table>"
+                )
+        except sqlite3.OperationalError:
+            pass
+        finally:
+            con.close()
 
         return f"""
-        <html>
-
-        <body style="font-family:Arial">
-
-        <h1 align="center">
-        ARQUEO DE CAJA
-        </h1>
-
-        <hr>
-
+        <html><body style="font-family:Arial">
+        <h1 align="center">ARQUEO DE CAJA</h1><hr>
         <b>N°:</b> {numero}<br>
-
         <b>Fecha:</b> {row[0]}<br>
-
-        <b>Usuario:</b> {row[5] or ""}
-
-        <hr>
-
-        <b>Total ventas:</b>
-        $ {float(row[7] or 0):,.2f}
-
-        <hr>
-
-        <b>Efectivo inicial:</b>
-        $ {float(row[1] or 0):,.2f}
-
-        <br>
-
-        <b>Esperado:</b>
-        $ {float(row[2] or 0):,.2f}
-
-        <br>
-
-        <b>Real:</b>
-        $ {float(row[3] or 0):,.2f}
-
-        <br>
-
-        <b>Diferencia:</b>
-        $ {float(row[4] or 0):,.2f}
-
-        <hr>
-
-        <b>Observaciones:</b>
-        {row[6] or "—"}
-
-        </body>
-
-        </html>
+        <b>Usuario:</b> {row[5] or ''}<hr>
+        <h3>DETALLE DE VENTAS</h3>
+        <b>Total ventas:</b> $ {float(row[7] or 0):,.2f}<br>
+        <b>💵 Efectivo:</b> $ {float(row[8] or 0):,.2f}<br>
+        <b>🏦 Transferencias:</b> $ {float(row[9] or 0):,.2f}<br>
+        <b>💳 Tarjetas:</b> $ {float(row[10] or 0):,.2f}<br>
+        <b>👤 Cuenta corriente:</b> $ {float(row[11] or 0):,.2f}<br>
+        <b>🧾 Cantidad de ventas:</b> {int(row[12] or 0)}<hr>
+        <h3>CIERRE DE EFECTIVO</h3>
+        <b>Efectivo inicial:</b> $ {float(row[1] or 0):,.2f}<br>
+        <b>Ventas en efectivo:</b> $ {float(row[8] or 0):,.2f}<br>
+        <b>Ingresos de caja:</b> $ {ingresos:,.2f}<br>
+        <b>Egresos de caja:</b> $ {egresos:,.2f}<br>
+        <b>Efectivo esperado:</b> $ {float(row[2] or 0):,.2f}<br>
+        <b>Efectivo contado:</b> $ {float(row[3] or 0):,.2f}<br>
+        <b>Diferencia:</b> $ {float(row[4] or 0):,.2f}<hr>
+        <h3>MOVIMIENTOS DE CAJA</h3>
+        {movimientos_html}<hr>
+        <b>Observaciones:</b> {row[6] or '—'}
+        </body></html>
         """
 
     # ========================================================

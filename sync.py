@@ -1,6 +1,6 @@
 import json
 import requests
-
+import threading
 from ui.db import (
     create_connection,
     init_db,
@@ -1093,6 +1093,10 @@ def descargar_productos():
 
         # =====================================================
         # ELIMINAR PRODUCTOS QUE YA NO EXISTEN EN RAILWAY
+        #
+        # IMPORTANTE:
+        # NO eliminar productos que tengan una
+        # sincronización pendiente.
         # =====================================================
 
         productos_locales = cursor.execute(
@@ -1113,8 +1117,47 @@ def descargar_productos():
             if not uuid_local:
                 continue
 
+            # -------------------------------------------------
+            # SI EXISTE EN RAILWAY, NO HACER NADA
+            # -------------------------------------------------
+
             if uuid_local in uuids_remotos:
                 continue
+
+            # -------------------------------------------------
+            # PROTEGER PRODUCTOS CON CAMBIOS PENDIENTES
+            #
+            # Si todavía no se sincronizó, NO debemos borrarlo.
+            # -------------------------------------------------
+
+            pendiente = cursor.execute(
+                """
+                SELECT 1
+                FROM sincronizacion
+                WHERE tabla='productos'
+                  AND registro_uuid=?
+                  AND sincronizado=0
+                LIMIT 1
+                """,
+                (
+                    uuid_local,
+                )
+            ).fetchone()
+
+            if pendiente:
+
+                print(
+                    "PRODUCTO LOCAL PENDIENTE DE SINCRONIZAR:",
+                    uuid_local,
+                    nombre_local
+                )
+
+                continue
+
+            # -------------------------------------------------
+            # SI NO EXISTE EN RAILWAY Y TAMPOCO TIENE
+            # SINCRONIZACIÓN PENDIENTE, SE ELIMINA LOCALMENTE
+            # -------------------------------------------------
 
             print(
                 "PRODUCTO ELIMINADO LOCALMENTE:",
@@ -1353,18 +1396,37 @@ def descargar_ventas():
                 )
             )
 
+            # ======================================================
+            # DETERMINAR ESTADO
+            #
+            # IMPORTANTE:
+            # Los estados especiales de Railway se respetan.
+            #
+            # Solamente una venta que viene como ACTIVA puede
+            # convertirse en ARCHIVADA por un arqueo.
+            # ======================================================
+
             estado_remoto = str(
                 venta.get(
                     "estado",
                     "ACTIVA"
                 ) or "ACTIVA"
-            ).upper()
+            ).strip().upper()
 
             estado_final = (
                 estado_remoto
             )
 
-            if arqueo_fecha:
+            # ------------------------------------------------------
+            # SOLO LAS VENTAS ACTIVAS PUEDEN SER ARCHIVADAS
+            # POR UN ARQUEO
+            # ------------------------------------------------------
+
+            if (
+                estado_remoto == "ACTIVA"
+                and
+                arqueo_fecha
+            ):
 
                 try:
 
@@ -1910,74 +1972,9 @@ def descargar_ventas():
 
         return 0
 
-        # =====================================================
-        # GUARDAR
-        # =====================================================
 
-        conexion.commit()
 
-        print(
-            "Ventas descargadas:",
-            actualizadas
-        )
-
-        # =====================================================
-        # MOSTRAR ACTIVAS / ARCHIVADAS
-        # =====================================================
-
-        activas = cursor.execute(
-            """
-            SELECT COUNT(*)
-            FROM ventas
-            WHERE estado='ACTIVA'
-            """
-        ).fetchone()[0]
-
-        archivadas = cursor.execute(
-            """
-            SELECT COUNT(*)
-            FROM ventas
-            WHERE estado='ARCHIVADA'
-            """
-        ).fetchone()[0]
-
-        print(
-            "VENTAS ACTIVAS:",
-            activas
-        )
-
-        print(
-            "VENTAS ARCHIVADAS:",
-            archivadas
-        )
-
-        print(
-            "DESCARGA DE VENTAS OK"
-        )
-
-        conexion.close()
-        conexion = None
-
-        return actualizadas
-
-    except Exception as e:
-
-        if conexion:
-
-            try:
-
-                conexion.rollback()
-                conexion.close()
-
-            except:
-                pass
-
-        print(
-            "Error descargando ventas:",
-            repr(e)
-        )
-
-        return 0
+ 
 
 
 # =========================================================
@@ -2376,3 +2373,90 @@ def sincronizar():
         "movimientos_bajados":
             movimientos_bajados
     }
+
+
+# =========================================================
+# SINCRONIZACIÓN EN SEGUNDO PLANO
+# =========================================================
+
+_sincronizacion_en_curso = False
+
+_lock_sincronizacion = threading.Lock()
+
+
+def sincronizar_en_segundo_plano():
+
+    global _sincronizacion_en_curso
+
+    # =====================================================
+    # EVITAR DOS SINCRONIZACIONES SIMULTÁNEAS
+    # =====================================================
+
+    with _lock_sincronizacion:
+
+        if _sincronizacion_en_curso:
+
+            print(
+                "Sincronización ya en curso..."
+            )
+
+            return False
+
+        _sincronizacion_en_curso = True
+
+    # =====================================================
+    # TRABAJO DEL HILO
+    # =====================================================
+
+    def trabajo():
+
+        global _sincronizacion_en_curso
+
+        try:
+
+            print(
+                "========================================"
+            )
+
+            print(
+                "SINCRONIZACIÓN EN SEGUNDO PLANO"
+            )
+
+            print(
+                "========================================"
+            )
+
+            resultado = sincronizar()
+
+            print(
+                "Sincronización automática OK:",
+                resultado
+            )
+
+        except Exception as e:
+
+            print(
+                "Error en sincronización:",
+                repr(e)
+            )
+
+        finally:
+
+            _sincronizacion_en_curso = False
+
+            print(
+                "Sincronización en segundo plano finalizada"
+            )
+
+    # =====================================================
+    # CREAR HILO
+    # =====================================================
+
+    hilo = threading.Thread(
+        target=trabajo,
+        daemon=True
+    )
+
+    hilo.start()
+
+    return True

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QBoxLayout,
     QGridLayout,
     QFormLayout,
     QLabel,
@@ -45,6 +46,8 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QGroupBox,
     QSizePolicy,
+    QStyle,
+    QScrollArea,
 )
 
 from ui.db import BASE_DATOS, init_db, get_setting
@@ -406,13 +409,140 @@ class Pedidos(QWidget):
             f"Pedidos - {get_setting('nombre_negocio', 'COTILLON')}"
         )
 
-        self.setMinimumSize(1200, 760)
-        self.resize(1400, 900)
+        # Ventana adaptable a resoluciones chicas.
+        self.setMinimumSize(760, 520)
+        try:
+            pantalla = self.screen()
+            if pantalla:
+                disponible = pantalla.availableGeometry()
+                ancho = min(1400, max(760, disponible.width() - 60))
+                alto = min(900, max(520, disponible.height() - 60))
+                self.resize(ancho, alto)
+            else:
+                self.resize(1000, 700)
+        except Exception:
+            self.resize(1000, 700)
 
         self.preparar_base_datos()
         self.construir_interfaz()
         self.cargar_productos()
         self.cargar_pedidos()
+
+    # ========================================================
+    # RESPONSIVE
+    # ========================================================
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        try:
+            ancho = self.width()
+            alto = self.height()
+
+            # El contenido central de la aplicación es más angosto que
+            # la pantalla completa porque existe el menú lateral. Por eso
+            # 1366x768 puede dejar solamente unos 1050-1150 px útiles.
+            # En ese caso los dos paneles superiores se APILAN y nunca
+            # intentamos hacerlos entrar a la fuerza en una sola fila.
+            if hasattr(self, "cuerpo_superior"):
+                if ancho <= 1250:
+                    self.cuerpo_superior.setDirection(QBoxLayout.TopToBottom)
+                else:
+                    self.cuerpo_superior.setDirection(QBoxLayout.LeftToRight)
+
+            # Los datos del pedido también pasan a una sola columna cuando
+            # el espacio es realmente reducido.
+            if hasattr(self, "datos_campos"):
+                if ancho <= 850:
+                    self.datos_campos.setDirection(QBoxLayout.TopToBottom)
+                else:
+                    self.datos_campos.setDirection(QBoxLayout.LeftToRight)
+
+            compacto = ancho <= 1250 or alto <= 820
+            muy_compacto = ancho <= 900 or alto <= 650
+
+            if hasattr(self, "principal"):
+                if muy_compacto:
+                    self.principal.setContentsMargins(6, 6, 6, 6)
+                    self.principal.setSpacing(6)
+                elif compacto:
+                    self.principal.setContentsMargins(9, 8, 9, 8)
+                    self.principal.setSpacing(8)
+                else:
+                    self.principal.setContentsMargins(16, 12, 16, 12)
+                    self.principal.setSpacing(12)
+
+            if hasattr(self, "titulo_principal"):
+                self.titulo_principal.setStyleSheet(
+                    "font-size:%dpx;font-weight:900;color:#0f172a;" %
+                    (20 if muy_compacto else 24 if compacto else 30)
+                )
+
+            if hasattr(self, "subtitulo_principal"):
+                self.subtitulo_principal.setStyleSheet(
+                    "font-size:%dpx;color:#64748b;" %
+                    (10 if muy_compacto else 11 if compacto else 14)
+                )
+
+            # Alturas compactas para que 1366x768 pueda mostrar mucho más
+            # contenido sin que las tablas se coman toda la pantalla.
+            row_productos = 25 if muy_compacto else 28 if compacto else 32
+            row_pedido = 27 if muy_compacto else 30 if compacto else 34
+            row_registrados = 25 if muy_compacto else 28 if compacto else 32
+
+            if hasattr(self, "tabla_productos"):
+                self.tabla_productos.verticalHeader().setDefaultSectionSize(row_productos)
+                h = self.tabla_productos.horizontalHeader()
+                h.resizeSection(0, 70 if muy_compacto else 78 if compacto else 88)
+                h.resizeSection(2, 48 if muy_compacto else 55 if compacto else 65)
+                h.resizeSection(3, 82 if muy_compacto else 90 if compacto else 100)
+
+            if hasattr(self, "tabla_pedido"):
+                self.tabla_pedido.verticalHeader().setDefaultSectionSize(row_pedido)
+                h = self.tabla_pedido.horizontalHeader()
+                h.resizeSection(0, 68 if muy_compacto else 75 if compacto else 85)
+                h.resizeSection(2, 68 if muy_compacto else 76 if compacto else 88)
+                h.resizeSection(3, 82 if muy_compacto else 92 if compacto else 105)
+                h.resizeSection(4, 92 if muy_compacto else 102 if compacto else 115)
+                h.resizeSection(5, 44 if muy_compacto else 48 if compacto else 54)
+
+            if hasattr(self, "tabla_registrados"):
+                self.tabla_registrados.verticalHeader().setDefaultSectionSize(row_registrados)
+                h = self.tabla_registrados.horizontalHeader()
+                h.resizeSection(0, 42 if muy_compacto else 46 if compacto else 52)
+                h.resizeSection(1, 78 if muy_compacto else 86 if compacto else 96)
+                h.resizeSection(3, 78 if muy_compacto else 86 if compacto else 96)
+                h.resizeSection(4, 82 if muy_compacto else 90 if compacto else 105)
+                h.resizeSection(5, 88 if muy_compacto else 98 if compacto else 110)
+                h.resizeSection(6, 90 if muy_compacto else 92 if compacto else 104)
+
+            altura_input = 28 if muy_compacto else 31 if compacto else 36
+            altura_btn = 28 if muy_compacto else 32 if compacto else 38
+
+            for nombre in ("cliente", "entrega", "obs", "buscar_producto", "buscar_pedido"):
+                widget = getattr(self, nombre, None)
+                if widget:
+                    widget.setMinimumHeight(altura_input)
+
+            if hasattr(self, "btn_agregar_producto"):
+                self.btn_agregar_producto.setMinimumHeight(altura_btn)
+
+            if hasattr(self, "botones_pedido_widgets"):
+                for btn in self.botones_pedido_widgets:
+                    btn.setMinimumHeight(altura_btn)
+
+            # Los paneles nunca fuerzan un ancho mínimo que provoque
+            # desplazamiento horizontal.
+            for nombre in ("productos_panel", "pedido_panel", "registrados_panel"):
+                panel = getattr(self, nombre, None)
+                if panel:
+                    panel.setMinimumWidth(0)
+
+            if hasattr(self, "contenido_pedidos"):
+                self.contenido_pedidos.setMinimumWidth(0)
+
+        except Exception:
+            pass
 
     # ========================================================
     # BASE DE DATOS
@@ -488,90 +618,56 @@ class Pedidos(QWidget):
             QFrame#panel {
                 background: white;
                 border: 1px solid #e2e8f0;
-                border-radius: 16px;
+                border-radius: 10px;
             }
 
             QLabel#titulo {
-                font-size: 30px;
+                font-size: 24px;
                 font-weight: 900;
                 color: #0f172a;
             }
 
             QLabel#subtitulo {
-                font-size: 14px;
+                font-size: 11px;
                 color: #64748b;
             }
 
             QLabel#titulo_panel {
-                font-size: 18px;
+                font-size: 14px;
                 font-weight: 900;
                 color: #0f172a;
             }
 
             QLabel#total {
-                font-size: 27px;
+                font-size: 19px;
                 font-weight: 900;
                 color: #2563eb;
             }
 
-            QLineEdit,
-            QPlainTextEdit,
-            QDateEdit,
-            QComboBox {
+            QLineEdit, QDateEdit, QComboBox {
                 background: white;
                 border: 1px solid #cbd5e1;
-                border-radius: 10px;
-                padding: 10px 12px;
-                font-size: 14px;
+                border-radius: 6px;
+                padding: 5px 8px;
+                font-size: 12px;
                 selection-background-color: #2563eb;
                 selection-color: white;
             }
 
-            QLineEdit:focus,
-            QPlainTextEdit:focus,
-            QDateEdit:focus,
-            QComboBox:focus {
-                border: 2px solid #60a5fa;
-            }
-
-            QDateEdit {
-                padding-right: 36px;
-                min-height: 38px;
-            }
-
-            QDateEdit::drop-down {
-                width: 34px;
-                border: none;
-                border-left: 1px solid #e2e8f0;
-                background: #f8fafc;
-                border-top-right-radius: 9px;
-                border-bottom-right-radius: 9px;
-            }
-
-            QDateEdit::down-button {
-                width: 30px;
-                border: none;
-                background: transparent;
-            }
-
-            QDateEdit::down-arrow {
-                width: 10px;
-                height: 10px;
-            }
+            QDateEdit { padding-right: 28px; }
 
             QTableWidget {
                 background: white;
                 border: 1px solid #e2e8f0;
-                border-radius: 12px;
+                border-radius: 6px;
                 gridline-color: #f1f5f9;
-                font-size: 14px;
+                font-size: 11px;
                 outline: none;
-                selection-mode: SingleSelection;
-                selection-behavior: SelectRows;
+
             }
 
             QTableWidget::item {
-                padding: 8px 10px;
+                padding: 2px 4px;
                 color: #334155;
                 border-bottom: 1px solid #f1f5f9;
             }
@@ -579,541 +675,322 @@ class Pedidos(QWidget):
             QTableWidget::item:selected {
                 background: #dbeafe;
                 color: #1e3a8a;
-                font-weight: 800;
-                border-top: 1px solid #93c5fd;
-                border-bottom: 1px solid #93c5fd;
+                font-weight: 700;
             }
 
             QHeaderView::section {
                 background: #0f172a;
                 color: white;
-                padding: 11px;
+                padding: 5px 4px;
                 font-weight: 800;
-                font-size: 13px;
+                font-size: 10px;
                 border: none;
             }
 
             QSpinBox {
                 background: #f8fafc;
                 border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                padding: 4px 34px 4px 8px;
-                min-height: 34px;
-                font-size: 14px;
+                border-radius: 5px;
+                padding: 1px 24px 1px 4px;
+                min-height: 24px;
+                font-size: 11px;
                 font-weight: 800;
-            }
-
-            QSpinBox:hover {
-                border: 1px solid #93c5fd;
-                background: white;
-            }
-
-            QSpinBox::up-button {
-                width: 28px;
-                border: none;
-                border-left: 1px solid #e2e8f0;
-                border-top-right-radius: 7px;
-                background: #eff6ff;
-            }
-
-            QSpinBox::down-button {
-                width: 28px;
-                border: none;
-                border-left: 1px solid #e2e8f0;
-                border-bottom-right-radius: 7px;
-                background: #eff6ff;
-            }
-
-            QSpinBox::up-button:hover,
-            QSpinBox::down-button:hover {
-                background: #dbeafe;
             }
 
             QPushButton {
                 border: none;
-                border-radius: 10px;
-                padding: 10px 16px;
-                font-size: 14px;
+                border-radius: 6px;
+                padding: 5px 9px;
+                font-size: 11px;
                 font-weight: 800;
             }
 
-            QPushButton#primario {
-                background: #2563eb;
-                color: white;
+            QPushButton#primario { background: #2563eb; color: white; }
+            QPushButton#verde { background: #16a34a; color: white; }
+            QPushButton#rojo, QPushButton#eliminar {
+                background: #fee2e2; color: #dc2626; border: 1px solid #fecaca;
             }
-
-            QPushButton#primario:hover {
-                background: #1d4ed8;
-            }
-
-            QPushButton#verde {
-                background: #16a34a;
-                color: white;
-            }
-
-            QPushButton#verde:hover {
-                background: #15803d;
-            }
-
-            QPushButton#rojo {
-                background: #fee2e2;
-                color: #dc2626;
-                border: 1px solid #fecaca;
-            }
-
-            QPushButton#rojo:hover {
-                background: #dc2626;
-                color: white;
-            }
-
-            QPushButton#secundario {
-                background: #e2e8f0;
-                color: #334155;
-            }
-
-            QPushButton#secundario:hover {
-                background: #cbd5e1;
-            }
-
             QPushButton#factura {
-                background: #dbeafe;
-                color: #1d4ed8;
-                border: 1px solid #bfdbfe;
+                background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe;
             }
+            QPushButton#primario:hover { background: #1d4ed8; }
+            QPushButton#verde:hover { background: #15803d; }
+            QPushButton#rojo:hover, QPushButton#eliminar:hover { background: #dc2626; color: white; }
+            QPushButton#factura:hover { background: #2563eb; color: white; }
 
-            QPushButton#factura:hover {
-                background: #2563eb;
-                color: white;
-            }
-
-            QScrollBar:vertical {
-                background: #f1f5f9;
-                width: 10px;
-                margin: 2px;
-            }
-
-            QScrollBar::handle:vertical {
-                background: #cbd5e1;
-                border-radius: 5px;
-                min-height: 30px;
-            }
+            QScrollBar:vertical { background: #f1f5f9; width: 9px; margin: 1px; }
+            QScrollBar::handle:vertical { background: #cbd5e1; border-radius: 4px; min-height: 25px; }
         """)
 
-        principal = QVBoxLayout(self)
-        principal.setContentsMargins(16, 14, 16, 14)
-        principal.setSpacing(10)
+        # Un único scroll vertical. La interfaz NO necesita scroll horizontal.
+        # Esto es especialmente importante dentro de la ventana principal,
+        # que pierde ancho por el menú lateral.
+        layout_raiz = QVBoxLayout(self)
+        layout_raiz.setContentsMargins(0, 0, 0, 0)
+        layout_raiz.setSpacing(0)
 
-        # ====================================================
+        self.scroll_pedidos = QScrollArea()
+        self.scroll_pedidos.setWidgetResizable(True)
+        self.scroll_pedidos.setFrameShape(QFrame.NoFrame)
+        self.scroll_pedidos.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_pedidos.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        contenido = QWidget()
+        contenido.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        contenido.setMinimumWidth(0)
+        self.contenido_pedidos = contenido
+
+        principal = QVBoxLayout(contenido)
+        self.principal = principal
+        principal.setContentsMargins(12, 10, 12, 10)
+        principal.setSpacing(8)
+
+        self.scroll_pedidos.setWidget(contenido)
+        layout_raiz.addWidget(self.scroll_pedidos)
+
         # ENCABEZADO
-        # ====================================================
-
         encabezado = QHBoxLayout()
-
         titulo_box = QVBoxLayout()
-        titulo_box.setSpacing(2)
+        titulo_box.setSpacing(0)
 
         titulo = QLabel("📋 Pedidos")
         titulo.setObjectName("titulo")
+        self.titulo_principal = titulo
 
-        subtitulo = QLabel(
-            "Administrá pedidos, productos, entregas y pagos"
-        )
+        subtitulo = QLabel("Administrá pedidos, productos, entregas y pagos")
         subtitulo.setObjectName("subtitulo")
+        self.subtitulo_principal = subtitulo
 
         titulo_box.addWidget(titulo)
         titulo_box.addWidget(subtitulo)
-
         encabezado.addLayout(titulo_box)
         encabezado.addStretch()
-
         principal.addLayout(encabezado)
 
-        # ====================================================
-        # PARTE SUPERIOR
-        # ====================================================
-
+        # DATOS DEL PEDIDO
         datos_panel = QFrame()
         datos_panel.setObjectName("panel")
+        datos_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         datos_layout = QVBoxLayout(datos_panel)
-        datos_layout.setContentsMargins(18, 18, 18, 18)
-        datos_layout.setSpacing(12)
+        datos_layout.setContentsMargins(9, 6, 9, 6)
+        datos_layout.setSpacing(3)
 
         lbl_datos = QLabel("Datos del pedido")
         lbl_datos.setObjectName("titulo_panel")
-
         datos_layout.addWidget(lbl_datos)
 
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(8)
+        self.datos_campos = QBoxLayout(QBoxLayout.LeftToRight)
+        self.datos_campos.setSpacing(8)
 
-        lbl_cliente = QLabel("Cliente")
-        lbl_entrega = QLabel("Fecha de entrega")
-        lbl_obs = QLabel("Observaciones")
-
-        for lbl in [lbl_cliente, lbl_entrega, lbl_obs]:
-            lbl.setStyleSheet(
-                "font-size:13px;color:#64748b;font-weight:800;"
-            )
+        def campo(label_text, widget, stretch=1):
+            box = QWidget()
+            box.setMinimumWidth(0)
+            lay = QVBoxLayout(box)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(2)
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("font-size:10px;color:#64748b;font-weight:800;")
+            lay.addWidget(lbl)
+            lay.addWidget(widget)
+            self.datos_campos.addWidget(box, stretch)
 
         self.cliente = QLineEdit()
-        self.cliente.setPlaceholderText(
-            "Nombre del cliente..."
-        )
+        self.cliente.setPlaceholderText("Nombre del cliente...")
 
         self.entrega = QDateEdit()
         self.entrega.setCalendarPopup(True)
         self.entrega.setDate(QDate.currentDate())
         self.entrega.setDisplayFormat("dd/MM/yyyy")
-        self.entrega.setMinimumHeight(40)
 
         self.obs = QLineEdit()
-        self.obs.setPlaceholderText(
-            "Observaciones o indicaciones de entrega..."
-        )
+        self.obs.setPlaceholderText("Observaciones o indicaciones de entrega...")
 
-        form.addWidget(lbl_cliente, 0, 0)
-        form.addWidget(self.cliente, 1, 0)
+        campo("Cliente", self.cliente, 1)
+        campo("Fecha de entrega", self.entrega, 1)
+        campo("Observaciones", self.obs, 2)
 
-        form.addWidget(lbl_entrega, 0, 1)
-        form.addWidget(self.entrega, 1, 1)
-
-        form.addWidget(lbl_obs, 0, 2)
-        form.addWidget(self.obs, 1, 2)
-
-        form.setColumnStretch(0, 1)
-        form.setColumnStretch(1, 1)
-        form.setColumnStretch(2, 2)
-
-        datos_layout.addLayout(form)
-
+        datos_layout.addLayout(self.datos_campos)
         principal.addWidget(datos_panel)
 
-        # ====================================================
-        # CUERPO PRINCIPAL
-        # ====================================================
-        # Productos y pedido actual arriba; pedidos registrados abajo.
-        cuerpo_superior = QHBoxLayout()
-        cuerpo_superior.setSpacing(12)
+        # PRODUCTOS + PEDIDO ACTUAL
+        self.cuerpo_superior = QBoxLayout(QBoxLayout.LeftToRight)
+        self.cuerpo_superior.setSpacing(8)
 
-        cuerpo = QHBoxLayout()
-        cuerpo.setSpacing(16)
-
-        # ----------------------------------------------------
-        # PRODUCTOS DISPONIBLES
-        # ----------------------------------------------------
-
+        # PRODUCTOS
         productos_panel = QFrame()
         productos_panel.setObjectName("panel")
+        productos_panel.setMinimumWidth(0)
+        productos_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.productos_panel = productos_panel
 
         productos_layout = QVBoxLayout(productos_panel)
-        productos_layout.setContentsMargins(16, 16, 16, 16)
-        productos_layout.setSpacing(8)
+        productos_layout.setContentsMargins(7, 6, 7, 6)
+        productos_layout.setSpacing(4)
 
         titulo_productos = QLabel("Buscar productos")
         titulo_productos.setObjectName("titulo_panel")
-
         productos_layout.addWidget(titulo_productos)
 
         self.buscar_producto = QLineEdit()
-        self.buscar_producto.setPlaceholderText(
-            "🔎 Buscar por nombre o código..."
-        )
-
-        self.buscar_producto.textChanged.connect(
-            self.filtrar_productos
-        )
-
+        self.buscar_producto.setPlaceholderText("🔎 Buscar por nombre o código...")
+        self.buscar_producto.textChanged.connect(self.filtrar_productos)
         productos_layout.addWidget(self.buscar_producto)
 
         self.tabla_productos = QTableWidget()
         self.tabla_productos.setColumnCount(4)
-
-        self.tabla_productos.setHorizontalHeaderLabels([
-            "Código",
-            "Producto",
-            "Stock",
-            "Precio",
-        ])
-
-        self.tabla_productos.setSelectionBehavior(
-            QAbstractItemView.SelectRows
-        )
-
-        self.tabla_productos.setSelectionMode(
-            QAbstractItemView.SingleSelection
-        )
-
-        self.tabla_productos.setEditTriggers(
-            QAbstractItemView.NoEditTriggers
-        )
-
-        self.tabla_productos.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarAlwaysOff
-        )
+        self.tabla_productos.setHorizontalHeaderLabels(["Código", "Producto", "Stock", "Precio"])
+        self.tabla_productos.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabla_productos.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tabla_productos.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla_productos.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tabla_productos.setWordWrap(False)
+        self.tabla_productos.setMinimumWidth(0)
+        hp = self.tabla_productos.horizontalHeader()
+        hp.setSectionResizeMode(0, QHeaderView.Fixed)
+        hp.setSectionResizeMode(1, QHeaderView.Stretch)
+        hp.setSectionResizeMode(2, QHeaderView.Fixed)
+        hp.setSectionResizeMode(3, QHeaderView.Fixed)
+        hp.resizeSection(0, 78)
+        hp.resizeSection(2, 55)
+        hp.resizeSection(3, 90)
+        productos_layout.addWidget(self.tabla_productos, 1)
 
-        self.tabla_productos.verticalHeader().setDefaultSectionSize(42)
-
-        header = self.tabla_productos.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
-        header.setSectionResizeMode(3, QHeaderView.Fixed)
-        header.resizeSection(0, 90)
-        header.resizeSection(2, 70)
-        header.resizeSection(3, 105)
-
-        productos_layout.addWidget(
-            self.tabla_productos,
-            1
-        )
-
-        btn_agregar = QPushButton(
-            "➕ Agregar producto seleccionado"
-        )
+        btn_agregar = QPushButton("➕ Agregar producto seleccionado")
         btn_agregar.setObjectName("verde")
-        btn_agregar.setMinimumHeight(44)
-        btn_agregar.clicked.connect(
-            self.agregar_producto_seleccionado
-        )
-
+        btn_agregar.setMinimumHeight(32)
+        btn_agregar.clicked.connect(self.agregar_producto_seleccionado)
+        self.btn_agregar_producto = btn_agregar
         productos_layout.addWidget(btn_agregar)
 
-        cuerpo_superior.addWidget(productos_panel, 5)
+        self.cuerpo_superior.addWidget(productos_panel, 5)
 
-        # ----------------------------------------------------
         # PEDIDO ACTUAL
-        # ----------------------------------------------------
-
         pedido_panel = QFrame()
         pedido_panel.setObjectName("panel")
+        pedido_panel.setMinimumWidth(0)
+        pedido_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.pedido_panel = pedido_panel
 
         pedido_layout = QVBoxLayout(pedido_panel)
-        pedido_layout.setContentsMargins(16, 16, 16, 16)
-        pedido_layout.setSpacing(8)
+        pedido_layout.setContentsMargins(7, 6, 7, 6)
+        pedido_layout.setSpacing(4)
 
         titulo_pedido = QLabel("Productos del pedido")
         titulo_pedido.setObjectName("titulo_panel")
-
         pedido_layout.addWidget(titulo_pedido)
 
         self.tabla_pedido = QTableWidget()
         self.tabla_pedido.setColumnCount(6)
-
-        self.tabla_pedido.setHorizontalHeaderLabels([
-            "Código",
-            "Producto",
-            "Cantidad",
-            "Precio",
-            "Subtotal",
-            "Acción",
-        ])
-
-        self.tabla_pedido.setSelectionBehavior(
-            QAbstractItemView.SelectRows
-        )
-
-        self.tabla_pedido.setSelectionMode(
-            QAbstractItemView.SingleSelection
-        )
-
-        self.tabla_pedido.setEditTriggers(
-            QAbstractItemView.NoEditTriggers
-        )
-
-        self.tabla_pedido.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarAlwaysOff
-        )
+        self.tabla_pedido.setHorizontalHeaderLabels(["Código", "Producto", "Cant.", "Precio", "Subtotal", "Acción"])
+        self.tabla_pedido.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabla_pedido.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tabla_pedido.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla_pedido.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tabla_pedido.setWordWrap(False)
+        self.tabla_pedido.setMinimumWidth(0)
+        h2 = self.tabla_pedido.horizontalHeader()
 
-        self.tabla_pedido.verticalHeader().setDefaultSectionSize(54)
+        h2.setSectionResizeMode(0, QHeaderView.Stretch)
+        h2.setSectionResizeMode(1, QHeaderView.Stretch)
+        h2.setSectionResizeMode(2, QHeaderView.Fixed)
+        h2.setSectionResizeMode(3, QHeaderView.Stretch)
+        h2.setSectionResizeMode(4, QHeaderView.Stretch)
+        h2.setSectionResizeMode(5, QHeaderView.Fixed)
 
-        header2 = self.tabla_pedido.horizontalHeader()
-
-        for columna in range(5):
-            header2.setSectionResizeMode(
-                columna,
-                QHeaderView.Stretch
-            )
-
-        header2.setSectionResizeMode(
-            5,
-            QHeaderView.Fixed
-        )
-
-        header2.resizeSection(5, 76)
-
-        pedido_layout.addWidget(
-            self.tabla_pedido,
-            1
-        )
+        h2.resizeSection(2, 75)
+        h2.resizeSection(5, 48)
+        pedido_layout.addWidget(self.tabla_pedido, 1)
 
         resumen = QFrame()
-        resumen.setStyleSheet("""
-            QFrame {
-                background: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 12px;
-            }
-        """)
-
+        resumen.setStyleSheet("QFrame { background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; }")
         resumen_layout = QHBoxLayout(resumen)
-        resumen_layout.setContentsMargins(15, 12, 15, 12)
-
+        resumen_layout.setContentsMargins(7, 4, 7, 4)
         lbl_total_texto = QLabel("TOTAL DEL PEDIDO")
-        lbl_total_texto.setStyleSheet(
-            "font-size:13px;font-weight:900;color:#64748b;"
-        )
-
+        lbl_total_texto.setStyleSheet("font-size:10px;font-weight:900;color:#64748b;")
         self.total = QLabel("$ 0,00")
         self.total.setObjectName("total")
-
         resumen_layout.addWidget(lbl_total_texto)
         resumen_layout.addStretch()
         resumen_layout.addWidget(self.total)
-
         pedido_layout.addWidget(resumen)
 
         botones_pedido = QHBoxLayout()
-
-        btn_vaciar = QPushButton("🗑 Vaciar pedido")
+        botones_pedido.setSpacing(5)
+        btn_vaciar = QPushButton("🗑 Vaciar")
         btn_vaciar.setObjectName("rojo")
-        btn_vaciar.setMinimumHeight(44)
-        btn_vaciar.clicked.connect(
-            self.vaciar_pedido
-        )
-
+        btn_vaciar.clicked.connect(self.vaciar_pedido)
         btn_guardar = QPushButton("💾 Guardar pedido")
         btn_guardar.setObjectName("primario")
-        btn_guardar.setMinimumHeight(44)
-        btn_guardar.clicked.connect(
-            self.guardar_pedido
-        )
-
+        btn_guardar.clicked.connect(self.guardar_pedido)
         botones_pedido.addWidget(btn_vaciar)
         botones_pedido.addWidget(btn_guardar)
-
+        self.botones_pedido_widgets = [btn_vaciar, btn_guardar]
         pedido_layout.addLayout(botones_pedido)
 
-        cuerpo_superior.addWidget(pedido_panel, 7)
+        self.cuerpo_superior.addWidget(pedido_panel, 6)
+        principal.addLayout(self.cuerpo_superior)
 
-        # ----------------------------------------------------
         # PEDIDOS REGISTRADOS
-        # ----------------------------------------------------
-
         registrados_panel = QFrame()
         registrados_panel.setObjectName("panel")
+        registrados_panel.setMinimumWidth(0)
+        registrados_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.registrados_panel = registrados_panel
 
         registrados_layout = QVBoxLayout(registrados_panel)
-        registrados_layout.setContentsMargins(16, 16, 16, 16)
-        registrados_layout.setSpacing(12)
+        registrados_layout.setContentsMargins(7, 6, 7, 6)
+        registrados_layout.setSpacing(4)
 
         titulo_registrados = QLabel("Pedidos registrados")
         titulo_registrados.setObjectName("titulo_panel")
-
         registrados_layout.addWidget(titulo_registrados)
 
         self.buscar_pedido = QLineEdit()
-        self.buscar_pedido.setPlaceholderText(
-            "🔎 Buscar pedido o cliente..."
-        )
-
-        self.buscar_pedido.textChanged.connect(
-            self.filtrar_pedidos
-        )
-
-        registrados_layout.addWidget(
-            self.buscar_pedido
-        )
+        self.buscar_pedido.setPlaceholderText("🔎 Buscar pedido o cliente...")
+        self.buscar_pedido.textChanged.connect(self.filtrar_pedidos)
+        registrados_layout.addWidget(self.buscar_pedido)
 
         self.tabla_registrados = QTableWidget()
         self.tabla_registrados.setColumnCount(7)
+        self.tabla_registrados.setHorizontalHeaderLabels(["N°", "Fecha", "Cliente", "Entrega", "Estado", "Total", "Acciones"])
+        self.tabla_registrados.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabla_registrados.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tabla_registrados.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla_registrados.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tabla_registrados.setWordWrap(False)
+        self.tabla_registrados.setTextElideMode(Qt.ElideRight)
+        self.tabla_registrados.setMinimumWidth(0)
+        h3 = self.tabla_registrados.horizontalHeader()
+        for col in range(7):
+            h3.setSectionResizeMode(col, QHeaderView.Stretch)
+        h3.setSectionResizeMode(0, QHeaderView.Fixed)
+        h3.setSectionResizeMode(1, QHeaderView.Fixed)
+        h3.setSectionResizeMode(3, QHeaderView.Fixed)
+        h3.setSectionResizeMode(4, QHeaderView.Fixed)
+        h3.setSectionResizeMode(5, QHeaderView.Fixed)
+        h3.setSectionResizeMode(6, QHeaderView.Fixed)
+        h3.resizeSection(0, 45)
+        h3.resizeSection(1, 82)
+        h3.resizeSection(3, 82)
+        h3.resizeSection(4, 88)
+        h3.resizeSection(5, 92)
+        h3.resizeSection(6, 92)
+        h3.setSectionResizeMode(2, QHeaderView.Stretch)
 
-        self.tabla_registrados.setHorizontalHeaderLabels([
-            "N°",
-            "Fecha",
-            "Cliente",
-            "Entrega",
-            "Estado",
-            "Total",
-            "Acciones",
-        ])
+        self.tabla_registrados.itemSelectionChanged.connect(self.seleccionar_pedido_registrado)
+        registrados_layout.addWidget(self.tabla_registrados, 1)
 
-        self.tabla_registrados.setSelectionBehavior(
-            QAbstractItemView.SelectRows
-        )
-
-        self.tabla_registrados.setSelectionMode(
-            QAbstractItemView.SingleSelection
-        )
-
-        self.tabla_registrados.setEditTriggers(
-            QAbstractItemView.NoEditTriggers
-        )
-
-        # La tabla ocupa todo el ancho disponible y no permite
-        # desplazamiento horizontal.
-        self.tabla_registrados.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarAlwaysOff
-        )
-        self.tabla_registrados.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Expanding
-        )
-
-        self.tabla_registrados.verticalHeader().setDefaultSectionSize(50)
-
-        header3 = self.tabla_registrados.horizontalHeader()
-
-        # Todas las columnas de datos se adaptan al ancho de la ventana.
-        # La columna de acciones mantiene un ancho razonable.
-        for columna in range(6):
-            header3.setSectionResizeMode(
-                columna,
-                QHeaderView.Stretch
-            )
-
-        header3.setSectionResizeMode(
-            6,
-            QHeaderView.Fixed
-        )
-        header3.resizeSection(6, 155)
-
-        self.tabla_registrados.itemSelectionChanged.connect(
-            self.seleccionar_pedido_registrado
-        )
-
-        registrados_layout.addWidget(
-            self.tabla_registrados,
-            1
-        )
-
-        leyenda = QLabel(
-            "🟠 PENDIENTE   •   🟢 ENTREGADO   •   "
-            "✓ Marcar entregado   •   🧾 Ver factura"
-        )
-
-        leyenda.setStyleSheet(
-            "font-size:12px;color:#64748b;font-weight:700;"
-        )
-
+        leyenda = QLabel("🟠 PENDIENTE   •   🟢 ENTREGADO   •   ✓ Marcar entregado   •   🧾 Ver factura")
+        leyenda.setStyleSheet("font-size:10px;color:#64748b;font-weight:700;")
+        leyenda.setWordWrap(True)
         registrados_layout.addWidget(leyenda)
 
-        # Primero la fila superior.
-        principal.addLayout(cuerpo_superior, 1)
+        # Este panel ocupa el ancho completo y queda debajo.
+        # En 1366x768 se ve completo y solo se desplaza verticalmente.
+        principal.addWidget(registrados_panel, 1)
 
-        # Después Pedidos registrados a todo el ancho.
-        principal.addWidget(registrados_panel, 0)
-
-        # ====================================================
-        # CONEXIONES
-        # ====================================================
-
-        self.tabla_productos.doubleClicked.connect(
-            self.agregar_producto_seleccionado
-        )
+        self.tabla_productos.doubleClicked.connect(self.agregar_producto_seleccionado)
 
     # ========================================================
     # PRODUCTOS
@@ -1494,8 +1371,9 @@ class Pedidos(QWidget):
                 "Modificar cantidad"
             )
 
-            spinner.setFixedWidth(105)
-            spinner.setMinimumHeight(38)
+            spinner.setMinimumWidth(70)
+            spinner.setMaximumWidth(75)
+            spinner.setMinimumHeight(24)
 
             spinner.valueChanged.connect(
                 lambda valor, i=indice:
@@ -1509,7 +1387,7 @@ class Pedidos(QWidget):
             )
 
             cont_layout.setContentsMargins(
-                5, 5, 5, 5
+                1, 1, 1, 1
             )
 
             cont_layout.setAlignment(
@@ -1542,7 +1420,13 @@ class Pedidos(QWidget):
             # BOTON ELIMINAR
             # ----------------------------------------------
 
-            btn_eliminar = QPushButton("🗑")
+            btn_eliminar = QPushButton()
+            btn_eliminar.setIcon(
+                self.style().standardIcon(
+                    QStyle.SP_TrashIcon
+                )
+            )
+            btn_eliminar.setIconSize(QSize(18, 18))
 
             btn_eliminar.setObjectName(
                 "rojo"
@@ -1553,12 +1437,12 @@ class Pedidos(QWidget):
             )
 
             btn_eliminar.setFixedSize(
-                46,
-                38
+                30,
+                26
             )
 
             btn_eliminar.setIconSize(
-                QSize(20, 20)
+                QSize(15, 15)
             )
 
             btn_eliminar.clicked.connect(
@@ -2121,14 +2005,20 @@ class Pedidos(QWidget):
             )
 
             acciones_layout.setContentsMargins(
-                2, 2, 2, 2
+                1, 0, 1, 0
             )
 
-            acciones_layout.setSpacing(3)
+            acciones_layout.setSpacing(1)
 
             if estado != "ENTREGADO":
 
-                btn_entregado = QPushButton("✓")
+                btn_entregado = QPushButton()
+                btn_entregado.setIcon(
+                    self.style().standardIcon(
+                        QStyle.SP_DialogApplyButton
+                    )
+                )
+                btn_entregado.setIconSize(QSize(15, 15))
                 btn_entregado.setObjectName(
                     "verde"
                 )
@@ -2137,10 +2027,8 @@ class Pedidos(QWidget):
                     "Marcar pedido como entregado y registrar pago"
                 )
 
-                btn_entregado.setFixedSize(
-                    42,
-                    36
-                )
+                btn_entregado.setFixedSize(28, 26)
+                btn_entregado.setText("✓")
 
                 btn_entregado.clicked.connect(
                     lambda checked=False,
@@ -2152,7 +2040,13 @@ class Pedidos(QWidget):
                     btn_entregado
                 )
 
-            btn_factura = QPushButton("🧾")
+            btn_factura = QPushButton()
+            btn_factura.setIcon(
+                self.style().standardIcon(
+                    QStyle.SP_FileDialogDetailedView
+                )
+            )
+            btn_factura.setIconSize(QSize(15, 15))
 
             btn_factura.setObjectName(
                 "factura"
@@ -2162,10 +2056,8 @@ class Pedidos(QWidget):
                 "Ver y guardar factura"
             )
 
-            btn_factura.setFixedSize(
-                42,
-                36
-            )
+            btn_factura.setFixedSize(28, 26)
+            btn_factura.setText("▣")
 
             btn_factura.clicked.connect(
                 lambda checked=False,
@@ -2181,7 +2073,13 @@ class Pedidos(QWidget):
             # BOTÓN ELIMINAR
             # ------------------------------------------------
 
-            btn_eliminar = QPushButton("🗑")
+            btn_eliminar = QPushButton()
+            btn_eliminar.setIcon(
+                self.style().standardIcon(
+                    QStyle.SP_TrashIcon
+                )
+            )
+            btn_eliminar.setIconSize(QSize(15, 15))
 
             btn_eliminar.setObjectName(
                 "eliminar"
@@ -2191,10 +2089,8 @@ class Pedidos(QWidget):
                 "Eliminar pedido"
             )
 
-            btn_eliminar.setFixedSize(
-                42,
-                36
-            )
+            btn_eliminar.setFixedSize(28, 26)
+            btn_eliminar.setText("×")
 
             btn_eliminar.clicked.connect(
                 lambda checked=False,
@@ -3862,7 +3758,7 @@ class Pedidos(QWidget):
         # Bloque de pago a la izquierda.
         pago_x = izquierda
         pago_w = 83.0
-        total_x = 116.0
+        total_x = 104.0
         total_w = derecha - total_x
         bloque_y = y
 
@@ -3886,8 +3782,8 @@ class Pedidos(QWidget):
 
         # Bloque de totales a la derecha.
         caja(total_x, bloque_y, total_w, 42, gris_fondo, gris_claro, 2.5)
-        escribir(total_x + 5, bloque_y + 7, 38, 6, "Subtotal", 8, gris, True)
-        escribir_derecha(total_x + 43, bloque_y + 7, total_w - 48, 6, dinero(subtotal_general), 8.5, negro)
+        escribir(total_x + 5, bloque_y + 7, 30, 6, "Subtotal", 8, gris, True)
+        escribir_derecha(total_x + 35, bloque_y + 7, total_w - 40, 6, dinero(subtotal_general), 8.5, negro)
 
         painter.setPen(QPen(gris_claro, max(1, X(0.30))))
         painter.drawLine(
@@ -3897,8 +3793,8 @@ class Pedidos(QWidget):
             Y(bloque_y + 19),
         )
 
-        escribir(total_x + 5, bloque_y + 23, 38, 9, "TOTAL", 10.5, azul, True)
-        escribir_derecha(total_x + 43, bloque_y + 22, total_w - 48, 10, dinero(total_general), 13, azul, True)
+        escribir(total_x + 5, bloque_y + 23, 30, 9, "TOTAL", 10.5, azul, True)
+        escribir_derecha(total_x + 35, bloque_y + 22, total_w - 40, 10, dinero(total_general), 13, azul, True)
 
         # --------------------------------------------------------
         # PIE DE PÁGINA

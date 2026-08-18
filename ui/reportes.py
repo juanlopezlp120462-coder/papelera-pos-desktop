@@ -243,6 +243,29 @@ class Reportes(QWidget):
 
         layout_principal.addWidget(self.tabla)
 
+        # ======================================================
+        # MOVIMIENTOS DE CAJA
+        # ======================================================
+        lbl_mov = QLabel("💰 Ingresos y egresos de caja")
+        lbl_mov.setStyleSheet("font-size: 16px; font-weight: 700; color: #1e293b; margin-top: 10px;")
+        layout_principal.addWidget(lbl_mov)
+
+        self.tabla_movimientos = QTableWidget()
+        self.tabla_movimientos.setColumnCount(5)
+        self.tabla_movimientos.setHorizontalHeaderLabels(["ID", "Fecha y Hora", "Tipo", "Importe ($)", "Concepto"])
+        hm = self.tabla_movimientos.horizontalHeader()
+        hm.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        hm.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        hm.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        hm.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        hm.setSectionResizeMode(4, QHeaderView.Stretch)
+        self.tabla_movimientos.verticalHeader().setVisible(False)
+        layout_principal.addWidget(self.tabla_movimientos)
+
+        self.lbl_mov_resumen = QLabel("Ingresos: $0.00 | Egresos: $0.00 | Neto: $0.00")
+        self.lbl_mov_resumen.setStyleSheet("font-size:14px;font-weight:700;color:#334155;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px;")
+        layout_principal.addWidget(self.lbl_mov_resumen)
+
         self.setLayout(layout_principal)
         self.cargar_reporte()
 
@@ -300,6 +323,18 @@ class Reportes(QWidget):
             """)
 
             lista_ventas = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT id, fecha, tipo, importe, COALESCE(concepto,'')
+                FROM movimientos_caja
+                ORDER BY id DESC
+            """)
+            lista_movimientos = cursor.fetchall()
+
+            ingresos = sum(float(m[3] or 0) for m in lista_movimientos if str(m[2]).upper() == "INGRESO")
+            egresos = sum(float(m[3] or 0) for m in lista_movimientos if str(m[2]).upper() == "EGRESO")
+            self.lbl_mov_resumen.setText(f"Ingresos: ${ingresos:,.2f} | Egresos: ${egresos:,.2f} | Neto: ${(ingresos-egresos):,.2f}")
+
             conexion.close()
 
             self.tabla.setRowCount(len(lista_ventas))
@@ -357,6 +392,18 @@ class Reportes(QWidget):
                 celda_layout.setContentsMargins(6, 4, 6, 4)
 
                 self.tabla.setCellWidget(fila, 3, celda_widget)
+
+            self.tabla_movimientos.setRowCount(len(lista_movimientos))
+            for fila, mov in enumerate(lista_movimientos):
+                self.tabla_movimientos.setItem(fila, 0, QTableWidgetItem(f"#{mov[0]}"))
+                self.tabla_movimientos.setItem(fila, 1, QTableWidgetItem(str(mov[1])))
+                item_tipo = QTableWidgetItem(str(mov[2]))
+                item_tipo.setTextAlignment(Qt.AlignCenter)
+                self.tabla_movimientos.setItem(fila, 2, item_tipo)
+                item_importe = QTableWidgetItem(f"${float(mov[3] or 0):,.2f}")
+                item_importe.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.tabla_movimientos.setItem(fila, 3, item_importe)
+                self.tabla_movimientos.setItem(fila, 4, QTableWidgetItem(str(mov[4] or "")))
 
         except Exception as e:
             print(f"Error al cargar reportes: {e}")

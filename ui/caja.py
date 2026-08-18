@@ -32,6 +32,10 @@ class Caja(QWidget):
 
 
         init_db()
+        self.asegurar_columnas_movimientos_caja()
+
+        self.ingresos_caja = 0.0
+        self.egresos_caja = 0.0
 
 
         self.setWindowTitle(
@@ -214,59 +218,17 @@ class Caja(QWidget):
 
 
 
-        self.lbl_total_ventas = QLabel(
-            "$ 0.00"
-        )
-
-        self.lbl_efectivo_ventas = QLabel(
-            "$ 0.00"
-        )
-
-        self.lbl_otros = QLabel(
-            "$ 0.00"
-        )
-
-        self.lbl_cantidad = QLabel(
-            "0"
-        )
-
-
+        # En el ARQUEO se muestra solamente el efectivo físico.
+        # Transferencias, tarjetas y cuenta corriente se conservan en BD para HISTORIAL.
+        self.lbl_efectivo_ventas = QLabel("$ 0.00")
+        self.lbl_cantidad = QLabel("0")
 
         self.add_kpi(
-            grid,
-            0,
-            0,
-            "🧾 Ventas del día",
-            self.lbl_total_ventas
+            grid, 0, 0, "💵 Ventas en efectivo", self.lbl_efectivo_ventas
         )
-
-
         self.add_kpi(
-            grid,
-            0,
-            1,
-            "💵 Ventas efectivo",
-            self.lbl_efectivo_ventas
+            grid, 0, 1, "📦 Cantidad de ventas", self.lbl_cantidad
         )
-
-
-        self.add_kpi(
-            grid,
-            1,
-            0,
-            "💳 Otros pagos",
-            self.lbl_otros
-        )
-
-
-        self.add_kpi(
-            grid,
-            1,
-            1,
-            "📦 Cantidad",
-            self.lbl_cantidad
-        )
-
 
 
         root.addWidget(
@@ -658,6 +620,70 @@ class Caja(QWidget):
 
 
     # ==========================
+    # ASEGURAR COLUMNA DE ARQUEO EN MOVIMIENTOS
+    # ==========================
+    def asegurar_columnas_movimientos_caja(self):
+        con = sqlite3.connect(BASE_DATOS)
+        try:
+            cur = con.cursor()
+            existe = cur.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='movimientos_caja'"
+            ).fetchone()
+            if not existe:
+                return
+
+            columnas = {fila[1] for fila in cur.execute(
+                "PRAGMA table_info(movimientos_caja)"
+            ).fetchall()}
+
+            if "arqueo_id" not in columnas:
+                cur.execute(
+                    "ALTER TABLE movimientos_caja ADD COLUMN arqueo_id INTEGER"
+                )
+
+            # Movimientos anteriores: quedan vinculados al primer arqueo
+            # posterior del mismo día. Así no vuelven a aparecer.
+            cur.execute(
+                """
+                UPDATE movimientos_caja
+                SET arqueo_id = (
+                    SELECT MIN(a.id)
+                    FROM arqueos a
+                    WHERE substr(a.fecha,1,10) = substr(movimientos_caja.fecha,1,10)
+                      AND a.fecha >= movimientos_caja.fecha
+                )
+                WHERE arqueo_id IS NULL
+                """
+            )
+            con.commit()
+        finally:
+            con.close()
+
+
+    # ==========================
+    # ASEGURAR COLUMNAS DEL ARQUEO
+    # ==========================
+    def asegurar_columnas_arqueo(self):
+        con = sqlite3.connect(BASE_DATOS)
+        try:
+            cur = con.cursor()
+            columnas = {fila[1] for fila in cur.execute("PRAGMA table_info(arqueos)").fetchall()}
+            campos = {
+                "ventas_total": "REAL DEFAULT 0",
+                "ventas_efectivo": "REAL DEFAULT 0",
+                "ventas_transferencia": "REAL DEFAULT 0",
+                "ventas_tarjeta": "REAL DEFAULT 0",
+                "ventas_cuenta": "REAL DEFAULT 0",
+                "cantidad_ventas": "INTEGER DEFAULT 0",
+            }
+            for nombre, tipo in campos.items():
+                if nombre not in columnas:
+                    cur.execute(f"ALTER TABLE arqueos ADD COLUMN {nombre} {tipo}")
+            con.commit()
+        finally:
+            con.close()
+
+    # ==========================
     # CONFIGURAR NUMERO
     # ==========================
 
@@ -843,135 +869,180 @@ class Caja(QWidget):
 
 
     def obtener_ventas_dia(self):
-
-
         hoy = self.fecha_hoy() + "%"
+        con = sqlite3.connect(BASE_DATOS)
+        cur = con.cursor()
+        try:
+            row = cur.execute("""
+                SELECT
+                    COALESCE(SUM(total), 0),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN COALESCE(pago_efectivo,0) > 0 THEN pago_efectivo
+                            WHEN LOWER(TRIM(COALESCE(forma_pago,''))) IN ('efectivo','cash') THEN total
+                            ELSE 0
+                        END
+                    ),0),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN COALESCE(pago_transferencia,0) > 0 THEN pago_transferencia
+                            WHEN LOWER(TRIM(COALESCE(forma_pago,''))) IN ('transferencia','transfer','mercadopago','mercado pago') THEN total
+                            ELSE 0
+                        END
+                    ),0),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN COALESCE(pago_tarjeta,0) > 0 THEN pago_tarjeta
+                            WHEN LOWER(TRIM(COALESCE(forma_pago,''))) IN ('tarjeta','credito','crédito','debito','débito') THEN total
+                            ELSE 0
+                        END
+                    ),0),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN COALESCE(pago_cuenta,0) > 0 THEN pago_cuenta
+                            WHEN LOWER(TRIM(COALESCE(forma_pago,''))) IN ('cuenta','cuenta corriente','fiado') THEN total
+                            ELSE 0
+                        END
+                    ),0),
+                    COUNT(*)
+                FROM ventas
+                WHERE fecha LIKE ?
+                  AND COALESCE(estado,'ACTIVA')='ACTIVA'
+            """, (hoy,)).fetchone()
 
+            return tuple(float(x or 0) for x in row[:5]) + (int(row[5] or 0),)
+        finally:
+            con.close()
 
+    def obtener_movimientos_dia(self):
+        hoy = self.fecha_hoy()
 
-        con = sqlite3.connect(
-            BASE_DATOS
-        )
-
-
+        con = sqlite3.connect(BASE_DATOS)
         cur = con.cursor()
 
+        try:
+            # =====================================================
+            # BUSCAR EL ÚLTIMO ARQUEO REALIZADO HOY
+            # =====================================================
+            ultimo_arqueo = cur.execute(
+                """
+                SELECT MAX(fecha)
+                FROM arqueos
+                WHERE fecha LIKE ?
+                """,
+                (hoy + "%",)
+            ).fetchone()[0]
 
+            # =====================================================
+            # PRIMER ARQUEO DEL DÍA
+            #
+            # Si todavía no hubo ningún arqueo hoy,
+            # toma todos los movimientos realizados hoy.
+            # =====================================================
+            if not ultimo_arqueo:
 
-        total = cur.execute(
-            """
-            SELECT COALESCE(SUM(total),0)
-            FROM ventas
-            WHERE fecha LIKE ?
-            AND estado='ACTIVA'
-            """,
-            (hoy,)
-        ).fetchone()[0]
+                row = cur.execute(
+                    """
+                    SELECT
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN UPPER(TRIM(tipo)) = 'INGRESO'
+                                    THEN importe
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ),
 
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN UPPER(TRIM(tipo)) = 'EGRESO'
+                                    THEN importe
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        )
 
+                    FROM movimientos_caja
 
-        efectivo = cur.execute(
-            """
-            SELECT COALESCE(
-                SUM(
-                    CASE
+                    WHERE fecha LIKE ?
+                      AND arqueo_id IS NULL
+                    """,
+                    (hoy + "%",)
+                ).fetchone()
 
-                    WHEN COALESCE(pago_efectivo,0)>0
-                    THEN pago_efectivo
+            # =====================================================
+            # ARQUEOS POSTERIORES
+            #
+            # Solamente toma movimientos realizados DESPUÉS
+            # del último arqueo.
+            # =====================================================
+            else:
 
+                row = cur.execute(
+                    """
+                    SELECT
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN UPPER(TRIM(tipo)) = 'INGRESO'
+                                    THEN importe
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ),
 
-                    WHEN LOWER(
-                        COALESCE(forma_pago,'')
-                    )='efectivo'
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN UPPER(TRIM(tipo)) = 'EGRESO'
+                                    THEN importe
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        )
 
-                    THEN total
+                    FROM movimientos_caja
 
+                    WHERE fecha LIKE ?
+                      AND fecha > ?
+                      AND arqueo_id IS NULL
+                    """,
+                    (
+                        hoy + "%",
+                        ultimo_arqueo
+                    )
+                ).fetchone()
 
-                    ELSE 0
+            return (
+                float(row[0] or 0),
+                float(row[1] or 0)
+            )
 
-                    END
-                ),
-            0)
-
-            FROM ventas
-
-            WHERE fecha LIKE ?
-            AND estado='ACTIVA'
-            """,
-            (hoy,)
-        ).fetchone()[0]
-
-
-
-        cantidad = cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM ventas
-            WHERE fecha LIKE ?
-            AND estado='ACTIVA'
-            """,
-            (hoy,)
-        ).fetchone()[0]
-
-
-
-        con.close()
-
-
-
-        return (
-
-            float(total or 0),
-
-            float(efectivo or 0),
-
-            int(cantidad or 0)
-
-        )
-
-
-
+        finally:
+            con.close()
     # ==========================
     # ACTUALIZAR DATOS
     # ==========================
-
-
     def actualizar_datos(self):
-
-
         (
             self.total_ventas,
             self.efectivo_ventas,
+            self.transferencia_ventas,
+            self.tarjeta_ventas,
+            self.cuenta_ventas,
             self.cantidad_ventas
-
         ) = self.obtener_ventas_dia()
 
+        (self.ingresos_caja, self.egresos_caja) = self.obtener_movimientos_dia()
 
-
-        self.lbl_total_ventas.setText(
-            f"$ {self.total_ventas:,.2f}"
-        )
-
-
-
-        self.lbl_efectivo_ventas.setText(
-            f"$ {self.efectivo_ventas:,.2f}"
-        )
-
-
-
-        self.lbl_otros.setText(
-            "$ 0.00"
-        )
-
-
-
-        self.lbl_cantidad.setText(
-            str(self.cantidad_ventas)
-        )
-
-
-
+        self.lbl_efectivo_ventas.setText(f"$ {self.efectivo_ventas:,.2f}")
+        self.lbl_cantidad.setText(str(self.cantidad_ventas))
         self.calcular()
 
     # ==========================
@@ -1110,16 +1181,13 @@ class Caja(QWidget):
 
 
 
+        # ARQUEO EXCLUSIVAMENTE EN EFECTIVO.
+        # Transferencias, tarjetas y cuenta corriente no forman parte de la caja física.
+        # INGRESOS/EGRESOS se guardan para REPORTES, pero no se muestran ni se suman aquí.
         esperado = (
-
             self.apertura.value()
-
-            +
-
-            self.efectivo_ventas
-
+            + self.efectivo_ventas
         )
-
 
 
         self.esperado = esperado
@@ -1164,28 +1232,25 @@ class Caja(QWidget):
 
 
         self.resultado.setText(
-
             f"""
-💵 Efectivo inicial:
+💵 EFECTIVO INICIAL:
 $ {self.apertura.value():,.2f}
 
-
-🧾 Ventas efectivo:
+💵 VENTAS EN EFECTIVO:
 $ {self.efectivo_ventas:,.2f}
-
 
 💰 EFECTIVO ESPERADO:
 $ {self.esperado:,.2f}
 
-
 💵 EFECTIVO CONTADO:
 $ {self.real.value():,.2f}
 
+📊 DIFERENCIA:
+$ {diferencia:,.2f}
 
 {estado}
 """
         )
-
 
 
     # ==========================
@@ -1467,11 +1532,14 @@ $ {self.real.value():,.2f}
                     observaciones,
                     ventas_total,
                     ventas_efectivo,
+                    ventas_transferencia,
+                    ventas_tarjeta,
+                    ventas_cuenta,
                     cantidad_ventas
                 )
 
                 VALUES
-                (?,?,?,?,?,?,?,?,?,?,?)
+                (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
 
                 (
@@ -1487,12 +1555,32 @@ $ {self.real.value():,.2f}
                     self.obs.text(),
                     self.total_ventas,
                     self.efectivo_ventas,
+                    self.transferencia_ventas,
+                    self.tarjeta_ventas,
+                    self.cuenta_ventas,
                     self.cantidad_ventas
 
                 )
 
             )
 
+            # Asociar al arqueo los movimientos que acaba de tomar.
+            # No se eliminan: REPORTES los seguirá mostrando.
+            arqueo_id = con.execute(
+                "SELECT id FROM arqueos WHERE uuid = ?",
+                (uuid_arqueo,)
+            ).fetchone()[0]
+
+            con.execute(
+                """
+                UPDATE movimientos_caja
+                SET arqueo_id = ?
+                WHERE fecha LIKE ?
+                  AND fecha <= ?
+                  AND arqueo_id IS NULL
+                """,
+                (arqueo_id, fecha_str[:10] + "%", fecha_str)
+            )
 
             con.commit()
 
@@ -1513,9 +1601,9 @@ $ {self.real.value():,.2f}
                 "observaciones": self.obs.text(),
                 "ventas_total": self.total_ventas,
                 "ventas_efectivo": self.efectivo_ventas,
-                "ventas_transferencia": 0,
-                "ventas_tarjeta": 0,
-                "ventas_cuenta": 0,
+                "ventas_transferencia": self.transferencia_ventas,
+                "ventas_tarjeta": self.tarjeta_ventas,
+                "ventas_cuenta": self.cuenta_ventas,
                 "cantidad_ventas": self.cantidad_ventas
             }
 
@@ -1555,6 +1643,9 @@ $ {self.real.value():,.2f}
                     "observaciones": self.obs.text(),
                     "ventas_total": self.total_ventas,
                     "ventas_efectivo": self.efectivo_ventas,
+                    "ventas_transferencia": self.transferencia_ventas,
+                    "ventas_tarjeta": self.tarjeta_ventas,
+                    "ventas_cuenta": self.cuenta_ventas,
                     "cantidad_ventas": self.cantidad_ventas
                 }
                 api_url = get_setting('api_url', 'https://papelera-pos-backend-production.up.railway.app')
@@ -1591,26 +1682,23 @@ $ {self.real.value():,.2f}
                 f"""
 El arqueo fue guardado correctamente.
 
-
 📅 Fecha:
 {self.fecha_hoy_display()}
-
 
 🧾 Ventas realizadas:
 {self.cantidad_ventas}
 
-
-💵 Total vendido:
-$ {self.total_ventas:,.2f}
-
+💵 Ventas en efectivo:
+$ {self.efectivo_ventas:,.2f}
 
 💰 Efectivo esperado:
 $ {self.esperado:,.2f}
 
-
 💵 Efectivo contado:
 $ {self.real.value():,.2f}
 
+📊 Diferencia:
+$ {self.real.value() - self.esperado:,.2f}
 """,
 
                 self
@@ -1630,16 +1718,16 @@ $ {self.real.value():,.2f}
             self.total_ventas = 0
 
             self.efectivo_ventas = 0
-
+            self.transferencia_ventas = 0
+            self.tarjeta_ventas = 0
+            self.cuenta_ventas = 0
             self.cantidad_ventas = 0
 
+            self.ingresos_caja = 0
+            self.egresos_caja = 0
             self.esperado = 0
 
 
-
-            self.lbl_total_ventas.setText(
-                "$ 0.00"
-            )
 
 
             self.lbl_efectivo_ventas.setText(
@@ -1647,9 +1735,6 @@ $ {self.real.value():,.2f}
             )
 
 
-            self.lbl_otros.setText(
-                "$ 0.00"
-            )
 
 
             self.lbl_cantidad.setText(
@@ -1698,16 +1783,16 @@ $ {self.real.value():,.2f}
             self.total_ventas = 0
 
             self.efectivo_ventas = 0
-
+            self.transferencia_ventas = 0
+            self.tarjeta_ventas = 0
+            self.cuenta_ventas = 0
             self.cantidad_ventas = 0
 
+            self.ingresos_caja = 0
+            self.egresos_caja = 0
             self.esperado = 0
 
 
-
-            self.lbl_total_ventas.setText(
-                "$ 0.00"
-            )
 
 
             self.lbl_efectivo_ventas.setText(
@@ -1715,9 +1800,6 @@ $ {self.real.value():,.2f}
             )
 
 
-            self.lbl_otros.setText(
-                "$ 0.00"
-            )
 
 
             self.lbl_cantidad.setText(
