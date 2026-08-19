@@ -6,81 +6,45 @@ on:
       - "v*"
 
 jobs:
-
   build-update:
-
     runs-on: windows-latest
 
     steps:
-
-      # ==========================================
-      # DESCARGAR REPOSITORIO
-      # ==========================================
-
       - name: Descargar repositorio
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # INSTALAR PYTHON
-      # ==========================================
 
       - name: Instalar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-
-      # ==========================================
-      # INSTALAR DEPENDENCIAS
-      # ==========================================
-
       - name: Instalar dependencias
         shell: powershell
         run: |
-
           python -m pip install --upgrade pip
-
           pip install -r requirements.txt
 
-
-      # ==========================================
-      # MOSTRAR VERSION
-      # ==========================================
+          python -c "import dotenv; print('python-dotenv OK:', dotenv.__file__)"
 
       - name: Obtener version
         shell: powershell
         run: |
-
           $version = "${{ github.ref_name }}".Replace("v","")
+
+          "VERSION=$version" >> $env:GITHUB_ENV
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host "VERSION DEL RELEASE" -ForegroundColor Cyan
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
-
-          Write-Host "Tag:"
-          Write-Host "${{ github.ref_name }}"
-
+          Write-Host "Tag: ${{ github.ref_name }}"
+          Write-Host "Version: $version"
           Write-Host ""
-
-          Write-Host "Version:"
-          Write-Host $version
-
-          Write-Host ""
-
-          "VERSION=$version" >> $env:GITHUB_ENV
-
-
-      # ==========================================
-      # CREAR EXE
-      # ==========================================
 
       - name: Crear EXE con PyInstaller
         shell: powershell
         run: |
-
           python -m PyInstaller --clean PAPELERA_POS.spec
 
           if ($LASTEXITCODE -ne 0) {
@@ -88,436 +52,351 @@ jobs:
               exit 1
           }
 
-
-      # ==========================================
-      # VERIFICAR EXE
-      # ==========================================
-
-      - name: Verificar EXE
+      - name: Verificar compilacion
         shell: powershell
         run: |
+          $internal = "dist\PAPELERA_POS\_internal"
+          $exe = "dist\PAPELERA_POS\PAPELERA_POS.exe"
 
-          if (!(Test-Path "dist\PAPELERA_POS\PAPELERA_POS.exe")) {
-
-              Write-Error "NO EXISTE PAPELERA_POS.exe"
-
+          if (!(Test-Path -LiteralPath $exe)) {
+              Write-Error "No existe PAPELERA_POS.exe"
               exit 1
           }
 
+          if (!(Test-Path -LiteralPath $internal)) {
+              Write-Error "No existe _internal"
+              exit 1
+          }
+
+          Write-Host "EXE encontrado." -ForegroundColor Green
+          Write-Host "_internal encontrado." -ForegroundColor Green
+
+      - name: Verificar python-dotenv
+        shell: powershell
+        run: |
+          $dotenv = "dist\PAPELERA_POS\_internal\dotenv"
+          $init = "dist\PAPELERA_POS\_internal\dotenv\__init__.py"
+
           Write-Host ""
-          Write-Host "OK: PAPELERA_POS.exe existe." -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO PYTHON-DOTENV" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
 
+          if (!(Test-Path -LiteralPath $dotenv)) {
+              Write-Error "ERROR CRITICO: No existe la carpeta dotenv."
+              Write-Host "Ruta esperada:"
+              Write-Host $dotenv
+              exit 1
+          }
 
-      # ==========================================
-      # CREAR VERSION.TXT
-      # ==========================================
+          if (!(Test-Path -LiteralPath $init)) {
+              Write-Error "ERROR CRITICO: Falta dotenv\__init__.py."
+              Write-Host "Ruta esperada:"
+              Write-Host $init
+              exit 1
+          }
+
+          Write-Host "dotenv encontrado correctamente." -ForegroundColor Green
+          Write-Host "__init__.py encontrado correctamente." -ForegroundColor Green
+          Write-Host ""
+
+          Get-ChildItem -LiteralPath $dotenv
+
+      - name: Verificar certifi
+        shell: powershell
+        run: |
+          $cert = "dist\PAPELERA_POS\_internal\certifi\cacert.pem"
+
+          if (!(Test-Path -LiteralPath $cert)) {
+              Write-Error "ERROR: Falta certifi\cacert.pem"
+              exit 1
+          }
+
+          Write-Host "certifi OK." -ForegroundColor Green
 
       - name: Crear version.txt
         shell: powershell
         run: |
-
-          Write-Host ""
-          Write-Host "Creando version.txt..." -ForegroundColor Cyan
-
-          # VERSION EN LA RAIZ
+          $rootVersion = "dist\PAPELERA_POS\version.txt"
+          $internalVersion = "dist\PAPELERA_POS\_internal\version.txt"
 
           Set-Content `
-            -Path "dist\PAPELERA_POS\version.txt" `
+            -LiteralPath $rootVersion `
             -Value $env:VERSION `
             -Encoding UTF8
 
-
-          # VERSION DENTRO DE INTERNAL
-
-          if (!(Test-Path "dist\PAPELERA_POS\_internal")) {
-
-              Write-Error "NO EXISTE _internal"
-
-              exit 1
-          }
-
-
           Set-Content `
-            -Path "dist\PAPELERA_POS\_internal\version.txt" `
+            -LiteralPath $internalVersion `
             -Value $env:VERSION `
             -Encoding UTF8
 
-
-      # ==========================================
-      # VERIFICAR VERSIONES
-      # ==========================================
+          Write-Host "version.txt creado." -ForegroundColor Green
 
       - name: Verificar versiones
         shell: powershell
         run: |
-
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO VERSIONES" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
-
-          $v1 = (
+          $rootVersion = (
               Get-Content `
-                "dist\PAPELERA_POS\version.txt" `
+                -LiteralPath "dist\PAPELERA_POS\version.txt" `
                 -Raw
           ).Trim()
 
-
-          $v2 = (
+          $internalVersion = (
               Get-Content `
-                "dist\PAPELERA_POS\_internal\version.txt" `
+                -LiteralPath "dist\PAPELERA_POS\_internal\version.txt" `
                 -Raw
           ).Trim()
 
-
-          Write-Host "Raiz:"
-          Write-Host $v1
-
+          Write-Host ""
+          Write-Host "Version raiz: $rootVersion"
+          Write-Host "Version _internal: $internalVersion"
+          Write-Host "Version esperada: $env:VERSION"
           Write-Host ""
 
-          Write-Host "_internal:"
-          Write-Host $v2
-
-          Write-Host ""
-
-
-          if ($v1 -ne $env:VERSION) {
-
-              Write-Error `
-                "ERROR: version.txt de raiz incorrecto."
-
+          if ($rootVersion -ne $env:VERSION) {
+              Write-Error "ERROR: version.txt de raiz incorrecto."
               exit 1
           }
 
-
-          if ($v2 -ne $env:VERSION) {
-
-              Write-Error `
-                "ERROR: version.txt de _internal incorrecto."
-
+          if ($internalVersion -ne $env:VERSION) {
+              Write-Error "ERROR: version.txt de _internal incorrecto."
               exit 1
           }
 
+          Write-Host "Versiones correctas." -ForegroundColor Green
 
-          Write-Host `
-            "OK: Las dos versiones son $env:VERSION" `
-            -ForegroundColor Green
-
-
-      # ==========================================
-      # VERIFICAR CERTIFICADO
-      # ==========================================
-
-      - name: Verificar certificado
+      - name: Preparar carpeta update
         shell: powershell
         run: |
-
-          if (!(Test-Path `
-            "dist\PAPELERA_POS\_internal\certifi\cacert.pem")) {
-
-              Write-Error `
-                "ERROR: NO EXISTE certifi\cacert.pem"
-
-              exit 1
-          }
-
-          Write-Host `
-            "OK: certifi\cacert.pem existe" `
-            -ForegroundColor Green
-
-
-      # ==========================================
-      # PREPARAR UPDATE
-      # ==========================================
-
-      - name: Preparar carpeta Update
-        shell: powershell
-        run: |
-
-          if (Test-Path "update") {
-
+          if (Test-Path -LiteralPath "update") {
               Remove-Item `
-                "update" `
+                -LiteralPath "update" `
                 -Recurse `
                 -Force
           }
 
-
           New-Item `
             -ItemType Directory `
             -Path "update" `
-            | Out-Null
+            -Force | Out-Null
 
-
-          # ======================================
-          # EXE
-          # ======================================
+          Write-Host "Copiando PAPELERA_POS.exe..."
 
           Copy-Item `
-            "dist\PAPELERA_POS\PAPELERA_POS.exe" `
-            "update\PAPELERA_POS.exe" `
+            -LiteralPath "dist\PAPELERA_POS\PAPELERA_POS.exe" `
+            -Destination "update\PAPELERA_POS.exe" `
             -Force
 
-
-          # ======================================
-          # VERSION
-          # ======================================
+          Write-Host "Copiando version.txt..."
 
           Copy-Item `
-            "dist\PAPELERA_POS\version.txt" `
-            "update\version.txt" `
+            -LiteralPath "dist\PAPELERA_POS\version.txt" `
+            -Destination "update\version.txt" `
             -Force
 
-
-          # ======================================
-          # INTERNAL COMPLETO
-          # ======================================
+          Write-Host "Copiando _internal completo..."
 
           Copy-Item `
-            "dist\PAPELERA_POS\_internal" `
-            "update\_internal" `
+            -LiteralPath "dist\PAPELERA_POS\_internal" `
+            -Destination "update\_internal" `
             -Recurse `
             -Force
 
+          Write-Host ""
+          Write-Host "Carpeta update preparada." -ForegroundColor Green
 
-      # ==========================================
-      # VERIFICAR UPDATE
-      # ==========================================
-
-      - name: Verificar carpeta Update
+      - name: Verificar update
         shell: powershell
         run: |
+          $exe = "update\PAPELERA_POS.exe"
+          $version = "update\version.txt"
+          $internal = "update\_internal"
+          $dotenv = "update\_internal\dotenv\__init__.py"
+          $cert = "update\_internal\certifi\cacert.pem"
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "CONTENIDO UPDATE" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO UPDATE" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          if (!(Test-Path -LiteralPath $exe)) {
+              Write-Error "Falta update\PAPELERA_POS.exe"
+              exit 1
+          }
+
+          if (!(Test-Path -LiteralPath $version)) {
+              Write-Error "Falta update\version.txt"
+              exit 1
+          }
+
+          if (!(Test-Path -LiteralPath $internal)) {
+              Write-Error "Falta update\_internal"
+              exit 1
+          }
+
+          if (!(Test-Path -LiteralPath $dotenv)) {
+              Write-Error "ERROR CRITICO: Falta update\_internal\dotenv\__init__.py"
+              exit 1
+          }
+
+          if (!(Test-Path -LiteralPath $cert)) {
+              Write-Error "ERROR: Falta update\_internal\certifi\cacert.pem"
+              exit 1
+          }
+
+          $updateVersion = (
+              Get-Content `
+                -LiteralPath $version `
+                -Raw
+          ).Trim()
+
+          if ($updateVersion -ne $env:VERSION) {
+              Write-Error "ERROR: version.txt del update incorrecto."
+              exit 1
+          }
+
+          Write-Host "PAPELERA_POS.exe OK." -ForegroundColor Green
+          Write-Host "version.txt OK." -ForegroundColor Green
+          Write-Host "_internal OK." -ForegroundColor Green
+          Write-Host "dotenv OK." -ForegroundColor Green
+          Write-Host "certifi OK." -ForegroundColor Green
+          Write-Host ""
+
+      - name: Mostrar contenido de update
+        shell: powershell
+        run: |
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "CONTENIDO DE UPDATE" -ForegroundColor Cyan
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
           Get-ChildItem `
-            "update" `
-            -Recurse
-
-
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO VERSION" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
-
-
-          if (!(Test-Path "update\version.txt")) {
-
-              Write-Error "FALTA update\version.txt"
-
-              exit 1
-          }
-
-
-          $updateVersion = (
-              Get-Content `
-                "update\version.txt" `
-                -Raw
-          ).Trim()
-
-
-          Write-Host "Version del update:"
-          Write-Host $updateVersion
-
-
-          if ($updateVersion -ne $env:VERSION) {
-
-              Write-Error `
-                "ERROR: VERSION INCORRECTA EN UPDATE"
-
-              exit 1
-          }
-
-
-      # ==========================================
-      # VERIFICAR INTERNAL
-      # ==========================================
-
-      - name: Verificar Internal
-        shell: powershell
-        run: |
-
-          if (!(Test-Path "update\_internal")) {
-
-              Write-Error `
-                "FALTA update\_internal"
-
-              exit 1
-          }
-
-
-          if (!(Test-Path "update\_internal\version.txt")) {
-
-              Write-Error `
-                "FALTA update\_internal\version.txt"
-
-              exit 1
-          }
-
-
-          $internalVersion = (
-              Get-Content `
-                "update\_internal\version.txt" `
-                -Raw
-          ).Trim()
-
-
-          if ($internalVersion -ne $env:VERSION) {
-
-              Write-Error `
-                "ERROR: VERSION INCORRECTA EN _internal"
-
-              exit 1
-          }
-
-
-          if (!(Test-Path `
-            "update\_internal\certifi\cacert.pem")) {
-
-              Write-Error `
-                "FALTA certifi\cacert.pem"
-
-              exit 1
-          }
-
-
-          Write-Host ""
-          Write-Host `
-            "OK: UPDATE COMPLETO Y CORRECTO" `
-            -ForegroundColor Green
-
-
-      # ==========================================
-      # CREAR ZIP
-      # ==========================================
+            -LiteralPath "update" `
+            -Recurse `
+            -File |
+            Select-Object FullName, Length
 
       - name: Crear update.zip
         shell: powershell
         run: |
-
-          if (Test-Path "update.zip") {
-
+          if (Test-Path -LiteralPath "update.zip") {
               Remove-Item `
-                "update.zip" `
+                -LiteralPath "update.zip" `
                 -Force
           }
-
 
           Compress-Archive `
             -Path "update\*" `
             -DestinationPath "update.zip" `
             -CompressionLevel Optimal
 
-
-          if (!(Test-Path "update.zip")) {
-
-              Write-Error `
-                "NO SE CREO update.zip"
-
+          if (!(Test-Path -LiteralPath "update.zip")) {
+              Write-Error "NO SE CREO update.zip"
               exit 1
           }
 
-
           Write-Host ""
-          Write-Host `
-            "OK: update.zip creado." `
-            -ForegroundColor Green
+          Write-Host "update.zip creado correctamente." -ForegroundColor Green
 
-
-      # ==========================================
-      # VERIFICAR ZIP
-      # ==========================================
-
-      - name: Verificar update.zip
+      - name: Verificar contenido del ZIP
         shell: powershell
         run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "CONTENIDO DEL ZIP" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
+          $zipPath = (Resolve-Path "update.zip").Path
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 
-          tar -tf update.zip
+          try {
+              $names = @(
+                  $zip.Entries |
+                  ForEach-Object {
+                      $_.FullName
+                  }
+              )
 
+              Write-Host ""
+              Write-Host "==========================================" -ForegroundColor Cyan
+              Write-Host "CONTENIDO DEL ZIP" -ForegroundColor Cyan
+              Write-Host "==========================================" -ForegroundColor Cyan
+              Write-Host ""
 
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICAR ARCHIVOS" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
+              $names | Select-String "dotenv"
 
+              $exeEntry = $names |
+                  Where-Object {
+                      $_ -match "^PAPELERA_POS\.exe$"
+                  }
 
-          $contenido = tar -tf update.zip
+              if ($null -eq $exeEntry) {
+                  Write-Error "ERROR: update.zip no contiene PAPELERA_POS.exe"
+                  exit 1
+              }
 
+              $versionEntry = $names |
+                  Where-Object {
+                      $_ -match "^version\.txt$"
+                  }
 
-          if (!($contenido -match "PAPELERA_POS.exe")) {
+              if ($null -eq $versionEntry) {
+                  Write-Error "ERROR: update.zip no contiene version.txt"
+                  exit 1
+              }
 
-              Write-Error `
-                "ERROR: Falta PAPELERA_POS.exe"
+              $internalEntry = $names |
+                  Where-Object {
+                      $_ -match "^_internal/"
+                  }
 
-              exit 1
+              if ($null -eq $internalEntry) {
+                  Write-Error "ERROR: update.zip no contiene _internal"
+                  exit 1
+              }
+
+              $dotenvEntry = $names |
+                  Where-Object {
+                      $_ -match "^_internal[/\\]dotenv[/\\]__init__\.py$"
+                  }
+
+              if ($null -eq $dotenvEntry) {
+                  Write-Error "ERROR CRITICO: update.zip NO contiene _internal\dotenv\__init__.py"
+                  exit 1
+              }
+
+              $certEntry = $names |
+                  Where-Object {
+                      $_ -match "^_internal[/\\]certifi[/\\]cacert\.pem$"
+                  }
+
+              if ($null -eq $certEntry) {
+                  Write-Error "ERROR: update.zip NO contiene certifi\cacert.pem"
+                  exit 1
+              }
+
+              Write-Host ""
+              Write-Host "==========================================" -ForegroundColor Green
+              Write-Host "ZIP VERIFICADO CORRECTAMENTE" -ForegroundColor Green
+              Write-Host "==========================================" -ForegroundColor Green
+              Write-Host ""
+              Write-Host "PAPELERA_POS.exe: OK" -ForegroundColor Green
+              Write-Host "version.txt: OK" -ForegroundColor Green
+              Write-Host "_internal: OK" -ForegroundColor Green
+              Write-Host "dotenv: OK" -ForegroundColor Green
+              Write-Host "certifi: OK" -ForegroundColor Green
+          }
+          finally {
+              $zip.Dispose()
           }
 
-
-          if (!($contenido -match "version.txt")) {
-
-              Write-Error `
-                "ERROR: Falta version.txt"
-
-              exit 1
-          }
-
-
-          if (!($contenido -match "_internal")) {
-
-              Write-Error `
-                "ERROR: Falta _internal"
-
-              exit 1
-          }
-
-
-          if (!(
-            $contenido -match `
-            "certifi/cacert.pem|certifi\\cacert.pem"
-          )) {
-
-              Write-Error `
-                "ERROR: Falta certifi\cacert.pem"
-
-              exit 1
-          }
-
-
-          Write-Host ""
-          Write-Host `
-            "OK: update.zip contiene todos los archivos." `
-            -ForegroundColor Green
-
-
-      # ==========================================
-      # SUBIR ARTIFACT
-      # ==========================================
-
-      - name: Subir update.zip Artifact
+      - name: Subir artifact
         uses: actions/upload-artifact@v4
         with:
           name: update
           path: update.zip
 
-
-      # ==========================================
-      # CREAR RELEASE
-      # ==========================================
-
-      - name: Crear Release y subir update.zip
+      - name: Crear Release
         uses: softprops/action-gh-release@v2
         with:
           files: update.zip
