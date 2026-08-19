@@ -1,4 +1,5 @@
-﻿# -*- mode: python ; coding: utf-8 -*-
+﻿
+# -*- mode: python ; coding: utf-8 -*-
 
 import os
 
@@ -35,53 +36,71 @@ VERSION_FILE = os.path.join(
 hiddenimports = []
 
 
-# Todos los módulos de ui
+# ------------------------------------------------------------
+# Todos los módulos de UI
+# ------------------------------------------------------------
+
 hiddenimports += collect_submodules(
     "ui"
 )
 
 
+# ------------------------------------------------------------
 # Certifi
+# ------------------------------------------------------------
+
 hiddenimports += collect_submodules(
     "certifi"
 )
 
 
-# ============================================================
-# DOTENV
-# ============================================================
+# ------------------------------------------------------------
+# python-dotenv
+# ------------------------------------------------------------
 
-dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
+hiddenimports += collect_submodules(
     "dotenv"
 )
 
+
+# ============================================================
+# DATOS
+# ============================================================
+
 datas = []
 
-datas += dotenv_datas
 
-hiddenimports += dotenv_hiddenimports
-
-binaries = []
-
-binaries += dotenv_binaries
-
-
-# ============================================================
-# CERTIFI
-# ============================================================
+# ------------------------------------------------------------
+# Certifi
+# ------------------------------------------------------------
 
 datas += collect_data_files(
     "certifi"
 )
 
 
-# ============================================================
-# VERSION.TXT
-# ============================================================
+# ------------------------------------------------------------
+# python-dotenv
+#
+# IMPORTANTE:
+# Copiamos explícitamente los archivos de dotenv
+# al directorio dotenv dentro de _internal.
+# ------------------------------------------------------------
 
-if os.path.exists(
-    VERSION_FILE
-):
+dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
+    "dotenv"
+)
+
+datas += dotenv_datas
+
+hiddenimports += dotenv_hiddenimports
+
+
+# ------------------------------------------------------------
+# Version.txt
+# ------------------------------------------------------------
+
+if os.path.exists(VERSION_FILE):
 
     datas.append(
         (
@@ -108,7 +127,7 @@ analysis = Analysis(
         PROJECT_DIR
     ],
 
-    binaries=binaries,
+    binaries=dotenv_binaries,
 
     datas=datas,
 

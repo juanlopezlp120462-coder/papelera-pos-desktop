@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import sys
 import os
 import threading
@@ -6,61 +8,56 @@ from core.version import obtener_version_actual
 from core.actualizador import hay_actualizacion
 
 from PySide6.QtWidgets import (
-    QApplication,
-    QMessageBox,
-    QProgressDialog
+QApplication,
+QMessageBox,
+QProgressDialog
 )
 
 from PySide6.QtCore import (
-    QTimer,
-    QObject,
-    Signal
+QTimer,
+QObject,
+Signal
 )
 
 from PySide6.QtGui import QGuiApplication
 
-from ui.keyboard import KeyboardAndNumberFilter
-from ui.db import init_db
-from ui.dashboard import Dashboard
-
-from webhook_server import start_webhook_server
-from sync import sincronizar
-
-
 # =========================================================
+
 # VARIABLES DE SINCRONIZACIÓN
+
 # =========================================================
 
 sync_en_curso = False
 sync_lock = threading.Lock()
 
 # Referencia global al Dashboard
+
 dashboard = None
 
-
 # =========================================================
+
 # SEÑAL PARA ACTUALIZAR EL DASHBOARD
+
 # =========================================================
 
 class SyncSignals(QObject):
+
 
     sincronizacion_terminada = Signal()
 
 
 sync_signals = SyncSignals()
 
-
 # =========================================================
+
 # SINCRONIZACIÓN EN SEGUNDO PLANO
+
 # =========================================================
 
 def ejecutar_sincronizacion():
 
-    global sync_en_curso
 
-    # -----------------------------------------------------
-    # Evitar dos sincronizaciones simultáneas
-    # -----------------------------------------------------
+    global sync_en_curso
 
     if sync_en_curso:
 
@@ -76,62 +73,43 @@ def ejecutar_sincronizacion():
 
             return
 
-        sync_en_curso = True
+    sync_en_curso = True
 
-    try:
+try:
 
-        # -------------------------------------------------
-        # EJECUTAR SINCRONIZACIÓN
-        # -------------------------------------------------
+    resultado = sincronizar()
 
-        resultado = sincronizar()
+    print(
+        "Sincronización automática OK:",
+        resultado
+    )
 
-        print(
-            "Sincronización automática OK:",
-            resultado
-        )
+    if dashboard is not None:
 
-        # -------------------------------------------------
-        # AVISAR AL DASHBOARD
-        #
-        # IMPORTANTE:
-        #
-        # No hacemos:
-        #
-        # dashboard.actualizar()
-        #
-        # directamente porque esta función está ejecutándose
-        # en un hilo secundario.
-        #
-        # Emitimos una señal Qt.
-        #
-        # Dashboard.actualizar() se ejecutará en el hilo
-        # principal de Qt.
-        # -------------------------------------------------
+        sync_signals.sincronizacion_terminada.emit()
 
-        if dashboard is not None:
+except Exception as e:
 
-            sync_signals.sincronizacion_terminada.emit()
+    print(
+        "Error sincronización automática:",
+        e
+    )
 
-    except Exception as e:
+finally:
 
-        print(
-            "Error sincronización automática:",
-            e
-        )
+    with sync_lock:
 
-    finally:
-
-        with sync_lock:
-
-            sync_en_curso = False
+        sync_en_curso = False
 
 
 # =========================================================
+
 # INICIAR SINCRONIZACIÓN EN HILO
+
 # =========================================================
 
 def iniciar_sincronizacion_hilo():
+
 
     hilo = threading.Thread(
         target=ejecutar_sincronizacion,
@@ -142,293 +120,290 @@ def iniciar_sincronizacion_hilo():
 
 
 # =========================================================
+
 # PROGRAMA PRINCIPAL
+
 # =========================================================
 
 if __name__ == "__main__":
 
-    # =====================================================
-    # CREAR APLICACIÓN QT
-    # =====================================================
+
+# =====================================================
+# CREAR APLICACIÓN QT
+# =====================================================
 
     app = QApplication(sys.argv)
 
-    # =====================================================
-    # ESCALA DE PANTALLA
-    # =====================================================
+# =====================================================
+# ESCALA DE PANTALLA
+# =====================================================
 
-    screen = (
-        QGuiApplication
-        .primaryScreen()
-        .availableGeometry()
-    )
+screen = (
+    QGuiApplication
+    .primaryScreen()
+    .availableGeometry()
+)
 
-    factor = min(
-        screen.width() / 1920,
-        screen.height() / 1080
-    )
+factor = min(
+    screen.width() / 1920,
+    screen.height() / 1080
+)
 
-    app.setStyleSheet(
-        f"""
-        QWidget {{
-            font-size: {int(14 * factor)}px;
-        }}
+app.setStyleSheet(
+    f"""
+    QWidget {{
+        font-size: {int(14 * factor)}px;
+    }}
 
-        QMessageBox {{
-            background: #ffffff;
-        }}
+    QMessageBox {{
+        background: #ffffff;
+    }}
 
-        QMessageBox QLabel {{
-            color: #0f172a;
-            font-size: 14px;
-        }}
+    QMessageBox QLabel {{
+        color: #0f172a;
+        font-size: 14px;
+    }}
 
-        QMessageBox QPushButton {{
-            background: #0ea5e9;
-            color: white;
-            border: 0;
-            border-radius: 8px;
-            padding: 8px 18px;
-            font-weight: 700;
-        }}
+    QMessageBox QPushButton {{
+        background: #0ea5e9;
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 18px;
+        font-weight: 700;
+    }}
 
-        QDialog {{
-            background: #ffffff;
-        }}
-        """
-    )
+    QDialog {{
+        background: #ffffff;
+    }}
+    """
+)
 
-    # =====================================================
-    # VERSIÓN
-    # =====================================================
+# =====================================================
+# VERSIÓN
+# =====================================================
 
-    version = obtener_version_actual()
+version = obtener_version_actual()
 
-    print(
-        f"PAPELERA POS - VERSION {version}"
-    )
+print(
+    f"PAPELERA POS - VERSION {version}"
+)
 
-    # =====================================================
-    # COMPROBAR ACTUALIZACIÓN
-    # =====================================================
+# =====================================================
+# COMPROBAR ACTUALIZACIÓN
+#
+# IMPORTANTE:
+#
+# NO importamos todavía:
+#
+#   ui.dashboard
+#   ui.historial
+#   ui.db
+#   ui.keyboard
+#   sync
+#   webhook_server
+#
+# Esto permite que una versión vieja pueda actualizarse
+# aunque le falte algún módulo utilizado por Dashboard.
+# =====================================================
 
-    actualizar = False
-    nueva_version = None
+actualizar = False
+nueva_version = None
 
-    if getattr(sys, "frozen", False):
-
-        try:
-
-            actualizar, nueva_version = hay_actualizacion(
-                version
-            )
-
-        except Exception as e:
-
-            print(
-                "Error comprobando actualización:",
-                e
-            )
-
-            actualizar = False
-            nueva_version = None
-
-    # =====================================================
-    # DIAGNÓSTICO
-    # =====================================================
+if getattr(sys, "frozen", False):
 
     try:
 
-        ruta_diagnostico = os.path.join(
-            (
-                os.path.dirname(sys.executable)
-                if getattr(sys, "frozen", False)
-                else os.getcwd()
-            ),
-            "diagnostico_actualizacion.txt"
+        actualizar, nueva_version = hay_actualizacion(
+            version
         )
-
-        with open(
-            ruta_diagnostico,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            f.write(
-                f"VERSION LOCAL: {version}\n"
-            )
-
-            f.write(
-                f"ACTUALIZAR: {actualizar}\n"
-            )
-
-            f.write(
-                f"NUEVA VERSION: {nueva_version}\n"
-            )
 
     except Exception as e:
 
         print(
-            "Error escribiendo diagnóstico:",
+            "Error comprobando actualización:",
             e
         )
 
-    # =====================================================
-    # ACTUALIZACIÓN
-    # =====================================================
+        actualizar = False
+        nueva_version = None
 
-    if actualizar:
+# =====================================================
+# DIAGNÓSTICO
+# =====================================================
+
+try:
+
+    ruta_diagnostico = os.path.join(
+        (
+            os.path.dirname(sys.executable)
+            if getattr(sys, "frozen", False)
+            else os.getcwd()
+        ),
+        "diagnostico_actualizacion.txt"
+    )
+
+    with open(
+        ruta_diagnostico,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(
+            f"VERSION LOCAL: {version}\n"
+        )
+
+        f.write(
+            f"ACTUALIZAR: {actualizar}\n"
+        )
+
+        f.write(
+            f"NUEVA VERSION: {nueva_version}\n"
+        )
+
+except Exception as e:
+
+    print(
+        "Error escribiendo diagnóstico:",
+        e
+    )
+
+# =====================================================
+# ACTUALIZACIÓN
+# =====================================================
+
+if actualizar:
+
+    print(
+        f"Hay una nueva versión disponible: "
+        f"{nueva_version}"
+    )
+
+    respuesta = QMessageBox.question(
+        None,
+        "Actualización disponible",
+        (
+            f"Hay una nueva versión disponible: "
+            f"{nueva_version}\n\n"
+            "¿Desea actualizar ahora?"
+        ),
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes
+    )
+
+    if respuesta == QMessageBox.Yes:
 
         print(
-            f"Hay una nueva versión disponible: "
-            f"{nueva_version}"
+            "Usuario aceptó actualización"
         )
 
-        respuesta = QMessageBox.question(
+        from core.actualizador import (
+            descargar_actualizacion,
+            instalar_actualizacion
+        )
+
+        # =================================================
+        # PROGRESO
+        # =================================================
+
+        progreso = QProgressDialog(
+            "Descargando actualización...",
             None,
-            "Actualización disponible",
-            (
-                f"Hay una nueva versión disponible: "
-                f"{nueva_version}\n\n"
-                "¿Desea actualizar ahora?"
-            ),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
+            0,
+            100
         )
 
-        if respuesta == QMessageBox.Yes:
+        progreso.setWindowTitle(
+            "Actualizando Papelera POS"
+        )
 
-            print(
-                "Usuario aceptó actualización"
+        progreso.setMinimumDuration(0)
+        progreso.setValue(0)
+        progreso.setAutoClose(False)
+        progreso.setAutoReset(False)
+        progreso.setCancelButton(None)
+
+        progreso.show()
+
+        QApplication.processEvents()
+
+        # =================================================
+        # PROGRESO DE DESCARGA
+        # =================================================
+
+        def actualizar_progreso(valor):
+
+            progreso.setValue(
+                valor
             )
 
-            from core.actualizador import (
-                descargar_actualizacion,
-                instalar_actualizacion
+            progreso.setLabelText(
+                f"Descargando actualización... "
+                f"{valor}%"
             )
-
-            # =================================================
-            # PROGRESO
-            # =================================================
-
-            progreso = QProgressDialog(
-                "Descargando actualización...",
-                None,
-                0,
-                100
-            )
-
-            progreso.setWindowTitle(
-                "Actualizando Papelera POS"
-            )
-
-            progreso.setMinimumDuration(0)
-            progreso.setValue(0)
-            progreso.setAutoClose(False)
-            progreso.setAutoReset(False)
-            progreso.setCancelButton(None)
-
-            progreso.show()
 
             QApplication.processEvents()
 
+        # =================================================
+        # DESCARGAR ACTUALIZACIÓN
+        # =================================================
+
+        zip_actualizacion = descargar_actualizacion(
+            actualizar_progreso
+        )
+
+        if zip_actualizacion:
+
+            print(
+                "Actualización descargada."
+            )
+
             # =================================================
-            # PROGRESO DE DESCARGA
+            # INSTALAR
             # =================================================
 
-            def actualizar_progreso(valor):
+            instalado = instalar_actualizacion(
+                zip_actualizacion,
+                nueva_version
+            )
 
-                progreso.setValue(
-                    valor
+            if instalado:
+
+                print(
+                    "Actualización instalada."
+                )
+
+                print(
+                    "Cerrando versión anterior..."
                 )
 
                 progreso.setLabelText(
-                    f"Descargando actualización... "
-                    f"{valor}%"
+                    "Actualización instalada. "
+                    "Reiniciando..."
+                )
+
+                progreso.setValue(
+                    100
                 )
 
                 QApplication.processEvents()
 
-            # =================================================
-            # DESCARGAR ACTUALIZACIÓN
-            # =================================================
+                # -------------------------------------------------
+                # NO CREAR DASHBOARD
+                # NO INICIAR SINCRONIZACIÓN
+                # NO INICIAR WEBHOOK
+                #
+                # El actualizador externo abrirá la nueva versión.
+                # -------------------------------------------------
 
-            zip_actualizacion = descargar_actualizacion(
-                actualizar_progreso
-            )
+                app.quit()
 
-            if zip_actualizacion:
-
-                print(
-                    "Actualización descargada."
-                )
-
-                # =================================================
-                # INSTALAR
-                # =================================================
-
-                instalado = instalar_actualizacion(
-                    zip_actualizacion,
-                    nueva_version
-                )
-
-                if instalado:
-
-                    print(
-                        "Actualización instalada."
-                    )
-
-                    print(
-                        "Cerrando versión anterior..."
-                    )
-
-                    progreso.setLabelText(
-                        "Actualización instalada. "
-                        "Reiniciando..."
-                    )
-
-                    progreso.setValue(
-                        100
-                    )
-
-                    QApplication.processEvents()
-
-                    # -------------------------------------------------
-                    # NO CREAR DASHBOARD
-                    # NO INICIAR SINCRONIZACIÓN
-                    # NO INICIAR WEBHOOK
-                    #
-                    # El actualizador externo abrirá la nueva versión.
-                    # -------------------------------------------------
-
-                    app.quit()
-
-                    sys.exit(0)
-
-                else:
-
-                    print(
-                        "ERROR: No se pudo instalar "
-                        "la actualización."
-                    )
-
-                    progreso.close()
-
-                    QMessageBox.warning(
-                        None,
-                        "Error",
-                        (
-                            "No se pudo instalar "
-                            "la actualización.\n\n"
-                            "El programa continuará "
-                            "con la versión actual."
-                        )
-                    )
+                sys.exit(0)
 
             else:
 
                 print(
-                    "ERROR: No se pudo descargar "
+                    "ERROR: No se pudo instalar "
                     "la actualización."
                 )
 
@@ -438,122 +413,139 @@ if __name__ == "__main__":
                     None,
                     "Error",
                     (
-                        "No se pudo descargar "
+                        "No se pudo instalar "
                         "la actualización.\n\n"
-                        "Verifique la conexión a Internet."
+                        "El programa continuará "
+                        "con la versión actual."
                     )
                 )
 
         else:
 
             print(
-                "Usuario rechazó actualización."
+                "ERROR: No se pudo descargar "
+                "la actualización."
             )
 
-    # =====================================================
-    # CREAR BASE LOCAL
-    # =====================================================
+            progreso.close()
 
-    init_db()
+            QMessageBox.warning(
+                None,
+                "Error",
+                (
+                    "No se pudo descargar "
+                    "la actualización.\n\n"
+                    "Verifique la conexión a Internet."
+                )
+            )
 
-    # =====================================================
-    # SERVIDOR LOCAL / WEBHOOK
-    # =====================================================
-
-    try:
-
-        start_webhook_server()
-
-    except Exception as e:
+    else:
 
         print(
-            "Error iniciando servidor webhook:",
-            e
+            "Usuario rechazó actualización."
         )
 
-    # =====================================================
-    # TECLADO ESPECIAL POS
-    # =====================================================
+# =====================================================
+# IMPORTAR COMPONENTES DEL PROGRAMA
+#
+# IMPORTANTE:
+#
+# Estos imports están DESPUÉS de la comprobación de
+# actualización.
+#
+# Una PC con una versión vieja puede actualizarse
+# antes de intentar cargar Dashboard/Historial.
+# =====================================================
 
-    keyboard_filter = KeyboardAndNumberFilter(
-        app
-    )
+from ui.keyboard import KeyboardAndNumberFilter
+from ui.db import init_db
+from ui.dashboard import Dashboard
 
-    app.installEventFilter(
-        keyboard_filter
-    )
+from webhook_server import start_webhook_server
+from sync import sincronizar
 
-    # =====================================================
-    # PANTALLA PRINCIPAL
-    # =====================================================
+# =====================================================
+# CREAR BASE LOCAL
+# =====================================================
+
+init_db()
+
+# =====================================================
+# SERVIDOR LOCAL / WEBHOOK
+# =====================================================
+
+try:
+
+    start_webhook_server()
+
+except Exception as e:
 
     print(
-        "Iniciando Dashboard..."
+        "Error iniciando servidor webhook:",
+        e
     )
 
-    dashboard = Dashboard()
+# =====================================================
+# TECLADO ESPECIAL POS
+# =====================================================
 
-    dashboard.showMaximized()
+keyboard_filter = KeyboardAndNumberFilter(
+    app
+)
 
-    # =====================================================
-    # CONECTAR SEÑAL DE SINCRONIZACIÓN
-    # =====================================================
-    #
-    # Cuando termina una sincronización:
-    #
-    #   hilo secundario
-    #          ↓
-    #   sincronizacion_terminada.emit()
-    #          ↓
-    #   hilo principal de Qt
-    #          ↓
-    #   dashboard.actualizar()
-    #
-    # Esto permite que Inicio se actualice
-    # automáticamente sin reiniciar.
-    # =====================================================
+app.installEventFilter(
+    keyboard_filter
+)
 
-    sync_signals.sincronizacion_terminada.connect(
-        dashboard.actualizar
-    )
+# =====================================================
+# PANTALLA PRINCIPAL
+# =====================================================
 
-    # =====================================================
-    # SINCRONIZACIÓN INICIAL
-    #
-    # Esperamos 2 segundos para que el Dashboard
-    # termine de aparecer.
-    # =====================================================
+print(
+    "Iniciando Dashboard..."
+)
 
-    QTimer.singleShot(
-        2000,
-        iniciar_sincronizacion_hilo
-    )
+dashboard = Dashboard()
 
-    # =====================================================
-    # SINCRONIZACIÓN AUTOMÁTICA
-    #
-    # Cada 30 segundos.
-    #
-    # Se ejecuta en segundo plano.
-    #
-    # Al terminar, actualiza Inicio automáticamente.
-    # =====================================================
+dashboard.showMaximized()
 
-    timer_sync = QTimer()
+# =====================================================
+# CONECTAR SEÑAL DE SINCRONIZACIÓN
+# =====================================================
 
-    timer_sync.timeout.connect(
-        iniciar_sincronizacion_hilo
-    )
+sync_signals.sincronizacion_terminada.connect(
+    dashboard.actualizar
+)
 
-    timer_sync.start(
-        30000
-    )
+# =====================================================
+# SINCRONIZACIÓN INICIAL
+# =====================================================
 
-    # =====================================================
-    # EJECUTAR APLICACIÓN
-    # =====================================================
+QTimer.singleShot(
+    2000,
+    iniciar_sincronizacion_hilo
+)
 
-    sys.exit(
-        app.exec()
-    )
+# =====================================================
+# SINCRONIZACIÓN AUTOMÁTICA
+#
+# Cada 30 segundos.
+# =====================================================
 
+timer_sync = QTimer()
+
+timer_sync.timeout.connect(
+    iniciar_sincronizacion_hilo
+)
+
+timer_sync.start(
+    30000
+)
+
+# =====================================================
+# EJECUTAR APLICACIÓN
+# =====================================================
+
+sys.exit(
+    app.exec()
+)
