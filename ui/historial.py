@@ -1,5 +1,7 @@
 import sqlite3
 import requests
+import os
+from dotenv import load_dotenv
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -24,6 +26,27 @@ from PySide6.QtCore import Qt
 import math
 
 from ui.db import BASE_DATOS, init_db, get_setting
+from core.sync import SUPABASE_URL, SUPABASE_KEY
+load_dotenv()
+
+SUPABASE_URL = os.getenv(
+    "SUPABASE_URL",
+    "https://vspfeihawhfdlpeqwxgp.supabase.co"
+).rstrip("/")
+
+SUPABASE_KEY = os.getenv(
+    "SUPABASE_KEY",
+    ""
+)
+
+
+def supabase_headers():
+
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
 from ui.ticket import (
     generar_ticket,
     imprimir_ticket,
@@ -965,10 +988,17 @@ class Historial(QWidget):
             # ==================================================
 
             response = requests.get(
-                f"{api_url}/ventas",
+                f"{SUPABASE_URL}/rest/v1/ventas",
+                params={
+                    "select": "*",
+                    "order": "id.desc"
+                },
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}"
+                },
                 timeout=10
             )
-
             if response.status_code != 200:
 
                 print(
@@ -1489,10 +1519,17 @@ class Historial(QWidget):
                 try:
 
                     detalle_response = requests.get(
-                        f"{api_url}/ventas/{id_venta_remota}/detalle",
+                        f"{SUPABASE_URL}/rest/v1/detalle_ventas",
+                        params={
+                            "venta_id": f"eq.{id_venta_remota}",
+                            "select": "*"
+                        },
+                        headers={
+                            "apikey": SUPABASE_KEY,
+                            "Authorization": f"Bearer {SUPABASE_KEY}"
+                        },
                         timeout=10
                     )
-
                     if detalle_response.status_code != 200:
 
                         print(
