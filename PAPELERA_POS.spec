@@ -2,8 +2,11 @@
 
 import os
 
-from PyInstaller.utils.hooks import collect_submodules
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import (
+    collect_submodules,
+    collect_data_files,
+    collect_all,
+)
 
 
 # ============================================================
@@ -16,20 +19,56 @@ PROJECT_DIR = os.path.dirname(
 
 
 # ============================================================
-# IMPORTS OCULTOS
+# ARCHIVO DE VERSION
+# ============================================================
+
+VERSION_FILE = os.path.join(
+    PROJECT_DIR,
+    "version.txt"
+)
+
+
+# ============================================================
+# HIDDEN IMPORTS
 # ============================================================
 
 hiddenimports = []
 
-hiddenimports += collect_submodules("ui")
-hiddenimports += collect_submodules("certifi")
+
+# Todos los módulos de ui
+hiddenimports += collect_submodules(
+    "ui"
+)
+
+
+# Certifi
+hiddenimports += collect_submodules(
+    "certifi"
+)
 
 
 # ============================================================
-# DATOS
+# DOTENV
 # ============================================================
+
+dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
+    "dotenv"
+)
 
 datas = []
+
+datas += dotenv_datas
+
+hiddenimports += dotenv_hiddenimports
+
+binaries = []
+
+binaries += dotenv_binaries
+
+
+# ============================================================
+# CERTIFI
+# ============================================================
 
 datas += collect_data_files(
     "certifi"
@@ -40,12 +79,9 @@ datas += collect_data_files(
 # VERSION.TXT
 # ============================================================
 
-VERSION_FILE = os.path.join(
-    PROJECT_DIR,
-    "version.txt"
-)
-
-if os.path.exists(VERSION_FILE):
+if os.path.exists(
+    VERSION_FILE
+):
 
     datas.append(
         (
@@ -60,6 +96,7 @@ if os.path.exists(VERSION_FILE):
 # ============================================================
 
 analysis = Analysis(
+
     [
         os.path.join(
             PROJECT_DIR,
@@ -71,7 +108,7 @@ analysis = Analysis(
         PROJECT_DIR
     ],
 
-    binaries=[],
+    binaries=binaries,
 
     datas=datas,
 
@@ -85,7 +122,7 @@ analysis = Analysis(
 
     excludes=[],
 
-    noarchive=False
+    noarchive=False,
 )
 
 
@@ -103,6 +140,7 @@ pyz = PYZ(
 # ============================================================
 
 exe = EXE(
+
     pyz,
 
     analysis.scripts,
@@ -130,6 +168,7 @@ exe = EXE(
 # ============================================================
 
 coll = COLLECT(
+
     exe,
 
     analysis.binaries,
@@ -144,4 +183,3 @@ coll = COLLECT(
 
     name="PAPELERA_POS"
 )
-
