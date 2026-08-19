@@ -13,10 +13,10 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Instalar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+        - name: Instalar Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: "3.14"
 
       - name: Instalar dependencias
         shell: powershell
