@@ -8,7 +8,6 @@ from PyInstaller.utils.hooks import (
     collect_all,
 )
 
-
 # ============================================================
 # CARPETA DEL PROYECTO
 # ============================================================
@@ -17,9 +16,8 @@ PROJECT_DIR = os.path.dirname(
     os.path.abspath(SPEC)
 )
 
-
 # ============================================================
-# ARCHIVO DE VERSION
+# VERSION
 # ============================================================
 
 VERSION_FILE = os.path.join(
@@ -27,107 +25,47 @@ VERSION_FILE = os.path.join(
     "version.txt"
 )
 
-
 # ============================================================
 # HIDDEN IMPORTS
 # ============================================================
 
 hiddenimports = []
 
+# UI
+hiddenimports += collect_submodules("ui")
 
-# ------------------------------------------------------------
-# Todos los módulos de UI
-# ------------------------------------------------------------
-
-hiddenimports += collect_submodules(
-    "ui"
-)
-
-
-# ------------------------------------------------------------
 # Certifi
-# ------------------------------------------------------------
+hiddenimports += collect_submodules("certifi")
 
-hiddenimports += collect_submodules(
-    "certifi"
-)
+# Dotenv
+hiddenimports += collect_submodules("dotenv")
 
-
-# ------------------------------------------------------------
-# python-dotenv
-# ------------------------------------------------------------
-
-hiddenimports += collect_submodules(
-    "dotenv"
-)
-
-
-# ------------------------------------------------------------
+# ============================================================
 # SUPABASE
-# ------------------------------------------------------------
+# ============================================================
 
-hiddenimports += collect_submodules(
-    "supabase"
-)
-
-hiddenimports += collect_submodules(
-    "postgrest"
-)
-
-hiddenimports += collect_submodules(
-    "realtime"
-)
-
-hiddenimports += collect_submodules(
-    "storage3"
-)
-
-hiddenimports += collect_submodules(
-    "supabase_auth"
-)
-
-hiddenimports += collect_submodules(
-    "supabase_functions"
-)
-
+hiddenimports += collect_submodules("supabase")
+hiddenimports += collect_submodules("postgrest")
+hiddenimports += collect_submodules("realtime")
+hiddenimports += collect_submodules("storage3")
+hiddenimports += collect_submodules("supabase_auth")
+hiddenimports += collect_submodules("supabase_functions")
 
 # ============================================================
 # DATOS
 # ============================================================
 
 datas = []
-
-
-# ------------------------------------------------------------
-# BASE DE DATOS INICIAL
-# ------------------------------------------------------------
-
-DATABASE_FILE = os.path.join(
-    PROJECT_DIR,
-    "database",
-    "abril.db"
-)
-
-if os.path.exists(DATABASE_FILE):
-
-    datas.append(
-        (
-            DATABASE_FILE,
-            "database"
-        )
-    )
-
+binaries = []
 
 # ------------------------------------------------------------
 # Certifi
 # ------------------------------------------------------------
 
-datas += collect_data_files(
-    "certifi"
-)
+datas += collect_data_files("certifi")
 
 # ------------------------------------------------------------
-# python-dotenv
+# Dotenv
 # ------------------------------------------------------------
 
 dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
@@ -135,12 +73,11 @@ dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
 )
 
 datas += dotenv_datas
-
+binaries += dotenv_binaries
 hiddenimports += dotenv_hiddenimports
 
-
 # ------------------------------------------------------------
-# SUPABASE
+# Supabase
 # ------------------------------------------------------------
 
 supabase_datas, supabase_binaries, supabase_hiddenimports = collect_all(
@@ -148,9 +85,8 @@ supabase_datas, supabase_binaries, supabase_hiddenimports = collect_all(
 )
 
 datas += supabase_datas
-
+binaries += supabase_binaries
 hiddenimports += supabase_hiddenimports
-
 
 # ------------------------------------------------------------
 # PostgREST
@@ -161,9 +97,8 @@ postgrest_datas, postgrest_binaries, postgrest_hiddenimports = collect_all(
 )
 
 datas += postgrest_datas
-
+binaries += postgrest_binaries
 hiddenimports += postgrest_hiddenimports
-
 
 # ------------------------------------------------------------
 # Realtime
@@ -174,9 +109,8 @@ realtime_datas, realtime_binaries, realtime_hiddenimports = collect_all(
 )
 
 datas += realtime_datas
-
+binaries += realtime_binaries
 hiddenimports += realtime_hiddenimports
-
 
 # ------------------------------------------------------------
 # Storage3
@@ -187,9 +121,8 @@ storage3_datas, storage3_binaries, storage3_hiddenimports = collect_all(
 )
 
 datas += storage3_datas
-
+binaries += storage3_binaries
 hiddenimports += storage3_hiddenimports
-
 
 # ------------------------------------------------------------
 # Supabase Auth
@@ -200,9 +133,8 @@ auth_datas, auth_binaries, auth_hiddenimports = collect_all(
 )
 
 datas += auth_datas
-
+binaries += auth_binaries
 hiddenimports += auth_hiddenimports
-
 
 # ------------------------------------------------------------
 # Supabase Functions
@@ -213,13 +145,12 @@ functions_datas, functions_binaries, functions_hiddenimports = collect_all(
 )
 
 datas += functions_datas
-
+binaries += functions_binaries
 hiddenimports += functions_hiddenimports
 
-
-# ------------------------------------------------------------
-# Version.txt
-# ------------------------------------------------------------
+# ============================================================
+# VERSION.TXT
+# ============================================================
 
 if os.path.exists(VERSION_FILE):
 
@@ -231,7 +162,8 @@ if os.path.exists(VERSION_FILE):
     )
 
 # ============================================================
-# NO INCLUIR LA BASE DE DATOS EN PYINSTALLER
+# IMPORTANTE:
+# NO INCLUIR database/abril.db EN PYINSTALLER
 # ============================================================
 
 datas = [
@@ -247,7 +179,6 @@ datas = [
 # ============================================================
 
 analysis = Analysis(
-
     [
         os.path.join(
             PROJECT_DIR,
@@ -259,15 +190,7 @@ analysis = Analysis(
         PROJECT_DIR
     ],
 
-    binaries=(
-        dotenv_binaries
-        + supabase_binaries
-        + postgrest_binaries
-        + realtime_binaries
-        + storage3_binaries
-        + auth_binaries
-        + functions_binaries
-    ),
+    binaries=binaries,
 
     datas=datas,
 
@@ -284,7 +207,6 @@ analysis = Analysis(
     noarchive=False,
 )
 
-
 # ============================================================
 # PYZ
 # ============================================================
@@ -293,13 +215,11 @@ pyz = PYZ(
     analysis.pure
 )
 
-
 # ============================================================
 # EXE
 # ============================================================
 
 exe = EXE(
-
     pyz,
 
     analysis.scripts,
@@ -321,13 +241,11 @@ exe = EXE(
     console=False,
 )
 
-
 # ============================================================
 # COLLECT
 # ============================================================
 
 coll = COLLECT(
-
     exe,
 
     analysis.binaries,
