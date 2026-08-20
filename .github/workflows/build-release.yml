@@ -28,7 +28,7 @@ jobs:
       - name: Instalar Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.12"
 
 
       # ==================================================
@@ -38,12 +38,39 @@ jobs:
       - name: Instalar dependencias
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "INSTALANDO DEPENDENCIAS" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
 
           python -m pip install --upgrade pip
 
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
-          pip install python-dotenv
+          python -m pip install `
+            supabase `
+            postgrest `
+            realtime-py `
+            storage3 `
+            supabase-auth `
+            supabase-functions `
+            pydantic `
+            pydantic-core `
+            httpx `
+            httpcore `
+            anyio `
+            websockets `
+            PyJWT `
+            cryptography `
+            cffi `
+            python-dotenv `
+            certifi
+
+          Write-Host ""
+          Write-Host "DEPENDENCIAS INSTALADAS." -ForegroundColor Green
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
@@ -109,6 +136,36 @@ jobs:
         shell: powershell
         run: |
 
+          $ErrorActionPreference = "Stop"
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "LIMPIANDO BUILD ANTERIOR" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          if (Test-Path -LiteralPath "build") {
+              Remove-Item `
+                -LiteralPath "build" `
+                -Recurse `
+                -Force
+          }
+
+          if (Test-Path -LiteralPath "dist") {
+              Remove-Item `
+                -LiteralPath "dist" `
+                -Recurse `
+                -Force
+          }
+
+          Write-Host "build y dist eliminados." -ForegroundColor Green
+          Write-Host ""
+
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "CREANDO EXE CON PYINSTALLER" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
           python -m PyInstaller --clean PAPELERA_POS.spec
 
           if ($LASTEXITCODE -ne 0) {
@@ -136,184 +193,6 @@ jobs:
 
           Write-Host ""
           Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
-          Write-Host ""
-
-      # ==================================================
-      # FORZAR DEPENDENCIAS PYTHON DENTRO DE _INTERNAL
-      # ==================================================
-
-      - name: Forzar dependencias Python dentro de dist
-        shell: powershell
-        run: |
-
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "FORZANDO DEPENDENCIAS PYTHON EN _INTERNAL" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
-
-          $internal = "dist\PAPELERA_POS\_internal"
-
-          if (!(Test-Path -LiteralPath $internal)) {
-              Write-Error "NO EXISTE: $internal"
-              exit 1
-          }
-
-          Write-Host "Consultando ubicaciones reales mediante Python..."
-          Write-Host ""
-
-          $paquetes = @(
-              "supabase",
-              "postgrest",
-              "realtime",
-              "storage3",
-              "supabase_auth",
-              "supabase_functions",
-              "pydantic",
-              "pydantic_core",
-              "httpx",
-              "httpcore",
-              "anyio",
-              "websockets",
-              "jwt",
-              "cryptography",
-              "cffi",
-              "dotenv",
-              "certifi"
-          )
-
-          foreach ($paquete in $paquetes) {
-
-              Write-Host ""
-              Write-Host "------------------------------------------"
-              Write-Host "PAQUETE: $paquete"
-              Write-Host "------------------------------------------"
-
-              $pythonScript = @"
-          import importlib.util
-          import os
-          import sys
-
-          nombre = "$paquete"
-
-          try:
-              spec = importlib.util.find_spec(nombre)
-
-              if spec is None:
-                  print("")
-                  sys.exit(2)
-
-              origen = spec.origin
-
-              if spec.submodule_search_locations:
-                  ruta = list(spec.submodule_search_locations)[0]
-              else:
-                  ruta = os.path.dirname(origen)
-
-              print(os.path.abspath(ruta))
-
-          except Exception as e:
-              print("ERROR:", e)
-              sys.exit(3)
-          "@
-
-              $source = (
-                  $pythonScript |
-                  python -
-              )
-
-              if ($LASTEXITCODE -ne 0) {
-
-                  Write-Error `
-                    "Python NO pudo localizar el paquete: $paquete"
-
-                  exit 1
-              }
-
-              $source = $source.Trim()
-
-              Write-Host "Origen real:"
-              Write-Host $source
-
-              if ([string]::IsNullOrWhiteSpace($source)) {
-
-                  Write-Error `
-                    "Python devolvio una ruta vacia para $paquete"
-
-                  exit 1
-              }
-
-              if (!(Test-Path -LiteralPath $source)) {
-
-                  Write-Error `
-                    "La ruta encontrada NO existe: $source"
-
-                  exit 1
-              }
-
-              $target = Join-Path $internal $paquete
-
-              Write-Host "Destino:"
-              Write-Host $target
-
-              if (Test-Path -LiteralPath $target) {
-
-                  Write-Host `
-                    "Eliminando copia anterior..." `
-                    -ForegroundColor Yellow
-
-                  Remove-Item `
-                    -LiteralPath $target `
-                    -Recurse `
-                    -Force
-              }
-
-              Copy-Item `
-                -LiteralPath $source `
-                -Destination $target `
-                -Recurse `
-                -Force
-
-              if (!(Test-Path -LiteralPath $target)) {
-
-                  Write-Error `
-                    "NO se pudo copiar $paquete"
-
-                  exit 1
-              }
-
-              $cantidad = @(
-                  Get-ChildItem `
-                    -LiteralPath $target `
-                    -Recurse `
-                    -File `
-                    -ErrorAction Stop
-              ).Count
-
-              if ($cantidad -le 0) {
-
-                  Write-Error `
-                    "La copia de $paquete esta vacia."
-
-                  exit 1
-              }
-
-              Write-Host `
-                "$paquete : COPIADO ($cantidad archivos)" `
-                -ForegroundColor Green
-          }
-
-          Write-Host ""
-          Write-Host "==========================================" `
-            -ForegroundColor Cyan
-
-          Write-Host `
-            "TODAS LAS DEPENDENCIAS FUERON COPIADAS" `
-            -ForegroundColor Green
-
-          Write-Host "==========================================" `
-            -ForegroundColor Cyan
-
           Write-Host ""
       # ==================================================
       # VERIFICAR COMPILACION
@@ -343,7 +222,87 @@ jobs:
           Write-Host "_internal encontrado." -ForegroundColor Green
           Write-Host ""
 
+      - name: Verificar estructura limpia de _internal
+        shell: powershell
+        run: |
 
+          $ErrorActionPreference = "Stop"
+
+          $internal = "dist\PAPELERA_POS\_internal"
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO ESTRUCTURA DE _internal" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          if (!(Test-Path -LiteralPath $internal)) {
+              Write-Error "No existe _internal."
+              exit 1
+          }
+
+          $nestedInternal = Get-ChildItem `
+              -LiteralPath $internal `
+              -Directory `
+              -Recurse `
+              -Force |
+              Where-Object {
+                  $_.Name -eq "_internal"
+              }
+
+          if ($nestedInternal.Count -gt 0) {
+
+              Write-Host ""
+              Write-Host "SE ENCONTRARON CARPETAS _internal ANIDADAS:" `
+                -ForegroundColor Red
+
+              $nestedInternal |
+                  ForEach-Object {
+                      Write-Host $_.FullName
+                  }
+
+              Write-Error `
+                "ERROR: existe _internal dentro de _internal."
+
+              exit 1
+          }
+
+          $nestedVersions = Get-ChildItem `
+              -LiteralPath $internal `
+              -Recurse `
+              -File `
+              -Force |
+              Where-Object {
+                  $_.Name -eq "version.txt"
+              }
+
+          if ($nestedVersions.Count -ne 1) {
+
+              Write-Host ""
+              Write-Host "VERSION.TXT ENCONTRADOS DENTRO DE _internal:" `
+                -ForegroundColor Yellow
+
+              if ($nestedVersions.Count -eq 0) {
+                  Write-Host "NO SE ENCONTRO NINGUNO."
+              }
+              else {
+                  $nestedVersions |
+                      ForEach-Object {
+                          Write-Host $_.FullName
+                      }
+              }
+
+              Write-Error `
+                "ERROR: _internal debe contener exactamente un version.txt."
+
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "ESTRUCTURA DE _internal CORRECTA." `
+            -ForegroundColor Green
+
+          Write-Host ""
       # ==================================================
       # VERIFICAR ESTRUCTURA DE DIST
       # ==================================================
@@ -352,9 +311,11 @@ jobs:
         shell: powershell
         run: |
 
+          $ErrorActionPreference = "Stop"
+
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "ESTRUCTURA REAL DE DIST" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO ESTRUCTURA REAL DE DIST" -ForegroundColor Cyan
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
@@ -362,42 +323,41 @@ jobs:
           $internal = "dist\PAPELERA_POS\_internal"
 
           if (!(Test-Path -LiteralPath $dist)) {
-
-              Write-Error "NO EXISTE dist\PAPELERA_POS"
+              Write-Error "NO EXISTE: $dist"
               exit 1
           }
 
           if (!(Test-Path -LiteralPath $internal)) {
-
-              Write-Error "NO EXISTE dist\PAPELERA_POS\_internal"
+              Write-Error "NO EXISTE: $internal"
               exit 1
           }
 
-          Write-Host "Contenido de dist\PAPELERA_POS:" `
-            -ForegroundColor Yellow
+          Write-Host "Contenido de dist\PAPELERA_POS:" -ForegroundColor Yellow
 
           Get-ChildItem `
             -LiteralPath $dist `
             -Force |
             ForEach-Object {
-
                 Write-Host "[$($_.Name)]"
             }
 
           Write-Host ""
-          Write-Host "Carpetas dentro de _internal:" `
-            -ForegroundColor Yellow
+
+          Write-Host "Carpetas directamente dentro de _internal:" -ForegroundColor Yellow
 
           Get-ChildItem `
             -LiteralPath $internal `
             -Directory `
             -Force |
             ForEach-Object {
-
                 Write-Host "[$($_.Name)]"
             }
 
           Write-Host ""
+
+          # --------------------------------------------------
+          # DEPENDENCIAS OBLIGATORIAS
+          # --------------------------------------------------
 
           $carpetas = @(
               "supabase",
@@ -409,15 +369,9 @@ jobs:
               "pydantic"
           )
 
-          Write-Host "==========================================" `
-            -ForegroundColor Cyan
-
-          Write-Host "VERIFICANDO DEPENDENCIAS EN DIST" `
-            -ForegroundColor Cyan
-
-          Write-Host "==========================================" `
-            -ForegroundColor Cyan
-
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO DEPENDENCIAS" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
           foreach ($carpeta in $carpetas) {
@@ -426,33 +380,67 @@ jobs:
 
               if (!(Test-Path -LiteralPath $ruta)) {
 
-                  Write-Error "FALTA: $ruta"
+                  Write-Error "FALTA LA DEPENDENCIA: $ruta"
                   exit 1
               }
 
-              $cantidad = @(
+              $archivos = @(
                   Get-ChildItem `
                     -LiteralPath $ruta `
                     -Recurse `
                     -File `
+                    -Force `
                     -ErrorAction Stop
-              ).Count
+              )
 
-              if ($cantidad -le 0) {
+              if ($archivos.Count -eq 0) {
 
-                  Write-Error `
-                    "La carpeta $carpeta esta vacia."
-
+                  Write-Error "LA CARPETA ESTA VACIA: $ruta"
                   exit 1
               }
 
               Write-Host `
-                "$carpeta : OK ($cantidad archivos)" `
+                "$carpeta : OK ($($archivos.Count) archivos)" `
                 -ForegroundColor Green
           }
 
           Write-Host ""
-          Write-Host "TODAS LAS DEPENDENCIAS ESTAN EN DIST." `
+
+          # --------------------------------------------------
+          # BUSCAR _internal ANIDADOS
+          # --------------------------------------------------
+
+          $nestedInternal = @(
+              Get-ChildItem `
+                -LiteralPath $internal `
+                -Directory `
+                -Recurse `
+                -Force |
+                Where-Object {
+                    $_.Name -eq "_internal"
+                }
+          )
+
+          if ($nestedInternal.Count -gt 0) {
+
+              Write-Host ""
+              Write-Host "ERROR: SE ENCONTRO _internal ANIDADO." `
+                -ForegroundColor Red
+
+              $nestedInternal |
+                ForEach-Object {
+                    Write-Host $_.FullName
+                }
+
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "No existen carpetas _internal anidadas." `
+            -ForegroundColor Green
+
+          Write-Host ""
+          Write-Host "TODAS LAS DEPENDENCIAS ESTAN CORRECTAMENTE EN _internal." `
             -ForegroundColor Green
           Write-Host ""
 
@@ -586,16 +574,31 @@ jobs:
         shell: powershell
         run: |
 
+          $ErrorActionPreference = "Stop"
+
           $version = "${{ github.ref_name }}"
 
           if ($version.StartsWith("v")) {
               $version = $version.Substring(1)
           }
 
-          $rootVersion = "dist\PAPELERA_POS\version.txt"
+          if ([string]::IsNullOrWhiteSpace($version)) {
+              Write-Error "No se pudo determinar la version."
+              exit 1
+          }
 
-          $internalVersion = `
-            "dist\PAPELERA_POS\_internal\version.txt"
+          $rootVersion = "dist\PAPELERA_POS\version.txt"
+          $internalVersion = "dist\PAPELERA_POS\_internal\version.txt"
+
+          if (!(Test-Path -LiteralPath "dist\PAPELERA_POS")) {
+              Write-Error "No existe dist\PAPELERA_POS."
+              exit 1
+          }
+
+          if (!(Test-Path -LiteralPath "dist\PAPELERA_POS\_internal")) {
+              Write-Error "No existe dist\PAPELERA_POS\_internal."
+              exit 1
+          }
 
           Set-Content `
             -LiteralPath $rootVersion `
@@ -608,8 +611,17 @@ jobs:
             -Encoding UTF8
 
           Write-Host ""
-          Write-Host "version.txt creado." -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERSION.TXT" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
           Write-Host "Version: $version"
+          Write-Host "Raiz: $rootVersion"
+          Write-Host "_internal: $internalVersion"
+
+          Write-Host ""
+          Write-Host "version.txt creados correctamente." -ForegroundColor Green
           Write-Host ""
 
 
@@ -804,6 +816,24 @@ jobs:
           }
 
           Write-Host "_internal : OK" `
+            -ForegroundColor Green
+          # --------------------------------------------------
+          # ESTRUCTURA _internal
+          # --------------------------------------------------
+
+          $nestedInternal = `
+            "update\_internal\_internal"
+
+          if (Test-Path -LiteralPath $nestedInternal) {
+
+              Write-Error `
+                "ERROR CRITICO: existe update\_internal\_internal."
+
+              exit 1
+          }
+
+          Write-Host `
+            "_internal sin carpetas _internal anidadas : OK" `
             -ForegroundColor Green
 
 
