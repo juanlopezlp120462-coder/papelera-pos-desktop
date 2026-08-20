@@ -1,4 +1,4 @@
-name: Crear Update PAPELERA POS
+﻿name: Crear Update PAPELERA POS
 
 on:
   push:
