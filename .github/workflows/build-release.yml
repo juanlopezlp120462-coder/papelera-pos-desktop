@@ -792,26 +792,65 @@ jobs:
             -Path "update" |
             Out-Null
 
-          Copy-Item `
-            -LiteralPath "dist\PAPELERA_POS\PAPELERA_POS.exe" `
-            -Destination "update\PAPELERA_POS.exe" `
-            -Force
+            Copy-Item `
+              -LiteralPath "dist\PAPELERA_POS\PAPELERA_POS.exe" `
+              -Destination "update\PAPELERA_POS.exe" `
+              -Force
 
-          Copy-Item `
-            -LiteralPath "dist\PAPELERA_POS\version.txt" `
-            -Destination "update\version.txt" `
-            -Force
+            Copy-Item `
+              -LiteralPath "dist\PAPELERA_POS\version.txt" `
+              -Destination "update\version.txt" `
+              -Force
 
-          Copy-Item `
-            -LiteralPath "dist\PAPELERA_POS\_internal" `
-            -Destination "update\_internal" `
-            -Recurse `
-            -Force
+            Copy-Item `
+              -LiteralPath "dist\PAPELERA_POS\_internal" `
+              -Destination "update\_internal" `
+              -Recurse `
+              -Force
 
-          Write-Host ""
-          Write-Host "Carpeta update preparada." `
-            -ForegroundColor Green
-          Write-Host ""
+
+            Write-Host ""
+            Write-Host "==========================================" -ForegroundColor Cyan
+            Write-Host "VERIFICANDO SUPABASE EN UPDATE" -ForegroundColor Cyan
+            Write-Host "==========================================" -ForegroundColor Cyan
+            Write-Host ""
+
+            $supabaseUpdate = "update\_internal\supabase"
+
+            if (!(Test-Path -LiteralPath $supabaseUpdate)) {
+                Write-Error "ERROR: supabase NO fue copiado a update\_internal"
+                exit 1
+            }
+
+            $supabaseFiles = @(
+                Get-ChildItem `
+                  -LiteralPath $supabaseUpdate `
+                  -Recurse `
+                  -File `
+                  -Force `
+                  -ErrorAction Stop
+            )
+
+            Write-Host "supabase encontrado en update\_internal." -ForegroundColor Green
+            Write-Host "Archivos encontrados: $($supabaseFiles.Count)" -ForegroundColor Green
+
+            Write-Host ""
+            Write-Host "CARPETAS DIRECTAS DE update\_internal:" -ForegroundColor Yellow
+
+            Get-ChildItem `
+              -LiteralPath "update\_internal" `
+              -Directory `
+              -Force |
+              ForEach-Object {
+                  Write-Host "[$($_.Name)]"
+              }
+
+            Write-Host ""
+
+            Write-Host ""
+            Write-Host "Carpeta update preparada." `
+              -ForegroundColor Green
+            Write-Host ""
 
 
       # ==================================================
