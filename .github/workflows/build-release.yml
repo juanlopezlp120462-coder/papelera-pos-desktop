@@ -473,34 +473,22 @@ jobs:
           # VERIFICAR QUE NO HAYA _internal ANIDADO
           # --------------------------------------------------
 
-          $nestedInternal = @(
-              Get-ChildItem `
-                -LiteralPath $internal `
-                -Directory `
-                -Recurse `
-                -Force |
-                Where-Object {
-                    $_.Name -eq "_internal"
-                }
-          )
+              $internalAnidado = Join-Path $internal "_internal"
 
-          if ($nestedInternal.Count -gt 0) {
+              if (Test-Path -LiteralPath $internalAnidado) {
+
+                  Write-Host ""
+                  Write-Host "ERROR: SE ENCONTRO _internal ANIDADO." `
+                    -ForegroundColor Red
+
+                  Write-Host $internalAnidado
+
+                  exit 1
+              }
 
               Write-Host ""
-              Write-Host "ERROR: SE ENCONTRO _internal ANIDADO." `
-                -ForegroundColor Red
-
-              $nestedInternal |
-                ForEach-Object {
-                    Write-Host $_.FullName
-                }
-
-              exit 1
-          }
-
-          Write-Host ""
-          Write-Host "_internal sin carpetas _internal anidadas : OK" `
-            -ForegroundColor Green
+              Write-Host "_internal sin carpeta _internal anidada : OK" `
+                -ForegroundColor Green
 
           # --------------------------------------------------
           # VERIFICAR SUPABASE MEDIANTE PYINSTALLER
