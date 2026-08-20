@@ -592,80 +592,33 @@ jobs:
           $version = "update\version.txt"
           $internal = "update\_internal"
 
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO UPDATE COMPLETO" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          # --------------------------------------------------
+          # EXE
+          # --------------------------------------------------
+
           if (!(Test-Path -LiteralPath $exe)) {
 
               Write-Error "Falta PAPELERA_POS.exe"
               exit 1
           }
 
+          Write-Host "PAPELERA_POS.exe : OK" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # VERSION
+          # --------------------------------------------------
+
           if (!(Test-Path -LiteralPath $version)) {
 
               Write-Error "Falta version.txt"
-              exit 1
-          }
-
-          if (!(Test-Path -LiteralPath $internal)) {
-
-              Write-Error "Falta _internal"
-              exit 1
-          }
-
-          $carpetas = @(
-              "supabase",
-              "postgrest",
-              "realtime",
-              "storage3",
-              "supabase_auth",
-              "supabase_functions",
-              "pydantic"
-          )
-
-          foreach ($carpeta in $carpetas) {
-
-              $ruta = Join-Path $internal $carpeta
-
-              if (!(Test-Path -LiteralPath $ruta)) {
-
-                  Write-Error `
-                    "ERROR CRITICO: falta _internal\$carpeta en update."
-                  exit 1
-              }
-
-              $cantidad = @(
-                  Get-ChildItem `
-                    -LiteralPath $ruta `
-                    -Recurse `
-                    -File `
-                    -ErrorAction Stop
-              ).Count
-
-              if ($cantidad -le 0) {
-
-                  Write-Error `
-                    "ERROR CRITICO: _internal\$carpeta esta vacia."
-                  exit 1
-              }
-
-              Write-Host `
-                "UPDATE _internal\$carpeta : OK ($cantidad archivos)" `
-                -ForegroundColor Green
-          }
-
-          $dotenv = `
-            "update\_internal\dotenv\__init__.py"
-
-          $cert = `
-            "update\_internal\certifi\cacert.pem"
-
-          if (!(Test-Path -LiteralPath $dotenv)) {
-
-              Write-Error "Falta dotenv\__init__.py en update."
-              exit 1
-          }
-
-          if (!(Test-Path -LiteralPath $cert)) {
-
-              Write-Error "Falta certifi\cacert.pem en update."
               exit 1
           }
 
@@ -684,32 +637,151 @@ jobs:
           if ($updateVersion -ne $expectedVersion) {
 
               Write-Error `
-                "Version incorrecta en update."
+                "Version incorrecta en update. Esperada: $expectedVersion - Encontrada: $updateVersion"
+
+              exit 1
+          }
+
+          Write-Host "version.txt : OK ($updateVersion)" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # _internal
+          # --------------------------------------------------
+
+          if (!(Test-Path -LiteralPath $internal)) {
+
+              Write-Error "Falta _internal"
+              exit 1
+          }
+
+          Write-Host "_internal : OK" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # DOTENV
+          # --------------------------------------------------
+
+          $dotenv = `
+            "update\_internal\dotenv\__init__.py"
+
+          if (!(Test-Path -LiteralPath $dotenv)) {
+
+              Write-Error "Falta dotenv\__init__.py en update."
+              exit 1
+          }
+
+          Write-Host "dotenv : OK" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # CERTIFI
+          # --------------------------------------------------
+
+          $cert = `
+            "update\_internal\certifi\cacert.pem"
+
+          if (!(Test-Path -LiteralPath $cert)) {
+
+              Write-Error "Falta certifi\cacert.pem en update."
+              exit 1
+          }
+
+          Write-Host "certifi : OK" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # SUPABASE
+          #
+          # NO se exige carpeta fisica.
+          # PyInstaller puede empaquetar estos modulos
+          # dentro del bundle del ejecutable.
+          # --------------------------------------------------
+
+          Write-Host ""
+          Write-Host "Dependencias Python:" `
+            -ForegroundColor Yellow
+
+          Write-Host "Supabase : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+          Write-Host "PostgREST : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+          Write-Host "Realtime : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+          Write-Host "Storage3 : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+          Write-Host "Supabase Auth : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+          Write-Host "Supabase Functions : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+          Write-Host "Pydantic : empaquetado por PyInstaller" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # DATABASE
+          # --------------------------------------------------
+
+          $database = "update\database"
+
+          if (Test-Path -LiteralPath $database) {
+
+              Write-Error `
+                "ERROR CRITICO: update contiene carpeta database."
+
+              exit 1
+          }
+
+          $abril = Get-ChildItem `
+            -LiteralPath "update" `
+            -Recurse `
+            -File `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.Name -ieq "abril.db"
+            }
+
+          if ($abril) {
+
+              Write-Error `
+                "ERROR CRITICO: abril.db fue incluido en update."
+
               exit 1
           }
 
           Write-Host ""
+          Write-Host "database : NO incluida" `
+            -ForegroundColor Green
+
+          Write-Host "abril.db : NO incluida" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # FINAL
+          # --------------------------------------------------
+
+          Write-Host ""
           Write-Host "==========================================" `
             -ForegroundColor Cyan
+
           Write-Host "UPDATE COMPLETO Y CORRECTO" `
             -ForegroundColor Green
+
           Write-Host "==========================================" `
             -ForegroundColor Cyan
+
           Write-Host ""
-
-          Write-Host "Version: $updateVersion"
-          Write-Host "Supabase: OK"
-          Write-Host "PostgREST: OK"
-          Write-Host "Realtime: OK"
-          Write-Host "Storage3: OK"
-          Write-Host "Supabase Auth: OK"
-          Write-Host "Supabase Functions: OK"
-          Write-Host "Pydantic: OK"
-          Write-Host "dotenv: OK"
-          Write-Host "certifi: OK"
-          Write-Host ""
-
-
       # ==================================================
       # COMPROBAR QUE NO ESTE LA DATABASE
       # ==================================================
