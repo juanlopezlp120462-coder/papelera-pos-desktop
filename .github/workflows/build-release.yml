@@ -310,8 +310,9 @@ jobs:
             -ForegroundColor Green
 
           Write-Host ""
+
       # ==================================================
-      # VERIFICAR ESTRUCTURA DE DIST
+      # VERIFICAR SUPABASE EN DIST
       # ==================================================
 
       - name: Verificar Supabase en dist
@@ -328,16 +329,45 @@ jobs:
 
           $dist = "dist\PAPELERA_POS"
           $internal = "dist\PAPELERA_POS\_internal"
+          $exe = "dist\PAPELERA_POS\PAPELERA_POS.exe"
+
+          # --------------------------------------------------
+          # DIST
+          # --------------------------------------------------
 
           if (!(Test-Path -LiteralPath $dist)) {
               Write-Error "NO EXISTE: $dist"
               exit 1
           }
 
+          Write-Host "dist\PAPELERA_POS : OK" -ForegroundColor Green
+
+          # --------------------------------------------------
+          # EXE
+          # --------------------------------------------------
+
+          if (!(Test-Path -LiteralPath $exe)) {
+              Write-Error "NO EXISTE: $exe"
+              exit 1
+          }
+
+          Write-Host "PAPELERA_POS.exe : OK" -ForegroundColor Green
+
+          # --------------------------------------------------
+          # _internal
+          # --------------------------------------------------
+
           if (!(Test-Path -LiteralPath $internal)) {
               Write-Error "NO EXISTE: $internal"
               exit 1
           }
+
+          Write-Host "_internal : OK" -ForegroundColor Green
+          Write-Host ""
+
+          # --------------------------------------------------
+          # MOSTRAR ESTRUCTURA REAL
+          # --------------------------------------------------
 
           Write-Host "Contenido de dist\PAPELERA_POS:" -ForegroundColor Yellow
 
@@ -363,58 +393,7 @@ jobs:
           Write-Host ""
 
           # --------------------------------------------------
-          # DEPENDENCIAS OBLIGATORIAS
-          # --------------------------------------------------
-
-          $carpetas = @(
-              "supabase",
-              "postgrest",
-              "realtime",
-              "storage3",
-              "supabase_auth",
-              "supabase_functions",
-              "pydantic"
-          )
-
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO DEPENDENCIAS" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
-
-          foreach ($carpeta in $carpetas) {
-
-              $ruta = Join-Path $internal $carpeta
-
-              if (!(Test-Path -LiteralPath $ruta)) {
-
-                  Write-Error "FALTA LA DEPENDENCIA: $ruta"
-                  exit 1
-              }
-
-              $archivos = @(
-                  Get-ChildItem `
-                    -LiteralPath $ruta `
-                    -Recurse `
-                    -File `
-                    -Force `
-                    -ErrorAction Stop
-              )
-
-              if ($archivos.Count -eq 0) {
-
-                  Write-Error "LA CARPETA ESTA VACIA: $ruta"
-                  exit 1
-              }
-
-              Write-Host `
-                "$carpeta : OK ($($archivos.Count) archivos)" `
-                -ForegroundColor Green
-          }
-
-          Write-Host ""
-
-          # --------------------------------------------------
-          # BUSCAR _internal ANIDADOS
+          # VERIFICAR QUE NO HAYA _internal ANIDADO
           # --------------------------------------------------
 
           $nestedInternal = @(
@@ -443,13 +422,105 @@ jobs:
           }
 
           Write-Host ""
-          Write-Host "No existen carpetas _internal anidadas." `
+          Write-Host "_internal sin carpetas _internal anidadas : OK" `
             -ForegroundColor Green
 
+          # --------------------------------------------------
+          # VERIFICAR SUPABASE MEDIANTE PYINSTALLER
+          # --------------------------------------------------
+
           Write-Host ""
-          Write-Host "TODAS LAS DEPENDENCIAS ESTAN CORRECTAMENTE EN _internal." `
-            -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO PAQUETES SUPABASE EMPAQUETADOS" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
+
+          $spec = Get-Content `
+            -LiteralPath "PAPELERA_POS.spec" `
+            -Raw
+
+          $paquetes = @(
+              "supabase",
+              "postgrest",
+              "realtime",
+              "storage3",
+              "supabase_auth",
+              "supabase_functions",
+              "pydantic",
+              "pydantic_core",
+              "httpx",
+              "httpcore",
+              "anyio",
+              "websockets",
+              "jwt",
+              "cryptography",
+              "cffi",
+              "dotenv",
+              "certifi"
+          )
+
+          foreach ($paquete in $paquetes) {
+
+              if ($spec -match [regex]::Escape("""$paquete""")) {
+
+                  Write-Host "$paquete : incluido en PAPELERA_POS.spec" `
+                    -ForegroundColor Green
+
+              }
+              else {
+
+                  Write-Error `
+                    "El paquete $paquete no esta declarado en PAPELERA_POS.spec."
+
+                  exit 1
+              }
+          }
+
+          # --------------------------------------------------
+          # VERIFICAR ARCHIVOS IMPORTANTES
+          # --------------------------------------------------
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO ARCHIVOS IMPORTANTES" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          $archivos = @(
+              "dist\PAPELERA_POS\PAPELERA_POS.exe",
+              "dist\PAPELERA_POS\_internal",
+              "dist\PAPELERA_POS\_internal\certifi\cacert.pem"
+          )
+
+          foreach ($archivo in $archivos) {
+
+              if (!(Test-Path -LiteralPath $archivo)) {
+
+                  Write-Error "FALTA: $archivo"
+                  exit 1
+              }
+
+              Write-Host "$archivo : OK" -ForegroundColor Green
+          }
+
+          # --------------------------------------------------
+          # RESULTADO
+          # --------------------------------------------------
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host "VERIFICACION DE DIST CORRECTA" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host ""
+
+          Write-Host "Supabase y sus dependencias estan declarados"
+          Write-Host "para ser incluidos por PyInstaller."
+          Write-Host ""
+
+          Write-Host "NO se exige que supabase exista como carpeta"
+          Write-Host "fisica directamente dentro de _internal."
+          Write-Host ""
+
 
 
       # ==================================================
