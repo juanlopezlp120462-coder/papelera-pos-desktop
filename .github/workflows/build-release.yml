@@ -38,6 +38,7 @@ jobs:
       - name: Instalar dependencias
         shell: powershell
         run: |
+
           $ErrorActionPreference = "Stop"
 
           Write-Host ""
@@ -48,34 +49,36 @@ jobs:
 
           python -m pip install --upgrade pip
 
-          python -m pip install -r requirements.txt
+          Write-Host ""
+          Write-Host "INSTALANDO SUPABASE Y DEPENDENCIAS..." -ForegroundColor Yellow
+          Write-Host ""
 
-          python -m pip install `
-            supabase `
-            postgrest `
-            realtime-py `
-            storage3 `
-            supabase-auth `
-            supabase-functions `
-            pydantic `
-            pydantic-core `
-            httpx `
-            httpcore `
-            anyio `
-            websockets `
-            PyJWT `
-            cryptography `
-            cffi `
-            python-dotenv `
-            certifi
+          python -m pip install --upgrade `
+            "supabase" `
+            "postgrest" `
+            "realtime-py" `
+            "storage3" `
+            "supabase-auth" `
+            "supabase-functions" `
+            "pydantic" `
+            "pydantic-core" `
+            "httpx" `
+            "httpcore" `
+            "anyio" `
+            "websockets" `
+            "PyJWT" `
+            "cryptography" `
+            "cffi" `
+            "python-dotenv" `
+            "certifi"
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "ERROR instalando dependencias."
+              exit 1
+          }
 
           Write-Host ""
-          Write-Host "DEPENDENCIAS INSTALADAS." -ForegroundColor Green
-
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO DEPENDENCIAS" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO INSTALACION..." -ForegroundColor Yellow
           Write-Host ""
 
           python -c "import supabase; print('SUPABASE:', supabase.__file__)"
@@ -83,14 +86,15 @@ jobs:
           python -c "import realtime; print('REALTIME:', realtime.__file__)"
           python -c "import storage3; print('STORAGE3:', storage3.__file__)"
           python -c "import supabase_auth; print('SUPABASE_AUTH:', supabase_auth.__file__)"
-          python -c "import supabase_functions; print('SUPABASE_FUNCTIONS:', supabase_functions.__file__)"
           python -c "import pydantic; print('PYDANTIC:', pydantic.__file__)"
+          python -c "import httpx; print('HTTPX:', httpx.__file__)"
           python -c "import dotenv; print('DOTENV:', dotenv.__file__)"
 
           Write-Host ""
-          Write-Host "Dependencias verificadas." -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host "DEPENDENCIAS INSTALADAS Y VERIFICADAS" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Green
           Write-Host ""
-
 
       # ==================================================
       # OBTENER VERSION
