@@ -114,30 +114,25 @@ jobs:
           }
 
           Write-Host ""
-          Write-Host "CONTENIDO REAL DE DIST:" -ForegroundColor Cyan
-
-          Get-ChildItem `
-            -LiteralPath "dist" `
-            -Force |
-            Format-Table Name, FullName
-
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "CONTENIDO REAL DE DIST" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
+          Get-ChildItem -LiteralPath "dist" -Force |
+              Select-Object Name, FullName |
+              Format-Table -AutoSize
+
+          Write-Host ""
           Write-Host "CARPETAS DENTRO DE DIST:" -ForegroundColor Cyan
 
-          Get-ChildItem `
-            -LiteralPath "dist" `
-            -Directory `
-            -Force |
-            ForEach-Object {
-                Write-Host "[$($_.Name)]"
-            }
+          Get-ChildItem -LiteralPath "dist" -Directory -Force |
+              ForEach-Object {
+                  Write-Host "[$($_.Name)]"
+              }
 
           Write-Host ""
-
-          Write-Host "PyInstaller termino correctamente." `
-            -ForegroundColor Green
-
+          Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
           Write-Host ""
 
       # ==================================================
