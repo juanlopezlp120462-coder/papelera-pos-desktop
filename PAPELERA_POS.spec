@@ -50,7 +50,51 @@ hiddenimports += collect_submodules("realtime")
 hiddenimports += collect_submodules("storage3")
 hiddenimports += collect_submodules("supabase_auth")
 hiddenimports += collect_submodules("supabase_functions")
+# ============================================================
+# SUPABASE FORZADO
+# ============================================================
 
+hiddenimports += [
+    "supabase",
+    "supabase.client",
+    "supabase._sync",
+    "supabase._sync.client",
+    "supabase._sync.auth_client",
+    "supabase._async",
+    "supabase._async.client",
+    "supabase._async.auth_client",
+
+    "postgrest",
+    "postgrest._sync",
+    "postgrest._sync.client",
+    "postgrest._sync.request_builder",
+    "postgrest._async",
+    "postgrest._async.client",
+    "postgrest._async.request_builder",
+
+    "realtime",
+    "realtime._sync",
+    "realtime._sync.client",
+    "realtime._sync.channel",
+    "realtime._sync.presence",
+    "realtime._async",
+    "realtime._async.client",
+    "realtime._async.channel",
+
+    "storage3",
+    "storage3._sync",
+    "storage3._sync.client",
+    "storage3._sync.bucket",
+    "storage3._async",
+    "storage3._async.client",
+    "storage3._async.bucket",
+
+    "supabase_auth",
+    "supabase_auth._sync",
+    "supabase_auth._sync.gotrue_client",
+    "supabase_auth._async",
+    "supabase_auth._async.gotrue_client",
+]
 # ============================================================
 # DATOS
 # ============================================================
@@ -212,9 +256,9 @@ analysis = Analysis(
 # ============================================================
 
 pyz = PYZ(
-    analysis.pure
+    analysis.pure,
+    analysis.zipped_data,
 )
-
 # ============================================================
 # EXE
 # ============================================================
