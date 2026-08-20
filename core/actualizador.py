@@ -7,8 +7,35 @@ import shutil
 import subprocess
 import time
 
+from dotenv import load_dotenv
+from supabase import create_client
 
-SERVIDOR = "https://papelera-pos-backend-production.up.railway.app"
+
+# ============================================================
+# SUPABASE
+# ============================================================
+
+load_dotenv()
+
+SUPABASE_URL = os.getenv(
+    "SUPABASE_URL"
+)
+
+SUPABASE_KEY = os.getenv(
+    "SUPABASE_KEY"
+)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+
+    raise RuntimeError(
+        "Faltan SUPABASE_URL o SUPABASE_KEY en .env"
+    )
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
 
 TIMEOUT = 10
 
@@ -163,74 +190,83 @@ def obtener_version_actual():
 # VERSION DEL SERVIDOR
 # ============================================================
 
+# ============================================================
+# VERSION DEL SERVIDOR
+# SUPABASE
+# ============================================================
+
 def obtener_ultima_version():
 
     try:
 
-        url = f"{SERVIDOR}/version"
-
-
-        headers = {}
-
-        token = os.getenv(
-            "GITHUB_TOKEN"
+        print(
+            "Consultando versión en Supabase..."
         )
 
-        if token:
-
-            headers["Authorization"] = (
-                f"token {token}"
+        respuesta = (
+            supabase
+            .table("versiones")
+            .select(
+                "version,url,activo,created_at"
             )
-
-
-        print(
-            "Consultando versión:",
-            url
+            .eq(
+                "activo",
+                True
+            )
+            .order(
+                "created_at",
+                desc=True
+            )
+            .limit(
+                1
+            )
+            .execute()
         )
 
 
-        respuesta = requests.get(
-            url,
-            headers=headers,
-            timeout=TIMEOUT
-        )
+        datos = respuesta.data
 
 
         print(
-            "HTTP versión:",
-            respuesta.status_code
-        )
-
-
-        print(
-            "Respuesta servidor:",
-            respuesta.text
-        )
-
-
-        if respuesta.status_code != 200:
-
-            return None
-
-
-        datos = respuesta.json()
-
-
-        print(
-            "Datos versión:",
+            "Respuesta Supabase:",
             repr(datos)
         )
 
 
-        version = datos.get(
+        if not datos:
+
+            print(
+                "ERROR: Supabase no devolvió ninguna versión activa."
+            )
+
+            return None
+
+
+        registro = datos[0]
+
+
+        version = registro.get(
             "version"
+        )
+
+        url = registro.get(
+            "url"
         )
 
 
         if version is None:
 
             print(
-                "ERROR: El servidor no devolvió version"
+                "ERROR: Supabase no devolvió version."
+            )
+
+            return None
+
+
+        if not url:
+
+            print(
+                "ERROR: Supabase no devolvió URL de actualización."
             )
 
             return None
@@ -242,32 +278,65 @@ def obtener_ultima_version():
             "\ufeff",
             ""
         ).replace(
-            "ï»¿",
+            "Ã¯Â»Â¿",
             ""
+        ).strip()
+
+
+        url = str(
+            url
         ).strip()
 
 
         if not version:
 
             print(
-                "ERROR: La versión del servidor está vacía"
+                "ERROR: La versión de Supabase está vacía."
             )
 
             return None
 
 
-        return datos
+        if not url:
+
+            print(
+                "ERROR: La URL de actualización está vacía."
+            )
+
+            return None
+
+
+        resultado = {
+
+            "version": version,
+
+            "url": url
+
+        }
+
+
+        print(
+            "VERSION SUPABASE:",
+            repr(version)
+        )
+
+        print(
+            "URL ACTUALIZACION:",
+            url
+        )
+
+
+        return resultado
 
 
     except Exception as e:
 
         print(
-            "Error consultando versión:",
+            "ERROR consultando Supabase:",
             repr(e)
         )
 
-
-    return None
+        return None
 
 
 # ============================================================
