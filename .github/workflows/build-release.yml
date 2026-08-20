@@ -139,7 +139,7 @@ jobs:
           Write-Host ""
 
       # ==================================================
-      # FORZAR DEPENDENCIAS SUPABASE DENTRO DE _INTERNAL
+      # FORZAR DEPENDENCIAS PYTHON DENTRO DE _INTERNAL
       # ==================================================
 
       - name: Forzar dependencias Python dentro de dist
@@ -148,21 +148,18 @@ jobs:
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "FORZANDO DEPENDENCIAS DENTRO DE _INTERNAL" -ForegroundColor Cyan
+          Write-Host "FORZANDO DEPENDENCIAS PYTHON EN _INTERNAL" -ForegroundColor Cyan
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
           $internal = "dist\PAPELERA_POS\_internal"
 
           if (!(Test-Path -LiteralPath $internal)) {
-              Write-Error "No existe $internal"
+              Write-Error "NO EXISTE: $internal"
               exit 1
           }
 
-          $site = python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
-
-          Write-Host "Python site-packages:"
-          Write-Host $site
+          Write-Host "Consultando ubicaciones reales mediante Python..."
           Write-Host ""
 
           $paquetes = @(
@@ -187,25 +184,82 @@ jobs:
 
           foreach ($paquete in $paquetes) {
 
-              $source = Join-Path $site $paquete
-              $target = Join-Path $internal $paquete
-
               Write-Host ""
               Write-Host "------------------------------------------"
-              Write-Host "Paquete: $paquete"
-              Write-Host "Origen:  $source"
-              Write-Host "Destino: $target"
+              Write-Host "PAQUETE: $paquete"
               Write-Host "------------------------------------------"
 
-              if (!(Test-Path -LiteralPath $source)) {
+              $pythonScript = @"
+          import importlib.util
+          import os
+          import sys
 
-                  Write-Error "NO EXISTE EL PAQUETE INSTALADO: $source"
+          nombre = "$paquete"
+
+          try:
+              spec = importlib.util.find_spec(nombre)
+
+              if spec is None:
+                  print("")
+                  sys.exit(2)
+
+              origen = spec.origin
+
+              if spec.submodule_search_locations:
+                  ruta = list(spec.submodule_search_locations)[0]
+              else:
+                  ruta = os.path.dirname(origen)
+
+              print(os.path.abspath(ruta))
+
+          except Exception as e:
+              print("ERROR:", e)
+              sys.exit(3)
+          "@
+
+              $source = (
+                  $pythonScript |
+                  python -
+              )
+
+              if ($LASTEXITCODE -ne 0) {
+
+                  Write-Error `
+                    "Python NO pudo localizar el paquete: $paquete"
+
                   exit 1
               }
 
+              $source = $source.Trim()
+
+              Write-Host "Origen real:"
+              Write-Host $source
+
+              if ([string]::IsNullOrWhiteSpace($source)) {
+
+                  Write-Error `
+                    "Python devolvio una ruta vacia para $paquete"
+
+                  exit 1
+              }
+
+              if (!(Test-Path -LiteralPath $source)) {
+
+                  Write-Error `
+                    "La ruta encontrada NO existe: $source"
+
+                  exit 1
+              }
+
+              $target = Join-Path $internal $paquete
+
+              Write-Host "Destino:"
+              Write-Host $target
+
               if (Test-Path -LiteralPath $target) {
 
-                  Write-Host "Eliminando copia anterior..." `
+                  Write-Host `
+                    "Eliminando copia anterior..." `
                     -ForegroundColor Yellow
 
                   Remove-Item `
@@ -222,7 +276,9 @@ jobs:
 
               if (!(Test-Path -LiteralPath $target)) {
 
-                  Write-Error "No se pudo copiar $paquete"
+                  Write-Error `
+                    "NO se pudo copiar $paquete"
+
                   exit 1
               }
 
@@ -236,7 +292,9 @@ jobs:
 
               if ($cantidad -le 0) {
 
-                  Write-Error "La copia de $paquete esta vacia."
+                  Write-Error `
+                    "La copia de $paquete esta vacia."
+
                   exit 1
               }
 
@@ -248,10 +306,14 @@ jobs:
           Write-Host ""
           Write-Host "==========================================" `
             -ForegroundColor Cyan
-          Write-Host "DEPENDENCIAS FORZADAS CORRECTAMENTE" `
+
+          Write-Host `
+            "TODAS LAS DEPENDENCIAS FUERON COPIADAS" `
             -ForegroundColor Green
+
           Write-Host "==========================================" `
             -ForegroundColor Cyan
+
           Write-Host ""
       # ==================================================
       # VERIFICAR COMPILACION
