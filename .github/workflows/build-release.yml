@@ -189,17 +189,6 @@ jobs:
               exit 1
           }
 
-          $sitePackages = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
-
-          if ([string]::IsNullOrWhiteSpace($sitePackages)) {
-              Write-Error "No se pudo determinar site-packages."
-              exit 1
-          }
-
-          Write-Host "site-packages:" -ForegroundColor Yellow
-          Write-Host $sitePackages -ForegroundColor Yellow
-          Write-Host ""
-
           $dependencias = @(
               "supabase",
               "postgrest",
@@ -222,15 +211,22 @@ jobs:
 
           foreach ($dependencia in $dependencias) {
 
-              $origen = Join-Path $sitePackages $dependencia
-              $destino = Join-Path $internal $dependencia
+              Write-Host ""
+              Write-Host "Buscando: $dependencia" -ForegroundColor Yellow
 
-              if (!(Test-Path -LiteralPath $origen)) {
-                  Write-Error "NO EXISTE EN SITE-PACKAGES: $origen"
+              $rutaPython = python -c "import importlib.util; s=importlib.util.find_spec('$dependencia'); print(s.submodule_search_locations[0] if s and s.submodule_search_locations else '')"
+
+              $rutaPython = $rutaPython.Trim()
+
+              if ([string]::IsNullOrWhiteSpace($rutaPython)) {
+                  Write-Error "NO SE ENCONTRO EL PAQUETE: $dependencia"
                   exit 1
               }
 
-              Write-Host "Copiando: $dependencia" -ForegroundColor Yellow
+              Write-Host "Origen:" -ForegroundColor DarkGray
+              Write-Host $rutaPython -ForegroundColor DarkGray
+
+              $destino = Join-Path $internal $dependencia
 
               if (Test-Path -LiteralPath $destino) {
                   Remove-Item `
@@ -240,7 +236,7 @@ jobs:
               }
 
               Copy-Item `
-                  -LiteralPath $origen `
+                  -LiteralPath $rutaPython `
                   -Destination $destino `
                   -Recurse `
                   -Force
@@ -254,7 +250,9 @@ jobs:
           }
 
           Write-Host ""
-          Write-Host "TODAS LAS DEPENDENCIAS SUPABASE FUERON COPIADAS." -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host "DEPENDENCIAS SUPABASE COPIADAS CORRECTAMENTE" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Green
           Write-Host ""
 
           Write-Host ""
