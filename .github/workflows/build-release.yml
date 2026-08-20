@@ -6,7 +6,9 @@ on:
       - "v*"
 
 jobs:
+
   build-update:
+
     runs-on: windows-latest
 
     steps:
@@ -36,6 +38,7 @@ jobs:
       - name: Instalar dependencias
         shell: powershell
         run: |
+
           python -m pip install --upgrade pip
 
           pip install -r requirements.txt
@@ -135,6 +138,7 @@ jobs:
           Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
           Write-Host ""
 
+
       # ==================================================
       # VERIFICAR COMPILACION
       # ==================================================
@@ -147,11 +151,13 @@ jobs:
           $internal = "dist\PAPELERA_POS\_internal"
 
           if (!(Test-Path -LiteralPath $exe)) {
+
               Write-Error "No existe PAPELERA_POS.exe"
               exit 1
           }
 
           if (!(Test-Path -LiteralPath $internal)) {
+
               Write-Error "No existe _internal"
               exit 1
           }
@@ -163,63 +169,61 @@ jobs:
 
 
       # ==================================================
-      # VERIFICAR DEPENDENCIAS EMPAQUETADAS
+      # VERIFICAR ESTRUCTURA DE DIST
       # ==================================================
 
-      - name: Verificar dependencias empaquetadas
+      - name: Verificar Supabase en dist
         shell: powershell
         run: |
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO DEPENDENCIAS EMPAQUETADAS" -ForegroundColor Cyan
+          Write-Host "ESTRUCTURA REAL DE DIST" -ForegroundColor Cyan
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
-          $exe = "dist\PAPELERA_POS\PAPELERA_POS.exe"
+          $dist = "dist\PAPELERA_POS"
+          $internal = "dist\PAPELERA_POS\_internal"
 
-          if (!(Test-Path -LiteralPath $exe)) {
-              Write-Error "NO EXISTE PAPELERA_POS.exe"
+          if (!(Test-Path -LiteralPath $dist)) {
+
+              Write-Error "NO EXISTE dist\PAPELERA_POS"
               exit 1
           }
 
-          Write-Host "EXE encontrado:" -ForegroundColor Green
-          Write-Host $exe
-          Write-Host ""
+          if (!(Test-Path -LiteralPath $internal)) {
 
-          Write-Host "Tamaño del EXE:" -ForegroundColor Yellow
+              Write-Error "NO EXISTE dist\PAPELERA_POS\_internal"
+              exit 1
+          }
 
-          $exeInfo = Get-Item -LiteralPath $exe
-
-          Write-Host (
-              "{0:N2} MB" -f ($exeInfo.Length / 1MB)
-          )
-
-          Write-Host ""
-
-          # --------------------------------------------------
-          # MOSTRAR ARCHIVO INTERNO DE PYINSTALLER
-          # --------------------------------------------------
-
-          Write-Host "Contenido de _internal:" -ForegroundColor Yellow
+          Write-Host "Contenido de dist\PAPELERA_POS:" `
+            -ForegroundColor Yellow
 
           Get-ChildItem `
-            -LiteralPath "dist\PAPELERA_POS\_internal" `
+            -LiteralPath $dist `
             -Force |
             ForEach-Object {
+
+                Write-Host "[$($_.Name)]"
+            }
+
+          Write-Host ""
+          Write-Host "Carpetas dentro de _internal:" `
+            -ForegroundColor Yellow
+
+          Get-ChildItem `
+            -LiteralPath $internal `
+            -Directory `
+            -Force |
+            ForEach-Object {
+
                 Write-Host "[$($_.Name)]"
             }
 
           Write-Host ""
 
-          # --------------------------------------------------
-          # BUSCAR ARCHIVOS RELACIONADOS
-          # --------------------------------------------------
-
-          Write-Host "Buscando archivos relacionados con Supabase..." `
-            -ForegroundColor Yellow
-
-          $busquedas = @(
+          $carpetas = @(
               "supabase",
               "postgrest",
               "realtime",
@@ -229,85 +233,54 @@ jobs:
               "pydantic"
           )
 
-          foreach ($nombre in $busquedas) {
-
-              $resultado = Get-ChildItem `
-                -LiteralPath "dist\PAPELERA_POS" `
-                -Recurse `
-                -Force `
-                -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $_.Name -like "*$nombre*"
-                } |
-                Select-Object -First 5
-
-              if ($resultado) {
-
-                  Write-Host ""
-                  Write-Host "$nombre : ENCONTRADO" `
-                    -ForegroundColor Green
-
-                  foreach ($archivo in $resultado) {
-                      Write-Host "  $($archivo.FullName)"
-                  }
-
-              } else {
-
-                  Write-Host ""
-                  Write-Host "$nombre : no aparece como archivo/carpeta independiente." `
-                    -ForegroundColor Yellow
-              }
-          }
-
-          Write-Host ""
-
-          # --------------------------------------------------
-          # INSPECCIONAR ARCHIVO PYZ
-          # --------------------------------------------------
-
-          Write-Host "Buscando archivos PYZ..." `
-            -ForegroundColor Yellow
-
-          $pyz = Get-ChildItem `
-            -LiteralPath "dist\PAPELERA_POS\_internal" `
-            -Recurse `
-            -File `
-            -Filter "*.pyz" `
-            -ErrorAction SilentlyContinue
-
-          if ($pyz) {
-
-              foreach ($archivo in $pyz) {
-
-                  Write-Host ""
-                  Write-Host "PYZ encontrado:" `
-                    -ForegroundColor Green
-
-                  Write-Host $archivo.FullName
-              }
-
-          } else {
-
-              Write-Host ""
-              Write-Host "No se encontro archivo PYZ independiente." `
-                -ForegroundColor Yellow
-          }
-
-          Write-Host ""
-
           Write-Host "==========================================" `
             -ForegroundColor Cyan
 
-          Write-Host "NO SE EXIGE QUE SUPABASE SEA UNA CARPETA." `
-            -ForegroundColor Green
-
-          Write-Host "La verificacion continuara con el EXE." `
-            -ForegroundColor Green
+          Write-Host "VERIFICANDO DEPENDENCIAS EN DIST" `
+            -ForegroundColor Cyan
 
           Write-Host "==========================================" `
             -ForegroundColor Cyan
 
           Write-Host ""
+
+          foreach ($carpeta in $carpetas) {
+
+              $ruta = Join-Path $internal $carpeta
+
+              if (!(Test-Path -LiteralPath $ruta)) {
+
+                  Write-Error "FALTA: $ruta"
+                  exit 1
+              }
+
+              $cantidad = @(
+                  Get-ChildItem `
+                    -LiteralPath $ruta `
+                    -Recurse `
+                    -File `
+                    -ErrorAction Stop
+              ).Count
+
+              if ($cantidad -le 0) {
+
+                  Write-Error `
+                    "La carpeta $carpeta esta vacia."
+
+                  exit 1
+              }
+
+              Write-Host `
+                "$carpeta : OK ($cantidad archivos)" `
+                -ForegroundColor Green
+          }
+
+          Write-Host ""
+          Write-Host "TODAS LAS DEPENDENCIAS ESTAN EN DIST." `
+            -ForegroundColor Green
+          Write-Host ""
+
+
       # ==================================================
       # FORZAR PYTHON-DOTENV
       # ==================================================
@@ -550,8 +523,8 @@ jobs:
 
           New-Item `
             -ItemType Directory `
-            -Path "update" `
-            | Out-Null
+            -Path "update" |
+            Out-Null
 
           Copy-Item `
             -LiteralPath "dist\PAPELERA_POS\PAPELERA_POS.exe" `
@@ -588,9 +561,12 @@ jobs:
           $internal = "update\_internal"
 
           Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO UPDATE COMPLETO" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+          Write-Host "VERIFICANDO UPDATE COMPLETO" `
+            -ForegroundColor Cyan
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
           Write-Host ""
 
           # --------------------------------------------------
@@ -690,40 +666,6 @@ jobs:
 
 
           # --------------------------------------------------
-          # SUPABASE
-          #
-          # NO se exige carpeta fisica.
-          # PyInstaller puede empaquetar estos modulos
-          # dentro del bundle del ejecutable.
-          # --------------------------------------------------
-
-          Write-Host ""
-          Write-Host "Dependencias Python:" `
-            -ForegroundColor Yellow
-
-          Write-Host "Supabase : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-          Write-Host "PostgREST : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-          Write-Host "Realtime : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-          Write-Host "Storage3 : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-          Write-Host "Supabase Auth : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-          Write-Host "Supabase Functions : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-          Write-Host "Pydantic : empaquetado por PyInstaller" `
-            -ForegroundColor Green
-
-
-          # --------------------------------------------------
           # DATABASE
           # --------------------------------------------------
 
@@ -777,6 +719,8 @@ jobs:
             -ForegroundColor Cyan
 
           Write-Host ""
+
+
       # ==================================================
       # COMPROBAR QUE NO ESTE LA DATABASE
       # ==================================================
@@ -791,6 +735,7 @@ jobs:
 
               Write-Error `
                 "ERROR CRITICO: update contiene carpeta database."
+
               exit 1
           }
 
@@ -807,6 +752,7 @@ jobs:
 
               Write-Error `
                 "ERROR CRITICO: abril.db fue incluido en update."
+
               exit 1
           }
 
@@ -871,10 +817,10 @@ jobs:
           try {
 
               $names = @(
-                $zip.Entries |
-                ForEach-Object {
-                  $_.FullName
-                }
+                  $zip.Entries |
+                  ForEach-Object {
+                      $_.FullName -replace "\\", "/"
+                  }
               )
 
               Write-Host ""
@@ -886,71 +832,164 @@ jobs:
                 -ForegroundColor Cyan
               Write-Host ""
 
-              $required = @(
-                  "_internal/supabase/",
-                  "_internal/postgrest/",
-                  "_internal/realtime/",
-                  "_internal/storage3/",
-                  "_internal/supabase_auth/",
-                  "_internal/supabase_functions/",
-                  "_internal/pydantic/",
-                  "_internal/dotenv/__init__.py",
-                  "_internal/certifi/cacert.pem"
+              Write-Host "CONTENIDO DEL ZIP:" `
+                -ForegroundColor Yellow
+
+              foreach ($name in $names) {
+                  Write-Host $name
+              }
+
+              Write-Host ""
+
+              # --------------------------------------------------
+              # FUNCION PARA BUSCAR ARCHIVOS DENTRO DE UNA CARPETA
+              # --------------------------------------------------
+
+              function Test-ZipPath {
+
+                  param(
+                      [string]$Path
+                  )
+
+                  $normalized = $Path -replace "\\", "/"
+
+                  return (
+                      $names |
+                      Where-Object {
+                          $_ -eq $normalized -or
+                          $_ -like "$normalized/*"
+                      } |
+                      Select-Object -First 1
+                  )
+              }
+
+
+              # --------------------------------------------------
+              # DEPENDENCIAS
+              # --------------------------------------------------
+
+              $requiredFolders = @(
+                  "_internal/supabase",
+                  "_internal/postgrest",
+                  "_internal/realtime",
+                  "_internal/storage3",
+                  "_internal/supabase_auth",
+                  "_internal/supabase_functions",
+                  "_internal/pydantic"
               )
 
-              foreach ($requiredPath in $required) {
+              foreach ($folder in $requiredFolders) {
 
-                  $found = $names |
-                    Where-Object {
-                      $_ -replace "\\", "/" |
-                      ForEach-Object {
-                        $_ -like "*$requiredPath*"
-                      }
-                    } |
-                    Select-Object -First 1
+                  $found = Test-ZipPath $folder
 
                   if ($null -eq $found) {
 
                       Write-Error `
-                        "ERROR CRITICO: falta $requiredPath en update.zip"
+                        "ERROR CRITICO: falta $folder en update.zip"
+
                       exit 1
                   }
 
                   Write-Host `
-                    "$requiredPath : OK" `
+                    "$folder : OK" `
                     -ForegroundColor Green
               }
 
+
+              # --------------------------------------------------
+              # DOTENV
+              # --------------------------------------------------
+
+              $dotenv = "_internal/dotenv/__init__.py"
+
+              if ($null -eq (Test-ZipPath $dotenv)) {
+
+                  Write-Error `
+                    "ERROR CRITICO: falta $dotenv en update.zip"
+
+                  exit 1
+              }
+
+              Write-Host `
+                "_internal/dotenv : OK" `
+                -ForegroundColor Green
+
+
+              # --------------------------------------------------
+              # CERTIFI
+              # --------------------------------------------------
+
+              $certifi = "_internal/certifi/cacert.pem"
+
+              if ($null -eq (Test-ZipPath $certifi)) {
+
+                  Write-Error `
+                    "ERROR CRITICO: falta $certifi en update.zip"
+
+                  exit 1
+              }
+
+              Write-Host `
+                "_internal/certifi : OK" `
+                -ForegroundColor Green
+
+
+              # --------------------------------------------------
+              # EXE
+              # --------------------------------------------------
+
               $exeEntry = $names |
                 Where-Object {
-                  $_ -match "PAPELERA_POS\.exe$"
-                } |
-                Select-Object -First 1
-
-              $versionEntry = $names |
-                Where-Object {
-                  $_ -match "version\.txt$"
+                    $_ -match "(^|/)PAPELERA_POS\.exe$"
                 } |
                 Select-Object -First 1
 
               if ($null -eq $exeEntry) {
 
                   Write-Error `
-                    "Falta PAPELERA_POS.exe en update.zip"
+                    "ERROR CRITICO: falta PAPELERA_POS.exe en update.zip"
+
                   exit 1
               }
+
+              Write-Host `
+                "PAPELERA_POS.exe : OK" `
+                -ForegroundColor Green
+
+
+              # --------------------------------------------------
+              # VERSION
+              # --------------------------------------------------
+
+              $versionEntry = $names |
+                Where-Object {
+                    $_ -match "(^|/)version\.txt$"
+                } |
+                Select-Object -First 1
 
               if ($null -eq $versionEntry) {
 
                   Write-Error `
-                    "Falta version.txt en update.zip"
+                    "ERROR CRITICO: falta version.txt en update.zip"
+
                   exit 1
               }
 
+              Write-Host `
+                "version.txt : OK" `
+                -ForegroundColor Green
+
+
+              # --------------------------------------------------
+              # DATABASE
+              # --------------------------------------------------
+
               $databaseEntry = $names |
                 Where-Object {
-                  $_ -replace "\\", "/" `
-                    -match "(^|/)database/|abril\.db$"
+
+                    $_ -match "(^|/)database(/|$)" -or
+                    $_ -match "(^|/)abril\.db$"
+
                 } |
                 Select-Object -First 1
 
@@ -958,40 +997,32 @@ jobs:
 
                   Write-Error `
                     "ERROR CRITICO: database/abril.db aparece en update.zip"
+
                   exit 1
               }
 
+              Write-Host `
+                "database : NO incluida" `
+                -ForegroundColor Green
+
+              Write-Host `
+                "abril.db : NO incluida" `
+                -ForegroundColor Green
+
+
+              # --------------------------------------------------
+              # FINAL
+              # --------------------------------------------------
+
               Write-Host ""
-              Write-Host "PAPELERA_POS.exe: OK" `
+              Write-Host "==========================================" `
+                -ForegroundColor Cyan
+              Write-Host "ZIP FINAL VERIFICADO CORRECTAMENTE" `
                 -ForegroundColor Green
-              Write-Host "version.txt: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\supabase: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\postgrest: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\realtime: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\storage3: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\supabase_auth: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\supabase_functions: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\pydantic: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\dotenv: OK" `
-                -ForegroundColor Green
-              Write-Host "_internal\certifi: OK" `
-                -ForegroundColor Green
-              Write-Host "database: NO incluida" `
-                -ForegroundColor Green
-              Write-Host "abril.db: NO incluida" `
-                -ForegroundColor Green
+              Write-Host "==========================================" `
+                -ForegroundColor Cyan
               Write-Host ""
-              Write-Host "ZIP FINAL VERIFICADO CORRECTAMENTE." `
-                -ForegroundColor Green
-              Write-Host ""
+
           }
           finally {
 
