@@ -201,6 +201,139 @@ jobs:
           Write-Host ""
           Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
           Write-Host ""
+
+      # ==================================================
+      # FORZAR PAQUETES SUPABASE EN _internal
+      # ==================================================
+
+      - name: Forzar paquetes Supabase
+        shell: powershell
+        run: |
+
+          $ErrorActionPreference = "Stop"
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "FORZANDO PAQUETES SUPABASE EN _internal" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          $python = (Get-Command python).Source
+
+          $site = python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+
+          Write-Host "Python:"
+          Write-Host $python
+          Write-Host ""
+
+          Write-Host "Site-packages:"
+          Write-Host $site
+          Write-Host ""
+
+          $internal = "dist\PAPELERA_POS\_internal"
+
+          if (!(Test-Path -LiteralPath $internal)) {
+
+              Write-Error "No existe $internal"
+              exit 1
+          }
+
+          # --------------------------------------------------
+          # PAQUETES QUE DEBEN QUEDAR FISICAMENTE EN _internal
+          # --------------------------------------------------
+
+          $paquetes = @(
+              "supabase",
+              "postgrest",
+              "realtime",
+              "storage3",
+              "supabase_auth",
+              "supabase_functions",
+              "pydantic",
+              "pydantic_core",
+              "httpx",
+              "httpcore",
+              "anyio",
+              "websockets",
+              "jwt",
+              "cryptography",
+              "cffi"
+          )
+
+          foreach ($paquete in $paquetes) {
+
+              Write-Host ""
+              Write-Host "------------------------------------------" -ForegroundColor Yellow
+              Write-Host "Procesando: $paquete" -ForegroundColor Yellow
+              Write-Host "------------------------------------------" -ForegroundColor Yellow
+
+              $source = Join-Path $site $paquete
+              $target = Join-Path $internal $paquete
+
+              if (!(Test-Path -LiteralPath $source)) {
+
+                  Write-Error "No se encontro $paquete en $source"
+                  exit 1
+              }
+
+              if (Test-Path -LiteralPath $target) {
+
+                  Remove-Item `
+                    -LiteralPath $target `
+                    -Recurse `
+                    -Force
+              }
+
+              Copy-Item `
+                -LiteralPath $source `
+                -Destination $target `
+                -Recurse `
+                -Force
+
+              Write-Host "$paquete copiado correctamente." `
+                -ForegroundColor Green
+          }
+
+          # --------------------------------------------------
+          # VERIFICAR SUPABASE
+          # --------------------------------------------------
+
+          $supabaseInit = `
+            "dist\PAPELERA_POS\_internal\supabase\__init__.py"
+
+          if (!(Test-Path -LiteralPath $supabaseInit)) {
+
+              Write-Error `
+                "ERROR CRITICO: no se pudo copiar supabase\__init__.py"
+
+              exit 1
+          }
+
+          # --------------------------------------------------
+          # MOSTRAR ESTRUCTURA
+          # --------------------------------------------------
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "SUPABASE FORZADO CORRECTAMENTE" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          Write-Host `
+            "supabase\__init__.py : OK" `
+            -ForegroundColor Green
+
+          Write-Host ""
+
+          Get-ChildItem `
+            -LiteralPath "dist\PAPELERA_POS\_internal\supabase" `
+            -Directory `
+            -Force |
+            Select-Object Name |
+            Format-Table -AutoSize
+
+          Write-Host ""
+
       # ==================================================
       # VERIFICAR COMPILACION
       # ==================================================
@@ -504,24 +637,58 @@ jobs:
           }
 
           # --------------------------------------------------
-          # RESULTADO
+          # VERIFICAR SUPABASE FISICO
           # --------------------------------------------------
 
           Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Green
-          Write-Host "VERIFICACION DE DIST CORRECTA" -ForegroundColor Green
-          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO SUPABASE FISICO EN DIST" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
-          Write-Host "Supabase y sus dependencias estan declarados"
-          Write-Host "para ser incluidos por PyInstaller."
+          $supabase = "dist\PAPELERA_POS\_internal\supabase"
+          $supabaseInit = "dist\PAPELERA_POS\_internal\supabase\__init__.py"
+
+          if (!(Test-Path -LiteralPath $supabase)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta dist\PAPELERA_POS\_internal\supabase"
+
+              exit 1
+          }
+
+          if (!(Test-Path -LiteralPath $supabaseInit)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta supabase\__init__.py"
+
+              exit 1
+          }
+
+          Write-Host `
+            "supabase : OK" `
+            -ForegroundColor Green
+
+          Write-Host `
+            "supabase\__init__.py : OK" `
+            -ForegroundColor Green
+
           Write-Host ""
 
-          Write-Host "NO se exige que supabase exista como carpeta"
-          Write-Host "fisica directamente dentro de _internal."
+          Write-Host `
+            "Contenido de supabase:" `
+            -ForegroundColor Yellow
+
+          Get-ChildItem `
+            -LiteralPath $supabase `
+            -Force |
+            Select-Object Name, Length |
+            Format-Table -AutoSize
+
           Write-Host ""
-
-
+          Write-Host "SUPABASE FISICO EN DIST : OK" `
+            -ForegroundColor Green
+          Write-Host ""
 
       # ==================================================
       # FORZAR PYTHON-DOTENV
