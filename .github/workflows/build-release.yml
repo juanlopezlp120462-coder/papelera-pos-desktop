@@ -807,6 +807,64 @@ jobs:
               -Destination "update\_internal" `
               -Recurse `
               -Force
+            # ==================================================
+            # VERIFICAR SUPABASE EN UPDATE
+            # ==================================================
+
+            $supabase = "update\_internal\supabase"
+
+            if (!(Test-Path -LiteralPath $supabase)) {
+
+                Write-Error `
+                  "ERROR CRITICO: falta update\_internal\supabase"
+
+                exit 1
+            }
+
+            $supabaseInit = `
+              "update\_internal\supabase\__init__.py"
+
+            if (!(Test-Path -LiteralPath $supabaseInit)) {
+
+                Write-Error `
+                  "ERROR CRITICO: falta update\_internal\supabase\__init__.py"
+
+                exit 1
+            }
+
+            $nestedInternal = `
+              "update\_internal\_internal"
+
+            if (Test-Path -LiteralPath $nestedInternal) {
+
+                Write-Error `
+                  "ERROR CRITICO: existe update\_internal\_internal"
+
+                exit 1
+            }
+
+            Write-Host ""
+            Write-Host "==========================================" `
+              -ForegroundColor Cyan
+            Write-Host "SUPABASE EN UPDATE" `
+              -ForegroundColor Cyan
+            Write-Host "==========================================" `
+              -ForegroundColor Cyan
+            Write-Host ""
+
+            Write-Host `
+              "update\_internal\supabase : OK" `
+              -ForegroundColor Green
+
+            Write-Host `
+              "supabase\__init__.py : OK" `
+              -ForegroundColor Green
+
+            Write-Host `
+              "_internal anidado : NO" `
+              -ForegroundColor Green
+
+            Write-Host ""
 
 
 
@@ -886,7 +944,6 @@ jobs:
           Write-Host "version.txt : OK ($updateVersion)" `
             -ForegroundColor Green
 
-
           # --------------------------------------------------
           # _internal
           # --------------------------------------------------
@@ -899,6 +956,65 @@ jobs:
 
           Write-Host "_internal : OK" `
             -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # SUPABASE
+          # --------------------------------------------------
+
+          $supabase = "update\_internal\supabase\__init__.py"
+
+          if (!(Test-Path -LiteralPath $supabase)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta supabase\__init__.py en update."
+
+              exit 1
+          }
+
+          Write-Host `
+            "supabase : OK" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # SUPABASE AUTH
+          # --------------------------------------------------
+
+          $supabaseAuth = "update\_internal\supabase_auth\__init__.py"
+
+          if (!(Test-Path -LiteralPath $supabaseAuth)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta supabase_auth\__init__.py en update."
+
+              exit 1
+          }
+
+          Write-Host `
+            "supabase_auth : OK" `
+            -ForegroundColor Green
+
+
+          # --------------------------------------------------
+          # POSTGREST
+          # --------------------------------------------------
+
+          $postgrest = "update\_internal\postgrest\__init__.py"
+
+          if (!(Test-Path -LiteralPath $postgrest)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta postgrest\__init__.py en update."
+
+              exit 1
+          }
+
+          Write-Host `
+            "postgrest : OK" `
+            -ForegroundColor Green
+
+
           # --------------------------------------------------
           # ESTRUCTURA _internal
           # --------------------------------------------------
