@@ -258,6 +258,61 @@ Write-Host ""
 
 # ============================================================
 # CRITICO:
+# VERIFICAR DEPENDENCIAS DE SUPABASE EN DIST
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       VERIFICANDO SUPABASE EN DIST" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+$SUPABASE_CARPETAS = @(
+    "supabase",
+    "postgrest",
+    "realtime",
+    "storage3",
+    "supabase_auth",
+    "supabase_functions",
+    "pydantic"
+)
+
+foreach ($NOMBRE in $SUPABASE_CARPETAS) {
+
+    $RUTA = Join-Path $DIST_INTERNAL $NOMBRE
+
+    if (!(Test-Path -LiteralPath $RUTA -PathType Container)) {
+        Write-Host ""
+        Write-Host "ERROR CRITICO: Falta $NOMBRE en _internal." -ForegroundColor Red
+        Write-Host "Ruta esperada: $RUTA" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "NO se continuara con la publicacion." -ForegroundColor Red
+        exit 1
+    }
+
+    $ARCHIVOS = @(
+        Get-ChildItem `
+            -LiteralPath $RUTA `
+            -Recurse `
+            -File `
+            -ErrorAction SilentlyContinue
+    )
+
+    if ($ARCHIVOS.Count -eq 0) {
+        Write-Host ""
+        Write-Host "ERROR CRITICO: $NOMBRE existe pero esta vacio." -ForegroundColor Red
+        Write-Host "Ruta: $RUTA" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "_internal\$NOMBRE : OK ($($ARCHIVOS.Count) archivos)." -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "Todas las dependencias de Supabase estan presentes en dist." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
+# CRITICO:
 # VERIFICAR QUE PYINSTALLER NO HAYA METIDO abril.db
 # DENTRO DE _internal
 # ============================================================
@@ -620,6 +675,50 @@ Write-Host "dotenv dentro del UPDATE: OK." -ForegroundColor Green
 Write-Host ""
 
 # ============================================================
+# CRITICO:
+# VERIFICAR DEPENDENCIAS DE SUPABASE EN UPDATE_TEMP
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       VERIFICANDO SUPABASE EN UPDATE_TEMP" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+foreach ($NOMBRE in $SUPABASE_CARPETAS) {
+
+    $RUTA = Join-Path $UPDATE_INTERNAL $NOMBRE
+
+    if (!(Test-Path -LiteralPath $RUTA -PathType Container)) {
+        Write-Host ""
+        Write-Host "ERROR CRITICO: UPDATE_TEMP no contiene _internal\$NOMBRE." -ForegroundColor Red
+        Write-Host "Ruta: $RUTA" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "NO se creara/publicara el update." -ForegroundColor Red
+        exit 1
+    }
+
+    $ARCHIVOS = @(
+        Get-ChildItem `
+            -LiteralPath $RUTA `
+            -Recurse `
+            -File `
+            -ErrorAction SilentlyContinue
+    )
+
+    if ($ARCHIVOS.Count -eq 0) {
+        Write-Host ""
+        Write-Host "ERROR CRITICO: UPDATE_TEMP contiene _internal\$NOMBRE pero esta vacio." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "UPDATE_TEMP\_internal\$NOMBRE : OK ($($ARCHIVOS.Count) archivos)." -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "UPDATE_TEMP contiene todas las dependencias de Supabase." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
 # CREAR UPDATE.ZIP
 # ============================================================
 
@@ -637,17 +736,6 @@ if (Test-Path -LiteralPath $UPDATE_ZIP) {
     [System.IO.Compression.CompressionLevel]::Optimal,
     $false
 )
-
-# ============================================================
-# ELIMINAR TEMPORAL
-# ============================================================
-
-if (Test-Path -LiteralPath $UPDATE_DIR) {
-    Remove-Item `
-        -LiteralPath $UPDATE_DIR `
-        -Recurse `
-        -Force
-}
 
 # ============================================================
 # COMPROBAR ZIP
@@ -699,6 +787,13 @@ $TIENE_VERSION = $false
 $TIENE_INTERNAL = $false
 $TIENE_DOTENV = $false
 $TIENE_DOTENV_INIT = $false
+$TIENE_SUPABASE = $false
+$TIENE_POSTGREST = $false
+$TIENE_REALTIME = $false
+$TIENE_STORAGE3 = $false
+$TIENE_SUPABASE_AUTH = $false
+$TIENE_SUPABASE_FUNCTIONS = $false
+$TIENE_PYDANTIC = $false
 $TIENE_DATABASE = $false
 $TIENE_ABRIL = $false
 $TIENE_BACKUPS = $false
@@ -727,6 +822,34 @@ foreach ($ENTRY in $ENTRADAS) {
 
     if ($NORMAL -eq "_internal/dotenv/__init__.py") {
         $TIENE_DOTENV_INIT = $true
+    }
+
+    if ($NORMAL -eq "_internal/supabase/" -or $NORMAL.StartsWith("_internal/supabase/")) {
+        $TIENE_SUPABASE = $true
+    }
+
+    if ($NORMAL -eq "_internal/postgrest/" -or $NORMAL.StartsWith("_internal/postgrest/")) {
+        $TIENE_POSTGREST = $true
+    }
+
+    if ($NORMAL -eq "_internal/realtime/" -or $NORMAL.StartsWith("_internal/realtime/")) {
+        $TIENE_REALTIME = $true
+    }
+
+    if ($NORMAL -eq "_internal/storage3/" -or $NORMAL.StartsWith("_internal/storage3/")) {
+        $TIENE_STORAGE3 = $true
+    }
+
+    if ($NORMAL -eq "_internal/supabase_auth/" -or $NORMAL.StartsWith("_internal/supabase_auth/")) {
+        $TIENE_SUPABASE_AUTH = $true
+    }
+
+    if ($NORMAL -eq "_internal/supabase_functions/" -or $NORMAL.StartsWith("_internal/supabase_functions/")) {
+        $TIENE_SUPABASE_FUNCTIONS = $true
+    }
+
+    if ($NORMAL -eq "_internal/pydantic/" -or $NORMAL.StartsWith("_internal/pydantic/")) {
+        $TIENE_PYDANTIC = $true
     }
 
     if ($NORMAL -eq "database/" -or $NORMAL.StartsWith("database/")) {
@@ -789,7 +912,35 @@ if (!$TIENE_DOTENV_INIT) {
     exit 1
 }
 
-Write-Host "_internal/dotenv/__init__.py: OK." -ForegroundColor Green
+
+$DEPENDENCIAS_ZIP = @(
+    @{ Nombre = "supabase"; Variable = $TIENE_SUPABASE },
+    @{ Nombre = "postgrest"; Variable = $TIENE_POSTGREST },
+    @{ Nombre = "realtime"; Variable = $TIENE_REALTIME },
+    @{ Nombre = "storage3"; Variable = $TIENE_STORAGE3 },
+    @{ Nombre = "supabase_auth"; Variable = $TIENE_SUPABASE_AUTH },
+    @{ Nombre = "supabase_functions"; Variable = $TIENE_SUPABASE_FUNCTIONS },
+    @{ Nombre = "pydantic"; Variable = $TIENE_PYDANTIC }
+)
+
+Write-Host ""
+Write-Host "Verificando dependencias Supabase dentro de UPDATE.zip..." -ForegroundColor Cyan
+
+foreach ($DEPENDENCIA in $DEPENDENCIAS_ZIP) {
+
+    if (!$DEPENDENCIA.Variable) {
+        Write-Host ""
+        Write-Host "ERROR CRITICO: UPDATE.zip NO contiene _internal\$($DEPENDENCIA.Nombre)." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "El update NO sera publicado." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "_internal\$($DEPENDENCIA.Nombre): OK." -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "Todas las dependencias Supabase estan dentro de UPDATE.zip." -ForegroundColor Green
 
 if ($TIENE_DATABASE) {
     Write-Host "ERROR: UPDATE.zip contiene database." -ForegroundColor Red
@@ -823,77 +974,501 @@ Write-Host "LOGS: NO incluidos." -ForegroundColor Green
 Write-Host "TICKETS: NO incluidos." -ForegroundColor Green
 Write-Host ""
 
+
 # ============================================================
 # COMPROBAR VERSION DENTRO DEL ZIP
 # ============================================================
 
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       VERIFICANDO CONTENIDO DEL ZIP" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
 $ZIP_VERSION_DIR = Join-Path $ROOT "ZIP_VERSION_CHECK"
 
+# ------------------------------------------------------------
+# LIMPIAR CARPETA ANTERIOR
+# ------------------------------------------------------------
+
 if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
-    Remove-Item -LiteralPath $ZIP_VERSION_DIR -Recurse -Force
+
+    Write-Host "Eliminando ZIP_VERSION_CHECK anterior..." -ForegroundColor Yellow
+
+    Remove-Item `
+        -LiteralPath $ZIP_VERSION_DIR `
+        -Recurse `
+        -Force
 }
 
-New-Item -ItemType Directory -Path $ZIP_VERSION_DIR -Force | Out-Null
+# ------------------------------------------------------------
+# CREAR CARPETA
+# ------------------------------------------------------------
+
+New-Item `
+    -ItemType Directory `
+    -Path $ZIP_VERSION_DIR `
+    -Force |
+    Out-Null
+
+# ------------------------------------------------------------
+# IMPORTANTE:
+# DEFINIR SIEMPRE LA RUTA DEL version.txt
+# ANTES DE USAR Test-Path
+# ------------------------------------------------------------
+
+$ZIP_VERSION_FILE = Join-Path `
+    $ZIP_VERSION_DIR `
+    "version.txt"
+
+if ([string]::IsNullOrWhiteSpace($ZIP_VERSION_FILE)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: No se pudo determinar la ruta de version.txt." -ForegroundColor Red
+    Write-Host ""
+
+    if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
+
+        Remove-Item `
+            -LiteralPath $ZIP_VERSION_DIR `
+            -Recurse `
+            -Force
+    }
+
+    exit 1
+}
+
+Write-Host "Carpeta de verificacion:" -ForegroundColor DarkGray
+Write-Host $ZIP_VERSION_DIR -ForegroundColor DarkGray
+
+Write-Host ""
+Write-Host "version.txt esperado en:" -ForegroundColor DarkGray
+Write-Host $ZIP_VERSION_FILE -ForegroundColor DarkGray
+Write-Host ""
+
+# ------------------------------------------------------------
+# EXTRAER UPDATE.ZIP
+# ------------------------------------------------------------
 
 try {
+
+    Write-Host "Extrayendo UPDATE.zip para verificacion..." -ForegroundColor Cyan
 
     Expand-Archive `
         -LiteralPath $UPDATE_ZIP `
         -DestinationPath $ZIP_VERSION_DIR `
         -Force
 
-    $ZIP_VERSION_FILE = Join-Path $ZIP_VERSION_DIR "version.txt"
-
-    if (!(Test-Path -LiteralPath $ZIP_VERSION_FILE)) {
-        throw "version.txt no fue encontrado despues de extraer UPDATE.zip."
-    }
-
-    $ZIP_VERSION = (
-        Get-Content `
-            -LiteralPath $ZIP_VERSION_FILE `
-            -Raw
-    ).Trim()
-
-    if ($ZIP_VERSION -ne $VERSION) {
-        throw "La version dentro de UPDATE.zip es $ZIP_VERSION y se esperaba $VERSION."
-    }
-
-    # Segunda comprobacion sobre el ZIP extraido
-    $ZIP_EXTRACTED_DB = @(
-        Get-ChildItem `
-            -LiteralPath $ZIP_VERSION_DIR `
-            -Recurse `
-            -File `
-            -Filter "abril.db" `
-            -ErrorAction SilentlyContinue
-    )
-
-    if ($ZIP_EXTRACTED_DB.Count -gt 0) {
-
-        Write-Host ""
-        Write-Host "ERROR CRITICO: abril.db aparecio dentro del ZIP extraido." -ForegroundColor Red
-
-        foreach ($DB_FILE in $ZIP_EXTRACTED_DB) {
-            Write-Host $DB_FILE.FullName -ForegroundColor Red
-        }
-
-        throw "UPDATE.zip contiene abril.db."
-    }
-
-    Write-Host "Version dentro de UPDATE.zip = $ZIP_VERSION" -ForegroundColor Green
-    Write-Host "Verificacion de abril.db dentro del ZIP: OK." -ForegroundColor Green
 }
-finally {
+catch {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: No se pudo extraer UPDATE.zip." -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
 
     if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
+
         Remove-Item `
             -LiteralPath $ZIP_VERSION_DIR `
             -Recurse `
             -Force
     }
+
+    exit 1
 }
 
+# ------------------------------------------------------------
+# VERIFICAR version.txt
+# ------------------------------------------------------------
+
+if (!(Test-Path -LiteralPath $ZIP_VERSION_FILE)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene version.txt." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Ruta esperada:" -ForegroundColor Yellow
+    Write-Host $ZIP_VERSION_FILE -ForegroundColor Yellow
+    Write-Host ""
+
+    exit 1
+}
+
+$ZIP_VERSION = (
+    Get-Content `
+        -LiteralPath $ZIP_VERSION_FILE `
+        -Raw
+).Trim()
+
+if ([string]::IsNullOrWhiteSpace($ZIP_VERSION)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: version.txt dentro del ZIP esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+if ($ZIP_VERSION -ne $VERSION) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: La version dentro de UPDATE.zip no coincide." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Esperada : $VERSION" -ForegroundColor Yellow
+    Write-Host "Encontrada: $ZIP_VERSION" -ForegroundColor Yellow
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "version.txt dentro del ZIP: OK." -ForegroundColor Green
+Write-Host "Version encontrada: $ZIP_VERSION" -ForegroundColor Green
 Write-Host ""
+
+# ============================================================
+# VERIFICAR _internal
+# ============================================================
+
+$ZIP_INTERNAL = Join-Path `
+    $ZIP_VERSION_DIR `
+    "_internal"
+
+if (!(Test-Path -LiteralPath $ZIP_INTERNAL -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal extraido: OK." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
+# VERIFICAR SUPABASE
+# ============================================================
+
+$ZIP_SUPABASE = Join-Path `
+    $ZIP_INTERNAL `
+    "supabase"
+
+if (!(Test-Path -LiteralPath $ZIP_SUPABASE -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\supabase." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$SUPABASE_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_SUPABASE `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($SUPABASE_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\supabase esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\supabase : OK ($SUPABASE_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR POSTGREST
+# ============================================================
+
+$ZIP_POSTGREST = Join-Path `
+    $ZIP_INTERNAL `
+    "postgrest"
+
+if (!(Test-Path -LiteralPath $ZIP_POSTGREST -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\postgrest." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$POSTGREST_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_POSTGREST `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($POSTGREST_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\postgrest esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\postgrest : OK ($POSTGREST_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR REALTIME
+# ============================================================
+
+$ZIP_REALTIME = Join-Path `
+    $ZIP_INTERNAL `
+    "realtime"
+
+if (!(Test-Path -LiteralPath $ZIP_REALTIME -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\realtime." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$REALTIME_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_REALTIME `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($REALTIME_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\realtime esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\realtime : OK ($REALTIME_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR STORAGE3
+# ============================================================
+
+$ZIP_STORAGE3 = Join-Path `
+    $ZIP_INTERNAL `
+    "storage3"
+
+if (!(Test-Path -LiteralPath $ZIP_STORAGE3 -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\storage3." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$STORAGE3_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_STORAGE3 `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($STORAGE3_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\storage3 esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\storage3 : OK ($STORAGE3_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR SUPABASE AUTH
+# ============================================================
+
+$ZIP_AUTH = Join-Path `
+    $ZIP_INTERNAL `
+    "supabase_auth"
+
+if (!(Test-Path -LiteralPath $ZIP_AUTH -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\supabase_auth." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$AUTH_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_AUTH `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($AUTH_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\supabase_auth esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\supabase_auth : OK ($AUTH_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR SUPABASE FUNCTIONS
+# ============================================================
+
+$ZIP_FUNCTIONS = Join-Path `
+    $ZIP_INTERNAL `
+    "supabase_functions"
+
+if (!(Test-Path -LiteralPath $ZIP_FUNCTIONS -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\supabase_functions." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$FUNCTIONS_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_FUNCTIONS `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($FUNCTIONS_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\supabase_functions esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\supabase_functions : OK ($FUNCTIONS_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR PYDANTIC
+# ============================================================
+
+$ZIP_PYDANTIC = Join-Path `
+    $ZIP_INTERNAL `
+    "pydantic"
+
+if (!(Test-Path -LiteralPath $ZIP_PYDANTIC -PathType Container)) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE.zip no contiene _internal\pydantic." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+$PYDANTIC_COUNT = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_PYDANTIC `
+        -Recurse `
+        -File `
+        -ErrorAction SilentlyContinue
+).Count
+
+if ($PYDANTIC_COUNT -le 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: _internal\pydantic esta vacio." -ForegroundColor Red
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "_internal\pydantic : OK ($PYDANTIC_COUNT archivos)." -ForegroundColor Green
+
+# ============================================================
+# VERIFICAR QUE NO EXISTA abril.db
+# ============================================================
+
+$ZIP_EXTRACTED_DB = @(
+    Get-ChildItem `
+        -LiteralPath $ZIP_VERSION_DIR `
+        -Recurse `
+        -File `
+        -Filter "abril.db" `
+        -ErrorAction SilentlyContinue
+)
+
+if ($ZIP_EXTRACTED_DB.Count -gt 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: abril.db aparecio dentro del ZIP extraido." -ForegroundColor Red
+    Write-Host ""
+
+    foreach ($DB_FILE in $ZIP_EXTRACTED_DB) {
+
+        Write-Host $DB_FILE.FullName -ForegroundColor Red
+    }
+
+    Write-Host ""
+
+    exit 1
+}
+
+Write-Host "abril.db dentro del ZIP: NO encontrado. OK." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
+# RESUMEN
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Green
+Write-Host "       UPDATE.ZIP VERIFICADO CORRECTAMENTE" -ForegroundColor Green
+Write-Host "============================================" -ForegroundColor Green
+Write-Host ""
+
+Write-Host "Version: $ZIP_VERSION" -ForegroundColor Green
+Write-Host ""
+
+Write-Host "Dependencias verificadas:" -ForegroundColor Cyan
+Write-Host "  _internal\supabase" -ForegroundColor Green
+Write-Host "  _internal\postgrest" -ForegroundColor Green
+Write-Host "  _internal\realtime" -ForegroundColor Green
+Write-Host "  _internal\storage3" -ForegroundColor Green
+Write-Host "  _internal\supabase_auth" -ForegroundColor Green
+Write-Host "  _internal\supabase_functions" -ForegroundColor Green
+Write-Host "  _internal\pydantic" -ForegroundColor Green
+Write-Host ""
+
+Write-Host "Database: NO incluida." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
+# ELIMINAR CARPETA TEMPORAL
+# ============================================================
+
+if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
+
+    Remove-Item `
+        -LiteralPath $ZIP_VERSION_DIR `
+        -Recurse `
+        -Force
+}
+
+Write-Host "Verificacion finalizada." -ForegroundColor Green
+Write-Host ""
+
+
 
 # ============================================================
 # RESULTADO ZIP
@@ -1000,6 +1575,20 @@ git push origin $TAG
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: No se pudo subir el tag $TAG." -ForegroundColor Red
     exit 1
+}
+
+# ============================================================
+# LIMPIAR TEMPORAL SOLO DESPUES DE PUBLICAR
+# ============================================================
+
+if (Test-Path -LiteralPath $UPDATE_DIR) {
+    Write-Host ""
+    Write-Host "Eliminando UPDATE_TEMP despues de publicar..." -ForegroundColor Cyan
+
+    Remove-Item `
+        -LiteralPath $UPDATE_DIR `
+        -Recurse `
+        -Force
 }
 
 # ============================================================
