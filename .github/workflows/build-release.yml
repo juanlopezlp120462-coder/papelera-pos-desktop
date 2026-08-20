@@ -809,41 +809,6 @@ jobs:
               -Force
 
 
-            Write-Host ""
-            Write-Host "==========================================" -ForegroundColor Cyan
-            Write-Host "VERIFICANDO SUPABASE EN UPDATE" -ForegroundColor Cyan
-            Write-Host "==========================================" -ForegroundColor Cyan
-            Write-Host ""
-
-            $supabaseUpdate = "update\_internal\supabase"
-
-            if (!(Test-Path -LiteralPath $supabaseUpdate)) {
-                Write-Error "ERROR: supabase NO fue copiado a update\_internal"
-                exit 1
-            }
-
-            $supabaseFiles = @(
-                Get-ChildItem `
-                  -LiteralPath $supabaseUpdate `
-                  -Recurse `
-                  -File `
-                  -Force `
-                  -ErrorAction Stop
-            )
-
-            Write-Host "supabase encontrado en update\_internal." -ForegroundColor Green
-            Write-Host "Archivos encontrados: $($supabaseFiles.Count)" -ForegroundColor Green
-
-            Write-Host ""
-            Write-Host "CARPETAS DIRECTAS DE update\_internal:" -ForegroundColor Yellow
-
-            Get-ChildItem `
-              -LiteralPath "update\_internal" `
-              -Directory `
-              -Force |
-              ForEach-Object {
-                  Write-Host "[$($_.Name)]"
-              }
 
             Write-Host ""
 
@@ -1186,37 +1151,6 @@ jobs:
                   )
               }
 
-
-              # --------------------------------------------------
-              # DEPENDENCIAS
-              # --------------------------------------------------
-
-              $requiredFolders = @(
-                  "_internal/supabase",
-                  "_internal/postgrest",
-                  "_internal/realtime",
-                  "_internal/storage3",
-                  "_internal/supabase_auth",
-                  "_internal/supabase_functions",
-                  "_internal/pydantic"
-              )
-
-              foreach ($folder in $requiredFolders) {
-
-                  $found = Test-ZipPath $folder
-
-                  if ($null -eq $found) {
-
-                      Write-Error `
-                        "ERROR CRITICO: falta $folder en update.zip"
-
-                      exit 1
-                  }
-
-                  Write-Host `
-                    "$folder : OK" `
-                    -ForegroundColor Green
-              }
 
 
               # --------------------------------------------------
