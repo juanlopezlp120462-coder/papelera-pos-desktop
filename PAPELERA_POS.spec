@@ -1,12 +1,10 @@
 ﻿# -*- mode: python ; coding: utf-8 -*-
 
 import os
-import sys
 
 from PyInstaller.utils.hooks import (
     collect_submodules,
     collect_data_files,
-    collect_all,
 )
 
 # ============================================================
@@ -57,26 +55,55 @@ PAQUETES = [
 hiddenimports = []
 
 # ============================================================
-# UI
+# UI PROPIA
 # ============================================================
 
-hiddenimports += collect_submodules("ui")
+ui_imports = collect_submodules("ui")
+
+print(
+    f"[PyInstaller] UI: "
+    f"{len(ui_imports)} submodulos encontrados"
+)
+
+hiddenimports += ui_imports
 
 # ============================================================
-# RECOPILAR SUBMÓDULOS
+# RECOPILAR SUBMODULOS
 # ============================================================
 
 for paquete in PAQUETES:
 
+    print("")
+    print("=" * 60)
+    print(f"[PyInstaller] ANALIZANDO: {paquete}")
+    print("=" * 60)
+
     try:
 
-        hiddenimports += collect_submodules(
-            paquete
+        encontrados = collect_submodules(paquete)
+
+        print(
+            f"[PyInstaller] {paquete}: "
+            f"{len(encontrados)} submodulos encontrados"
         )
 
-    except Exception:
+        if not encontrados:
 
-        pass
+            print(
+                f"[PyInstaller] ADVERTENCIA: "
+                f"{paquete} no devolvio submodulos"
+            )
+
+        hiddenimports += encontrados
+
+    except Exception as e:
+
+        print(
+            f"[PyInstaller] ERROR recopilando "
+            f"submodulos de {paquete}: {e}"
+        )
+
+        raise
 
 # ============================================================
 # IMPORTS PRINCIPALES FORZADOS
@@ -208,6 +235,14 @@ hiddenimports += [
 ]
 
 # ============================================================
+# ELIMINAR DUPLICADOS
+# ============================================================
+
+hiddenimports = list(
+    dict.fromkeys(hiddenimports)
+)
+
+# ============================================================
 # DATOS
 # ============================================================
 
@@ -215,27 +250,41 @@ datas = []
 binaries = []
 
 # ============================================================
-# COLLECT_ALL
+# RECOPILAR DATOS
 # ============================================================
 
 for paquete in PAQUETES:
 
+    print("")
+    print(
+        f"[PyInstaller] RECOPILANDO DATOS: {paquete}"
+    )
+
     try:
 
-        paquete_datas, paquete_binaries, paquete_hiddenimports = (
-            collect_all(paquete)
+        encontrados = collect_data_files(
+            paquete,
+            include_py_files=True
         )
 
-        datas += paquete_datas
-        binaries += paquete_binaries
-        hiddenimports += paquete_hiddenimports
+        print(
+            f"[PyInstaller] {paquete}: "
+            f"{len(encontrados)} archivos de datos"
+        )
 
-    except Exception:
+        datas += encontrados
 
-        pass
+    except Exception as e:
+
+        print(
+            f"[PyInstaller] ERROR recopilando datos "
+            f"de {paquete}: {e}"
+        )
+
+        raise
 
 # ============================================================
-# DATABASE
+# ELIMINAR DATABASE
 # ============================================================
 
 datas = [
@@ -262,27 +311,48 @@ if os.path.exists(VERSION_FILE):
         )
     )
 
+else:
+
+    print(
+        "[PyInstaller] ADVERTENCIA: "
+        "no existe version.txt en el proyecto"
+    )
+
 # ============================================================
 # ELIMINAR DUPLICADOS
 # ============================================================
 
-hiddenimports = list(
-    dict.fromkeys(
-        hiddenimports
-    )
-)
-
 datas = list(
-    dict.fromkeys(
-        datas
-    )
+    dict.fromkeys(datas)
 )
 
 binaries = list(
-    dict.fromkeys(
-        binaries
-    )
+    dict.fromkeys(binaries)
 )
+
+# ============================================================
+# RESUMEN
+# ============================================================
+
+print("")
+print("=" * 60)
+print("RESUMEN PYINSTALLER")
+print("=" * 60)
+
+print(
+    f"Hidden imports: {len(hiddenimports)}"
+)
+
+print(
+    f"Data files: {len(datas)}"
+)
+
+print(
+    f"Binaries: {len(binaries)}"
+)
+
+print("=" * 60)
+print("")
 
 # ============================================================
 # ANALYSIS
