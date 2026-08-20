@@ -302,15 +302,38 @@ jobs:
               exit 1
           }
 
+          # --------------------------------------------------
+          # VERIFICAR QUE NO HAYA _internal DIRECTAMENTE ANIDADO
+          # --------------------------------------------------
+
           $nestedInternal = Get-ChildItem `
               -LiteralPath $internal `
               -Directory `
-              -Recurse `
               -Force |
               Where-Object {
                   $_.Name -eq "_internal"
               }
 
+          if ($nestedInternal.Count -gt 0) {
+
+              Write-Host ""
+              Write-Host "ERROR: SE ENCONTRO _internal DIRECTAMENTE DENTRO DE _internal." `
+                  -ForegroundColor Red
+
+              $nestedInternal |
+                  ForEach-Object {
+                      Write-Host $_.FullName
+                  }
+
+              Write-Error `
+                  "ERROR: existe _internal directamente dentro de _internal."
+
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "_internal sin carpetas _internal directamente anidadas : OK" `
+              -ForegroundColor Green
           if ($nestedInternal.Count -gt 0) {
 
               Write-Host ""
