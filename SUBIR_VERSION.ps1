@@ -23,7 +23,7 @@ Write-Host ""
 
 if ($args.Count -lt 1) {
     Write-Host "ERROR: No se indico la version." -ForegroundColor Red
-    Write-Host "Uso: .\SUBIR_VERSION.ps1 2.0.30"
+    Write-Host "Uso: .\SUBIR_VERSION.ps1 1.0.52"
     exit 1
 }
 
@@ -216,7 +216,7 @@ python -m PyInstaller --clean PAPELERA_POS.spec
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "ERROR: PyInstaller fallo al compilar PAPELERA_POS." -ForegroundColor Red
+    Write-Host "ERROR: PyInstaller fallo al compilar PAPELERA POS." -ForegroundColor Red
     exit 1
 }
 
@@ -257,6 +257,45 @@ Write-Host "base_library.zip OK." -ForegroundColor Green
 Write-Host ""
 
 # ============================================================
+# CRITICO:
+# VERIFICAR QUE PYINSTALLER NO HAYA METIDO abril.db
+# DENTRO DE _internal
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       VERIFICANDO DATABASE EN _INTERNAL" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+$INTERNAL_DB_FILES = @(
+    Get-ChildItem `
+        -LiteralPath $DIST_INTERNAL `
+        -Recurse `
+        -File `
+        -Filter "abril.db" `
+        -ErrorAction SilentlyContinue
+)
+
+if ($INTERNAL_DB_FILES.Count -gt 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: PyInstaller incluyo abril.db dentro de _internal." -ForegroundColor Red
+    Write-Host ""
+
+    foreach ($DB_FILE in $INTERNAL_DB_FILES) {
+        Write-Host $DB_FILE.FullName -ForegroundColor Red
+    }
+
+    Write-Host ""
+    Write-Host "NO se continuara con la publicacion." -ForegroundColor Red
+
+    exit 1
+}
+
+Write-Host "Correcto: _internal NO contiene abril.db." -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
 # COMPROBAR DOTENV
 # ============================================================
 
@@ -280,8 +319,6 @@ if (!(Test-Path -LiteralPath $DIST_DOTENV)) {
 
 if (!(Test-Path -LiteralPath $DIST_DOTENV_INIT)) {
     Write-Host "ERROR CRITICO: No existe dotenv\__init__.py." -ForegroundColor Red
-    Write-Host "Ruta comprobada:" -ForegroundColor Yellow
-    Write-Host $DIST_DOTENV_INIT -ForegroundColor Yellow
     exit 1
 }
 
@@ -289,16 +326,8 @@ Write-Host "dotenv encontrado correctamente." -ForegroundColor Green
 Write-Host "__init__.py encontrado correctamente." -ForegroundColor Green
 Write-Host ""
 
-Write-Host "Archivos dotenv incluidos:" -ForegroundColor Cyan
-
-Get-ChildItem -LiteralPath $DIST_DOTENV -File | ForEach-Object {
-    Write-Host "  $($_.Name)"
-}
-
-Write-Host ""
-
 # ============================================================
-# PREPARAR DATABASE
+# PREPARAR DATABASE INICIAL
 # ============================================================
 
 Write-Host "============================================" -ForegroundColor Cyan
@@ -312,7 +341,10 @@ if (!(Test-Path -LiteralPath $DIST_DATABASE_DIR)) {
 
 Write-Host "Copiando database inicial a dist..." -ForegroundColor Cyan
 
-Copy-Item -LiteralPath $DATABASE_ORIGEN -Destination $DIST_DATABASE -Force
+Copy-Item `
+    -LiteralPath $DATABASE_ORIGEN `
+    -Destination $DIST_DATABASE `
+    -Force
 
 if (!(Test-Path -LiteralPath $DIST_DATABASE)) {
     Write-Host ""
@@ -348,7 +380,10 @@ Write-Host "       PREPARANDO VERSION EN DIST" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-Copy-Item -LiteralPath $VERSION_FILE -Destination $DIST_VERSION -Force
+Copy-Item `
+    -LiteralPath $VERSION_FILE `
+    -Destination $DIST_VERSION `
+    -Force
 
 if (!(Test-Path -LiteralPath $DIST_VERSION)) {
     Write-Host "ERROR: No se genero version.txt en dist." -ForegroundColor Red
@@ -365,6 +400,28 @@ if ($VERSION_DIST -ne $VERSION) {
 }
 
 Write-Host "version.txt en dist = $VERSION" -ForegroundColor Green
+Write-Host ""
+
+# ============================================================
+# CREAR CARPETAS DE INSTALACION INICIAL
+# ============================================================
+
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       PREPARANDO CARPETAS INICIALES" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+$DIST_BACKUPS = Join-Path $DIST_APP "backups"
+$DIST_LOGS = Join-Path $DIST_APP "logs"
+$DIST_TICKETS = Join-Path $DIST_APP "tickets"
+
+New-Item -ItemType Directory -Path $DIST_BACKUPS -Force | Out-Null
+New-Item -ItemType Directory -Path $DIST_LOGS -Force | Out-Null
+New-Item -ItemType Directory -Path $DIST_TICKETS -Force | Out-Null
+
+Write-Host "backups OK." -ForegroundColor Green
+Write-Host "logs OK." -ForegroundColor Green
+Write-Host "tickets OK." -ForegroundColor Green
 Write-Host ""
 
 # ============================================================
@@ -415,7 +472,10 @@ New-Item -ItemType Directory -Path $UPDATE_DIR -Force | Out-Null
 
 Write-Host "Copiando PAPELERA_POS.exe..." -ForegroundColor Cyan
 
-Copy-Item -LiteralPath $DIST_EXE -Destination (Join-Path $UPDATE_DIR "PAPELERA_POS.exe") -Force
+Copy-Item `
+    -LiteralPath $DIST_EXE `
+    -Destination (Join-Path $UPDATE_DIR "PAPELERA_POS.exe") `
+    -Force
 
 # ============================================================
 # COPIAR _INTERNAL
@@ -425,7 +485,11 @@ $UPDATE_INTERNAL = Join-Path $UPDATE_DIR "_internal"
 
 Write-Host "Copiando _internal..." -ForegroundColor Cyan
 
-Copy-Item -LiteralPath $DIST_INTERNAL -Destination $UPDATE_INTERNAL -Recurse -Force
+Copy-Item `
+    -LiteralPath $DIST_INTERNAL `
+    -Destination $UPDATE_INTERNAL `
+    -Recurse `
+    -Force
 
 # ============================================================
 # COPIAR VERSION
@@ -433,32 +497,82 @@ Copy-Item -LiteralPath $DIST_INTERNAL -Destination $UPDATE_INTERNAL -Recurse -Fo
 
 Write-Host "Copiando version.txt..." -ForegroundColor Cyan
 
-Copy-Item -LiteralPath $VERSION_FILE -Destination (Join-Path $UPDATE_DIR "version.txt") -Force
+Copy-Item `
+    -LiteralPath $VERSION_FILE `
+    -Destination (Join-Path $UPDATE_DIR "version.txt") `
+    -Force
 
 # ============================================================
-# ELIMINAR COSAS QUE NO DEBEN IR AL UPDATE
+# ELIMINAR ELEMENTOS DE INSTALACION INICIAL
+# DEL UPDATE
 # ============================================================
 
 $UPDATE_DATABASE = Join-Path $UPDATE_DIR "database"
 $UPDATE_BACKUPS = Join-Path $UPDATE_DIR "backups"
 $UPDATE_LOGS = Join-Path $UPDATE_DIR "logs"
+$UPDATE_TICKETS = Join-Path $UPDATE_DIR "tickets"
 $UPDATE_ABRIL = Join-Path $UPDATE_DIR "abril.db"
 
-if (Test-Path -LiteralPath $UPDATE_DATABASE) {
-    Remove-Item -LiteralPath $UPDATE_DATABASE -Recurse -Force
-}
+foreach ($RUTA in @(
+    $UPDATE_DATABASE,
+    $UPDATE_BACKUPS,
+    $UPDATE_LOGS,
+    $UPDATE_TICKETS
+)) {
 
-if (Test-Path -LiteralPath $UPDATE_BACKUPS) {
-    Remove-Item -LiteralPath $UPDATE_BACKUPS -Recurse -Force
-}
-
-if (Test-Path -LiteralPath $UPDATE_LOGS) {
-    Remove-Item -LiteralPath $UPDATE_LOGS -Recurse -Force
+    if (Test-Path -LiteralPath $RUTA) {
+        Remove-Item `
+            -LiteralPath $RUTA `
+            -Recurse `
+            -Force
+    }
 }
 
 if (Test-Path -LiteralPath $UPDATE_ABRIL) {
-    Remove-Item -LiteralPath $UPDATE_ABRIL -Force
+    Remove-Item `
+        -LiteralPath $UPDATE_ABRIL `
+        -Force
 }
+
+# ============================================================
+# CRITICO:
+# EL UPDATE NO PUEDE CONTENER abril.db
+# NI DENTRO NI FUERA DE _internal
+# ============================================================
+
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "       BUSCANDO abril.db EN UPDATE" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+$UPDATE_DB_FILES = @(
+    Get-ChildItem `
+        -LiteralPath $UPDATE_DIR `
+        -Recurse `
+        -File `
+        -Filter "abril.db" `
+        -ErrorAction SilentlyContinue
+)
+
+if ($UPDATE_DB_FILES.Count -gt 0) {
+
+    Write-Host ""
+    Write-Host "ERROR CRITICO: UPDATE_TEMP contiene abril.db." -ForegroundColor Red
+    Write-Host ""
+
+    foreach ($DB_FILE in $UPDATE_DB_FILES) {
+        Write-Host $DB_FILE.FullName -ForegroundColor Red
+    }
+
+    Write-Host ""
+    Write-Host "NO se continuara con la publicacion." -ForegroundColor Red
+
+    exit 1
+}
+
+Write-Host "Correcto: UPDATE_TEMP NO contiene abril.db." -ForegroundColor Green
+Write-Host ""
 
 # ============================================================
 # VERIFICAR UPDATE_TEMP
@@ -529,7 +643,10 @@ if (Test-Path -LiteralPath $UPDATE_ZIP) {
 # ============================================================
 
 if (Test-Path -LiteralPath $UPDATE_DIR) {
-    Remove-Item -LiteralPath $UPDATE_DIR -Recurse -Force
+    Remove-Item `
+        -LiteralPath $UPDATE_DIR `
+        -Recurse `
+        -Force
 }
 
 # ============================================================
@@ -562,9 +679,10 @@ $ZIP = [System.IO.Compression.ZipFile]::OpenRead(
 )
 
 $ENTRADAS = @(
-    $ZIP.Entries | ForEach-Object {
-        $_.FullName
-    }
+    $ZIP.Entries |
+        ForEach-Object {
+            $_.FullName
+        }
 )
 
 Write-Host "Contenido de UPDATE.zip:" -ForegroundColor Cyan
@@ -585,6 +703,7 @@ $TIENE_DATABASE = $false
 $TIENE_ABRIL = $false
 $TIENE_BACKUPS = $false
 $TIENE_LOGS = $false
+$TIENE_TICKETS = $false
 
 foreach ($ENTRY in $ENTRADAS) {
 
@@ -624,6 +743,10 @@ foreach ($ENTRY in $ENTRADAS) {
 
     if ($NORMAL -eq "logs/" -or $NORMAL.StartsWith("logs/")) {
         $TIENE_LOGS = $true
+    }
+
+    if ($NORMAL -eq "tickets/" -or $NORMAL.StartsWith("tickets/")) {
+        $TIENE_TICKETS = $true
     }
 }
 
@@ -688,10 +811,16 @@ if ($TIENE_LOGS) {
     exit 1
 }
 
+if ($TIENE_TICKETS) {
+    Write-Host "ERROR: UPDATE.zip contiene tickets." -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "DATABASE: NO incluida." -ForegroundColor Green
 Write-Host "abril.db: NO incluido." -ForegroundColor Green
 Write-Host "BACKUPS: NO incluidos." -ForegroundColor Green
 Write-Host "LOGS: NO incluidos." -ForegroundColor Green
+Write-Host "TICKETS: NO incluidos." -ForegroundColor Green
 Write-Host ""
 
 # ============================================================
@@ -708,7 +837,10 @@ New-Item -ItemType Directory -Path $ZIP_VERSION_DIR -Force | Out-Null
 
 try {
 
-    Expand-Archive -LiteralPath $UPDATE_ZIP -DestinationPath $ZIP_VERSION_DIR -Force
+    Expand-Archive `
+        -LiteralPath $UPDATE_ZIP `
+        -DestinationPath $ZIP_VERSION_DIR `
+        -Force
 
     $ZIP_VERSION_FILE = Join-Path $ZIP_VERSION_DIR "version.txt"
 
@@ -716,18 +848,48 @@ try {
         throw "version.txt no fue encontrado despues de extraer UPDATE.zip."
     }
 
-    $ZIP_VERSION = (Get-Content -LiteralPath $ZIP_VERSION_FILE -Raw).Trim()
+    $ZIP_VERSION = (
+        Get-Content `
+            -LiteralPath $ZIP_VERSION_FILE `
+            -Raw
+    ).Trim()
 
     if ($ZIP_VERSION -ne $VERSION) {
         throw "La version dentro de UPDATE.zip es $ZIP_VERSION y se esperaba $VERSION."
     }
 
+    # Segunda comprobacion sobre el ZIP extraido
+    $ZIP_EXTRACTED_DB = @(
+        Get-ChildItem `
+            -LiteralPath $ZIP_VERSION_DIR `
+            -Recurse `
+            -File `
+            -Filter "abril.db" `
+            -ErrorAction SilentlyContinue
+    )
+
+    if ($ZIP_EXTRACTED_DB.Count -gt 0) {
+
+        Write-Host ""
+        Write-Host "ERROR CRITICO: abril.db aparecio dentro del ZIP extraido." -ForegroundColor Red
+
+        foreach ($DB_FILE in $ZIP_EXTRACTED_DB) {
+            Write-Host $DB_FILE.FullName -ForegroundColor Red
+        }
+
+        throw "UPDATE.zip contiene abril.db."
+    }
+
     Write-Host "Version dentro de UPDATE.zip = $ZIP_VERSION" -ForegroundColor Green
+    Write-Host "Verificacion de abril.db dentro del ZIP: OK." -ForegroundColor Green
 }
 finally {
 
     if (Test-Path -LiteralPath $ZIP_VERSION_DIR) {
-        Remove-Item -LiteralPath $ZIP_VERSION_DIR -Recurse -Force
+        Remove-Item `
+            -LiteralPath $ZIP_VERSION_DIR `
+            -Recurse `
+            -Force
     }
 }
 
@@ -754,6 +916,7 @@ Write-Host "  - database"
 Write-Host "  - abril.db"
 Write-Host "  - backups"
 Write-Host "  - logs"
+Write-Host "  - tickets"
 Write-Host ""
 
 # ============================================================
@@ -858,6 +1021,9 @@ Write-Host "INSTALACION INICIAL:" -ForegroundColor Cyan
 Write-Host "  - PAPELERA_POS.exe"
 Write-Host "  - _internal"
 Write-Host "  - database\abril.db"
+Write-Host "  - backups"
+Write-Host "  - logs"
+Write-Host "  - tickets"
 Write-Host "  - version.txt"
 Write-Host ""
 
@@ -871,11 +1037,13 @@ Write-Host "NO SE ACTUALIZA:" -ForegroundColor Cyan
 Write-Host "  - database\abril.db"
 Write-Host "  - backups"
 Write-Host "  - logs"
+Write-Host "  - tickets"
 Write-Host ""
 
 Write-Host "UPDATE.zip generado y verificado correctamente." -ForegroundColor Green
 Write-Host "python-dotenv incluido correctamente." -ForegroundColor Green
 Write-Host "La database NO fue incluida en UPDATE.zip." -ForegroundColor Green
+Write-Host "abril.db NO esta dentro de _internal." -ForegroundColor Green
 Write-Host ""
 Write-Host "GitHub Actions deberia generar/publicar ahora el Release." -ForegroundColor Yellow
 Write-Host ""

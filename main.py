@@ -56,7 +56,6 @@ sync_signals = SyncSignals()
 
 def ejecutar_sincronizacion():
 
-
     global sync_en_curso
 
     if sync_en_curso:
@@ -73,33 +72,33 @@ def ejecutar_sincronizacion():
 
             return
 
-    sync_en_curso = True
+        sync_en_curso = True
 
-try:
+    try:
 
-    resultado = sincronizar()
+        resultado = sincronizar()
 
-    print(
-        "Sincronización automática OK:",
-        resultado
-    )
+        print(
+            "Sincronización automática OK:",
+            resultado
+        )
 
-    if dashboard is not None:
+        if dashboard is not None:
 
-        sync_signals.sincronizacion_terminada.emit()
+            sync_signals.sincronizacion_terminada.emit()
 
-except Exception as e:
+    except Exception as e:
 
-    print(
-        "Error sincronización automática:",
-        e
-    )
+        print(
+            "Error sincronización automática:",
+            e
+        )
 
-finally:
+    finally:
 
-    with sync_lock:
+        with sync_lock:
 
-        sync_en_curso = False
+            sync_en_curso = False
 
 
 # =========================================================

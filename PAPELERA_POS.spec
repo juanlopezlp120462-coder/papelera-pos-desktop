@@ -1,5 +1,4 @@
-﻿
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 
 import os
 
@@ -63,11 +62,60 @@ hiddenimports += collect_submodules(
 )
 
 
+# ------------------------------------------------------------
+# SUPABASE
+# ------------------------------------------------------------
+
+hiddenimports += collect_submodules(
+    "supabase"
+)
+
+hiddenimports += collect_submodules(
+    "postgrest"
+)
+
+hiddenimports += collect_submodules(
+    "realtime"
+)
+
+hiddenimports += collect_submodules(
+    "storage3"
+)
+
+hiddenimports += collect_submodules(
+    "supabase_auth"
+)
+
+hiddenimports += collect_submodules(
+    "supabase_functions"
+)
+
+
 # ============================================================
 # DATOS
 # ============================================================
 
 datas = []
+
+
+# ------------------------------------------------------------
+# BASE DE DATOS INICIAL
+# ------------------------------------------------------------
+
+DATABASE_FILE = os.path.join(
+    PROJECT_DIR,
+    "database",
+    "abril.db"
+)
+
+if os.path.exists(DATABASE_FILE):
+
+    datas.append(
+        (
+            DATABASE_FILE,
+            "database"
+        )
+    )
 
 
 # ------------------------------------------------------------
@@ -78,13 +126,8 @@ datas += collect_data_files(
     "certifi"
 )
 
-
 # ------------------------------------------------------------
 # python-dotenv
-#
-# IMPORTANTE:
-# Copiamos explícitamente los archivos de dotenv
-# al directorio dotenv dentro de _internal.
 # ------------------------------------------------------------
 
 dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
@@ -94,6 +137,84 @@ dotenv_datas, dotenv_binaries, dotenv_hiddenimports = collect_all(
 datas += dotenv_datas
 
 hiddenimports += dotenv_hiddenimports
+
+
+# ------------------------------------------------------------
+# SUPABASE
+# ------------------------------------------------------------
+
+supabase_datas, supabase_binaries, supabase_hiddenimports = collect_all(
+    "supabase"
+)
+
+datas += supabase_datas
+
+hiddenimports += supabase_hiddenimports
+
+
+# ------------------------------------------------------------
+# PostgREST
+# ------------------------------------------------------------
+
+postgrest_datas, postgrest_binaries, postgrest_hiddenimports = collect_all(
+    "postgrest"
+)
+
+datas += postgrest_datas
+
+hiddenimports += postgrest_hiddenimports
+
+
+# ------------------------------------------------------------
+# Realtime
+# ------------------------------------------------------------
+
+realtime_datas, realtime_binaries, realtime_hiddenimports = collect_all(
+    "realtime"
+)
+
+datas += realtime_datas
+
+hiddenimports += realtime_hiddenimports
+
+
+# ------------------------------------------------------------
+# Storage3
+# ------------------------------------------------------------
+
+storage3_datas, storage3_binaries, storage3_hiddenimports = collect_all(
+    "storage3"
+)
+
+datas += storage3_datas
+
+hiddenimports += storage3_hiddenimports
+
+
+# ------------------------------------------------------------
+# Supabase Auth
+# ------------------------------------------------------------
+
+auth_datas, auth_binaries, auth_hiddenimports = collect_all(
+    "supabase_auth"
+)
+
+datas += auth_datas
+
+hiddenimports += auth_hiddenimports
+
+
+# ------------------------------------------------------------
+# Supabase Functions
+# ------------------------------------------------------------
+
+functions_datas, functions_binaries, functions_hiddenimports = collect_all(
+    "supabase_functions"
+)
+
+datas += functions_datas
+
+hiddenimports += functions_hiddenimports
 
 
 # ------------------------------------------------------------
@@ -109,6 +230,17 @@ if os.path.exists(VERSION_FILE):
         )
     )
 
+# ============================================================
+# NO INCLUIR LA BASE DE DATOS EN PYINSTALLER
+# ============================================================
+
+datas = [
+    data
+    for data in datas
+    if not str(data[0]).replace("\\", "/").lower().endswith(
+        "database/abril.db"
+    )
+]
 
 # ============================================================
 # ANALYSIS
@@ -127,7 +259,15 @@ analysis = Analysis(
         PROJECT_DIR
     ],
 
-    binaries=dotenv_binaries,
+    binaries=(
+        dotenv_binaries
+        + supabase_binaries
+        + postgrest_binaries
+        + realtime_binaries
+        + storage3_binaries
+        + auth_binaries
+        + functions_binaries
+    ),
 
     datas=datas,
 
