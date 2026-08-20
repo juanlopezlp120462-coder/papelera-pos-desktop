@@ -172,6 +172,90 @@ jobs:
               Write-Error "PyInstaller fallo."
               exit 1
           }
+          # ============================================================
+          # FORZAR DEPENDENCIAS SUPABASE DENTRO DE _internal
+          # ============================================================
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "COPIANDO DEPENDENCIAS SUPABASE A _internal" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          $internal = "dist\PAPELERA_POS\_internal"
+
+          if (!(Test-Path -LiteralPath $internal)) {
+              Write-Error "No existe: $internal"
+              exit 1
+          }
+
+          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
+
+          if ([string]::IsNullOrWhiteSpace($sitePackages)) {
+              Write-Error "No se pudo determinar site-packages."
+              exit 1
+          }
+
+          Write-Host "site-packages:" -ForegroundColor Yellow
+          Write-Host $sitePackages -ForegroundColor Yellow
+          Write-Host ""
+
+          $dependencias = @(
+              "supabase",
+              "postgrest",
+              "realtime",
+              "storage3",
+              "supabase_auth",
+              "supabase_functions",
+              "pydantic",
+              "pydantic_core",
+              "httpx",
+              "httpcore",
+              "anyio",
+              "websockets",
+              "jwt",
+              "cryptography",
+              "cffi",
+              "dotenv",
+              "certifi"
+          )
+
+          foreach ($dependencia in $dependencias) {
+
+              $origen = Join-Path $sitePackages $dependencia
+              $destino = Join-Path $internal $dependencia
+
+              if (!(Test-Path -LiteralPath $origen)) {
+                  Write-Error "NO EXISTE EN SITE-PACKAGES: $origen"
+                  exit 1
+              }
+
+              Write-Host "Copiando: $dependencia" -ForegroundColor Yellow
+
+              if (Test-Path -LiteralPath $destino) {
+                  Remove-Item `
+                      -LiteralPath $destino `
+                      -Recurse `
+                      -Force
+              }
+
+              Copy-Item `
+                  -LiteralPath $origen `
+                  -Destination $destino `
+                  -Recurse `
+                  -Force
+
+              if (!(Test-Path -LiteralPath $destino)) {
+                  Write-Error "NO SE PUDO COPIAR: $dependencia"
+                  exit 1
+              }
+
+              Write-Host "$dependencia : OK" -ForegroundColor Green
+          }
+
+          Write-Host ""
+          Write-Host "TODAS LAS DEPENDENCIAS SUPABASE FUERON COPIADAS." -ForegroundColor Green
+          Write-Host ""
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
