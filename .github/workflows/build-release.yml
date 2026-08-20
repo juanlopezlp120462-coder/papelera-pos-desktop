@@ -107,7 +107,15 @@ jobs:
         run: |
 
           python -m PyInstaller --clean PAPELERA_POS.spec
-
+            Write-Host ""
+            Write-Host "CONTENIDO REAL DE DIST:" -ForegroundColor Cyan
+            Get-ChildItem -LiteralPath "dist" -Force | Format-Table Name, FullName
+            Write-Host ""
+            Write-Host "CARPETAS DENTRO DE DIST:" -ForegroundColor Cyan
+            Get-ChildItem -LiteralPath "dist" -Directory -Force | ForEach-Object {
+                Write-Host "[$($_.Name)]"
+            }
+            Write-Host ""
           if ($LASTEXITCODE -ne 0) {
               Write-Error "PyInstaller fallo."
               exit 1
@@ -152,6 +160,62 @@ jobs:
       - name: Verificar Supabase en dist
         shell: powershell
         run: |
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "ESTRUCTURA REAL DE DIST EN GITHUB ACTIONS" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          Write-Host "Contenido de dist:" -ForegroundColor Yellow
+
+          Get-ChildItem -LiteralPath "dist" -Force |
+              ForEach-Object {
+                  Write-Host "NOMBRE: [$($_.Name)]"
+                  Write-Host "RUTA:   [$($_.FullName)]"
+                  Write-Host ""
+              }
+
+          Write-Host "Carpetas dentro de dist:" -ForegroundColor Yellow
+
+          Get-ChildItem -LiteralPath "dist" -Directory -Force |
+              ForEach-Object {
+                  Write-Host "[$($_.Name)]"
+              }
+
+          Write-Host ""
+
+          Write-Host "Contenido de dist\PAPELERA_POS:" -ForegroundColor Yellow
+
+          if (Test-Path -LiteralPath "dist\PAPELERA_POS") {
+
+              Get-ChildItem -LiteralPath "dist\PAPELERA_POS" -Force |
+                  ForEach-Object {
+                      Write-Host "[$($_.Name)]"
+                  }
+
+          } else {
+
+              Write-Error "NO EXISTE dist\PAPELERA_POS"
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "Contenido de _internal:" -ForegroundColor Yellow
+
+          if (Test-Path -LiteralPath "dist\PAPELERA_POS\_internal") {
+
+              Get-ChildItem -LiteralPath "dist\PAPELERA_POS\_internal" -Directory -Force |
+                  ForEach-Object {
+                      Write-Host "[$($_.Name)]"
+                  }
+
+          } else {
+
+              Write-Error "NO EXISTE dist\PAPELERA_POS\_internal"
+              exit 1
+          }
+
+          Write-Host ""
 
           $internal = "dist\PAPELERA_POS\_internal"
 
