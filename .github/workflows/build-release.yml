@@ -138,7 +138,121 @@ jobs:
           Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
           Write-Host ""
 
+      # ==================================================
+      # FORZAR DEPENDENCIAS SUPABASE DENTRO DE _INTERNAL
+      # ==================================================
 
+      - name: Forzar dependencias Python dentro de dist
+        shell: powershell
+        run: |
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "FORZANDO DEPENDENCIAS DENTRO DE _INTERNAL" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          $internal = "dist\PAPELERA_POS\_internal"
+
+          if (!(Test-Path -LiteralPath $internal)) {
+              Write-Error "No existe $internal"
+              exit 1
+          }
+
+          $site = python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+
+          Write-Host "Python site-packages:"
+          Write-Host $site
+          Write-Host ""
+
+          $paquetes = @(
+              "supabase",
+              "postgrest",
+              "realtime",
+              "storage3",
+              "supabase_auth",
+              "supabase_functions",
+              "pydantic",
+              "pydantic_core",
+              "httpx",
+              "httpcore",
+              "anyio",
+              "websockets",
+              "jwt",
+              "cryptography",
+              "cffi",
+              "dotenv",
+              "certifi"
+          )
+
+          foreach ($paquete in $paquetes) {
+
+              $source = Join-Path $site $paquete
+              $target = Join-Path $internal $paquete
+
+              Write-Host ""
+              Write-Host "------------------------------------------"
+              Write-Host "Paquete: $paquete"
+              Write-Host "Origen:  $source"
+              Write-Host "Destino: $target"
+              Write-Host "------------------------------------------"
+
+              if (!(Test-Path -LiteralPath $source)) {
+
+                  Write-Error "NO EXISTE EL PAQUETE INSTALADO: $source"
+                  exit 1
+              }
+
+              if (Test-Path -LiteralPath $target) {
+
+                  Write-Host "Eliminando copia anterior..." `
+                    -ForegroundColor Yellow
+
+                  Remove-Item `
+                    -LiteralPath $target `
+                    -Recurse `
+                    -Force
+              }
+
+              Copy-Item `
+                -LiteralPath $source `
+                -Destination $target `
+                -Recurse `
+                -Force
+
+              if (!(Test-Path -LiteralPath $target)) {
+
+                  Write-Error "No se pudo copiar $paquete"
+                  exit 1
+              }
+
+              $cantidad = @(
+                  Get-ChildItem `
+                    -LiteralPath $target `
+                    -Recurse `
+                    -File `
+                    -ErrorAction Stop
+              ).Count
+
+              if ($cantidad -le 0) {
+
+                  Write-Error "La copia de $paquete esta vacia."
+                  exit 1
+              }
+
+              Write-Host `
+                "$paquete : COPIADO ($cantidad archivos)" `
+                -ForegroundColor Green
+          }
+
+          Write-Host ""
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+          Write-Host "DEPENDENCIAS FORZADAS CORRECTAMENTE" `
+            -ForegroundColor Green
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+          Write-Host ""
       # ==================================================
       # VERIFICAR COMPILACION
       # ==================================================
