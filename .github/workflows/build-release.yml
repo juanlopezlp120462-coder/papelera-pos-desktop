@@ -37,10 +37,29 @@ jobs:
         shell: powershell
         run: |
           python -m pip install --upgrade pip
+
           pip install -r requirements.txt
+
           pip install python-dotenv
 
-          python -c "import dotenv; print('python-dotenv OK:', dotenv.__file__)"
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO DEPENDENCIAS" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          python -c "import supabase; print('SUPABASE:', supabase.__file__)"
+          python -c "import postgrest; print('POSTGREST:', postgrest.__file__)"
+          python -c "import realtime; print('REALTIME:', realtime.__file__)"
+          python -c "import storage3; print('STORAGE3:', storage3.__file__)"
+          python -c "import supabase_auth; print('SUPABASE_AUTH:', supabase_auth.__file__)"
+          python -c "import supabase_functions; print('SUPABASE_FUNCTIONS:', supabase_functions.__file__)"
+          python -c "import pydantic; print('PYDANTIC:', pydantic.__file__)"
+          python -c "import dotenv; print('DOTENV:', dotenv.__file__)"
+
+          Write-Host ""
+          Write-Host "Dependencias verificadas." -ForegroundColor Green
+          Write-Host ""
 
 
       # ==================================================
@@ -50,12 +69,17 @@ jobs:
       - name: Obtener version
         shell: powershell
         run: |
-          $version = "${{ github.ref_name }}".Replace("v", "")
 
-          "VERSION=$version" | Out-File `
-            -FilePath $env:GITHUB_ENV `
-            -Encoding utf8 `
-            -Append
+          $version = "${{ github.ref_name }}"
+
+          if ($version.StartsWith("v")) {
+              $version = $version.Substring(1)
+          }
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+              Write-Error "No se pudo obtener la version."
+              exit 1
+          }
 
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
@@ -68,6 +92,11 @@ jobs:
 
           Write-Host ""
 
+          "VERSION=$version" | Out-File `
+            -FilePath $env:GITHUB_ENV `
+            -Encoding utf8 `
+            -Append
+
 
       # ==================================================
       # CREAR EXE
@@ -76,12 +105,17 @@ jobs:
       - name: Crear EXE con PyInstaller
         shell: powershell
         run: |
+
           python -m PyInstaller --clean PAPELERA_POS.spec
 
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "PyInstaller fallo."
-            exit 1
+              Write-Error "PyInstaller fallo."
+              exit 1
           }
+
+          Write-Host ""
+          Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
+          Write-Host ""
 
 
       # ==================================================
@@ -91,22 +125,83 @@ jobs:
       - name: Verificar compilacion
         shell: powershell
         run: |
+
           $exe = "dist\PAPELERA_POS\PAPELERA_POS.exe"
           $internal = "dist\PAPELERA_POS\_internal"
 
           if (!(Test-Path -LiteralPath $exe)) {
-            Write-Error "No existe PAPELERA_POS.exe"
-            exit 1
+              Write-Error "No existe PAPELERA_POS.exe"
+              exit 1
           }
 
           if (!(Test-Path -LiteralPath $internal)) {
-            Write-Error "No existe _internal"
-            exit 1
+              Write-Error "No existe _internal"
+              exit 1
           }
 
           Write-Host ""
           Write-Host "PAPELERA_POS.exe encontrado." -ForegroundColor Green
           Write-Host "_internal encontrado." -ForegroundColor Green
+          Write-Host ""
+
+
+      # ==================================================
+      # VERIFICAR SUPABASE EN DIST
+      # ==================================================
+
+      - name: Verificar Supabase en dist
+        shell: powershell
+        run: |
+
+          $internal = "dist\PAPELERA_POS\_internal"
+
+          $carpetas = @(
+              "supabase",
+              "postgrest",
+              "realtime",
+              "storage3",
+              "supabase_auth",
+              "supabase_functions",
+              "pydantic"
+          )
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO DEPENDENCIAS EN DIST" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          foreach ($carpeta in $carpetas) {
+
+              $ruta = Join-Path $internal $carpeta
+
+              if (!(Test-Path -LiteralPath $ruta)) {
+
+                  Write-Error "FALTA: $ruta"
+                  exit 1
+              }
+
+              $cantidad = @(
+                  Get-ChildItem `
+                    -LiteralPath $ruta `
+                    -Recurse `
+                    -File `
+                    -ErrorAction Stop
+              ).Count
+
+              if ($cantidad -le 0) {
+
+                  Write-Error "La carpeta $carpeta esta vacia."
+                  exit 1
+              }
+
+              Write-Host "$carpeta : OK ($cantidad archivos)" `
+                -ForegroundColor Green
+          }
+
+          Write-Host ""
+          Write-Host "TODAS LAS DEPENDENCIAS ESTAN EN DIST." `
+            -ForegroundColor Green
           Write-Host ""
 
 
@@ -117,6 +212,7 @@ jobs:
       - name: Forzar python-dotenv
         shell: powershell
         run: |
+
           $python = (Get-Command python).Source
 
           Write-Host ""
@@ -131,6 +227,7 @@ jobs:
           Write-Host ""
 
           $source = Join-Path $site "dotenv"
+
           $target = Join-Path `
             "dist\PAPELERA_POS\_internal" `
             "dotenv"
@@ -144,11 +241,13 @@ jobs:
           Write-Host ""
 
           if (!(Test-Path -LiteralPath $source)) {
+
               Write-Error "No se encontro dotenv en $source"
               exit 1
           }
 
           if (Test-Path -LiteralPath $target) {
+
               Remove-Item `
                 -LiteralPath $target `
                 -Recurse `
@@ -162,7 +261,8 @@ jobs:
             -Force
 
           Write-Host ""
-          Write-Host "dotenv copiado correctamente." -ForegroundColor Green
+          Write-Host "dotenv copiado correctamente." `
+            -ForegroundColor Green
           Write-Host ""
 
           $distInfo = Get-ChildItem `
@@ -178,6 +278,7 @@ jobs:
                 $distInfo.Name
 
               if (Test-Path -LiteralPath $distTarget) {
+
                   Remove-Item `
                     -LiteralPath $distTarget `
                     -Recurse `
@@ -190,8 +291,11 @@ jobs:
                 -Recurse `
                 -Force
 
-              Write-Host "python-dotenv dist-info copiado." -ForegroundColor Green
+              Write-Host `
+                "python-dotenv dist-info copiado." `
+                -ForegroundColor Green
           }
+
 
       # ==================================================
       # VERIFICAR DOTENV
@@ -200,31 +304,26 @@ jobs:
       - name: Verificar dotenv
         shell: powershell
         run: |
+
           $dotenv = "dist\PAPELERA_POS\_internal\dotenv"
           $init = "dist\PAPELERA_POS\_internal\dotenv\__init__.py"
 
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO PYTHON-DOTENV" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
-
           if (!(Test-Path -LiteralPath $dotenv)) {
-            Write-Error "Falta carpeta dotenv."
-            exit 1
+
+              Write-Error "Falta carpeta dotenv."
+              exit 1
           }
 
           if (!(Test-Path -LiteralPath $init)) {
-            Write-Error "Falta dotenv\__init__.py."
-            exit 1
+
+              Write-Error "Falta dotenv\__init__.py."
+              exit 1
           }
 
-          Write-Host "dotenv encontrado correctamente." -ForegroundColor Green
-          Write-Host "Ruta: $dotenv" -ForegroundColor Green
           Write-Host ""
-
-          Get-ChildItem `
-            -LiteralPath $dotenv
+          Write-Host "dotenv encontrado correctamente." `
+            -ForegroundColor Green
+          Write-Host ""
 
 
       # ==================================================
@@ -234,22 +333,31 @@ jobs:
       - name: Crear version.txt
         shell: powershell
         run: |
+
+          $version = "${{ github.ref_name }}"
+
+          if ($version.StartsWith("v")) {
+              $version = $version.Substring(1)
+          }
+
           $rootVersion = "dist\PAPELERA_POS\version.txt"
-          $internalVersion = "dist\PAPELERA_POS\_internal\version.txt"
+
+          $internalVersion = `
+            "dist\PAPELERA_POS\_internal\version.txt"
 
           Set-Content `
             -LiteralPath $rootVersion `
-            -Value $env:VERSION `
+            -Value $version `
             -Encoding UTF8
 
           Set-Content `
             -LiteralPath $internalVersion `
-            -Value $env:VERSION `
+            -Value $version `
             -Encoding UTF8
 
           Write-Host ""
           Write-Host "version.txt creado." -ForegroundColor Green
-          Write-Host "Version: $env:VERSION"
+          Write-Host "Version: $version"
           Write-Host ""
 
 
@@ -260,33 +368,44 @@ jobs:
       - name: Verificar version
         shell: powershell
         run: |
+
+          $expectedVersion = "${{ github.ref_name }}"
+
+          if ($expectedVersion.StartsWith("v")) {
+              $expectedVersion = $expectedVersion.Substring(1)
+          }
+
           $v1 = (
-            Get-Content `
-              -LiteralPath "dist\PAPELERA_POS\version.txt" `
-              -Raw
+              Get-Content `
+                -LiteralPath "dist\PAPELERA_POS\version.txt" `
+                -Raw
           ).Trim()
 
           $v2 = (
-            Get-Content `
-              -LiteralPath "dist\PAPELERA_POS\_internal\version.txt" `
-              -Raw
+              Get-Content `
+                -LiteralPath "dist\PAPELERA_POS\_internal\version.txt" `
+                -Raw
           ).Trim()
 
           Write-Host "Version raiz: $v1"
           Write-Host "Version _internal: $v2"
+          Write-Host "Version esperada: $expectedVersion"
           Write-Host ""
 
-          if ($v1 -ne $env:VERSION) {
-            Write-Error "version.txt de raiz incorrecto."
-            exit 1
+          if ($v1 -ne $expectedVersion) {
+
+              Write-Error "version.txt de raiz incorrecto."
+              exit 1
           }
 
-          if ($v2 -ne $env:VERSION) {
-            Write-Error "version.txt de _internal incorrecto."
-            exit 1
+          if ($v2 -ne $expectedVersion) {
+
+              Write-Error "version.txt de _internal incorrecto."
+              exit 1
           }
 
-          Write-Host "Versiones correctas." -ForegroundColor Green
+          Write-Host "Versiones correctas." `
+            -ForegroundColor Green
 
 
       # ==================================================
@@ -296,14 +415,18 @@ jobs:
       - name: Verificar certifi
         shell: powershell
         run: |
-          $cert = "dist\PAPELERA_POS\_internal\certifi\cacert.pem"
+
+          $cert = `
+            "dist\PAPELERA_POS\_internal\certifi\cacert.pem"
 
           if (!(Test-Path -LiteralPath $cert)) {
-            Write-Error "Falta certifi\cacert.pem"
-            exit 1
+
+              Write-Error "Falta certifi\cacert.pem"
+              exit 1
           }
 
-          Write-Host "certifi OK." -ForegroundColor Green
+          Write-Host "certifi OK." `
+            -ForegroundColor Green
 
 
       # ==================================================
@@ -313,11 +436,13 @@ jobs:
       - name: Preparar update
         shell: powershell
         run: |
+
           if (Test-Path -LiteralPath "update") {
-            Remove-Item `
-              -LiteralPath "update" `
-              -Recurse `
-              -Force
+
+              Remove-Item `
+                -LiteralPath "update" `
+                -Recurse `
+                -Force
           }
 
           New-Item `
@@ -342,68 +467,179 @@ jobs:
             -Force
 
           Write-Host ""
-          Write-Host "Carpeta update preparada." -ForegroundColor Green
+          Write-Host "Carpeta update preparada." `
+            -ForegroundColor Green
           Write-Host ""
 
 
       # ==================================================
-      # VERIFICAR UPDATE
+      # VERIFICAR UPDATE COMPLETO
       # ==================================================
 
-      - name: Verificar update
+      - name: Verificar update completo
         shell: powershell
         run: |
+
           $exe = "update\PAPELERA_POS.exe"
           $version = "update\version.txt"
           $internal = "update\_internal"
-          $dotenv = "update\_internal\dotenv\__init__.py"
-          $cert = "update\_internal\certifi\cacert.pem"
 
           if (!(Test-Path -LiteralPath $exe)) {
-            Write-Error "Falta PAPELERA_POS.exe"
-            exit 1
+
+              Write-Error "Falta PAPELERA_POS.exe"
+              exit 1
           }
 
           if (!(Test-Path -LiteralPath $version)) {
-            Write-Error "Falta version.txt"
-            exit 1
+
+              Write-Error "Falta version.txt"
+              exit 1
           }
 
           if (!(Test-Path -LiteralPath $internal)) {
-            Write-Error "Falta _internal"
-            exit 1
+
+              Write-Error "Falta _internal"
+              exit 1
           }
 
+          $carpetas = @(
+              "supabase",
+              "postgrest",
+              "realtime",
+              "storage3",
+              "supabase_auth",
+              "supabase_functions",
+              "pydantic"
+          )
+
+          foreach ($carpeta in $carpetas) {
+
+              $ruta = Join-Path $internal $carpeta
+
+              if (!(Test-Path -LiteralPath $ruta)) {
+
+                  Write-Error `
+                    "ERROR CRITICO: falta _internal\$carpeta en update."
+                  exit 1
+              }
+
+              $cantidad = @(
+                  Get-ChildItem `
+                    -LiteralPath $ruta `
+                    -Recurse `
+                    -File `
+                    -ErrorAction Stop
+              ).Count
+
+              if ($cantidad -le 0) {
+
+                  Write-Error `
+                    "ERROR CRITICO: _internal\$carpeta esta vacia."
+                  exit 1
+              }
+
+              Write-Host `
+                "UPDATE _internal\$carpeta : OK ($cantidad archivos)" `
+                -ForegroundColor Green
+          }
+
+          $dotenv = `
+            "update\_internal\dotenv\__init__.py"
+
+          $cert = `
+            "update\_internal\certifi\cacert.pem"
+
           if (!(Test-Path -LiteralPath $dotenv)) {
-            Write-Error "Falta dotenv\__init__.py en update"
-            exit 1
+
+              Write-Error "Falta dotenv\__init__.py en update."
+              exit 1
           }
 
           if (!(Test-Path -LiteralPath $cert)) {
-            Write-Error "Falta certifi\cacert.pem en update"
-            exit 1
+
+              Write-Error "Falta certifi\cacert.pem en update."
+              exit 1
+          }
+
+          $expectedVersion = "${{ github.ref_name }}"
+
+          if ($expectedVersion.StartsWith("v")) {
+              $expectedVersion = $expectedVersion.Substring(1)
           }
 
           $updateVersion = (
-            Get-Content `
-              -LiteralPath $version `
-              -Raw
+              Get-Content `
+                -LiteralPath $version `
+                -Raw
           ).Trim()
 
-          if ($updateVersion -ne $env:VERSION) {
-            Write-Error "Version incorrecta en update."
-            exit 1
+          if ($updateVersion -ne $expectedVersion) {
+
+              Write-Error `
+                "Version incorrecta en update."
+              exit 1
           }
 
           Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "UPDATE COMPLETO Y CORRECTO" -ForegroundColor Green
-          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+          Write-Host "UPDATE COMPLETO Y CORRECTO" `
+            -ForegroundColor Green
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
           Write-Host ""
 
           Write-Host "Version: $updateVersion"
+          Write-Host "Supabase: OK"
+          Write-Host "PostgREST: OK"
+          Write-Host "Realtime: OK"
+          Write-Host "Storage3: OK"
+          Write-Host "Supabase Auth: OK"
+          Write-Host "Supabase Functions: OK"
+          Write-Host "Pydantic: OK"
           Write-Host "dotenv: OK"
           Write-Host "certifi: OK"
+          Write-Host ""
+
+
+      # ==================================================
+      # COMPROBAR QUE NO ESTE LA DATABASE
+      # ==================================================
+
+      - name: Verificar que database NO este incluida
+        shell: powershell
+        run: |
+
+          $database = "update\database"
+
+          if (Test-Path -LiteralPath $database) {
+
+              Write-Error `
+                "ERROR CRITICO: update contiene carpeta database."
+              exit 1
+          }
+
+          $abril = Get-ChildItem `
+            -LiteralPath "update" `
+            -Recurse `
+            -File `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.Name -ieq "abril.db"
+            }
+
+          if ($abril) {
+
+              Write-Error `
+                "ERROR CRITICO: abril.db fue incluido en update."
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "DATABASE: NO incluida." `
+            -ForegroundColor Green
+          Write-Host "abril.db: NO incluida." `
+            -ForegroundColor Green
           Write-Host ""
 
 
@@ -414,10 +650,12 @@ jobs:
       - name: Crear update.zip
         shell: powershell
         run: |
+
           if (Test-Path -LiteralPath "update.zip") {
-            Remove-Item `
-              -LiteralPath "update.zip" `
-              -Force
+
+              Remove-Item `
+                -LiteralPath "update.zip" `
+                -Force
           }
 
           Compress-Archive `
@@ -426,111 +664,163 @@ jobs:
             -CompressionLevel Optimal
 
           if (!(Test-Path -LiteralPath "update.zip")) {
-            Write-Error "No se creo update.zip"
-            exit 1
+
+              Write-Error "No se creo update.zip"
+              exit 1
           }
 
           Write-Host ""
-          Write-Host "update.zip creado correctamente." -ForegroundColor Green
+          Write-Host "update.zip creado correctamente." `
+            -ForegroundColor Green
           Write-Host ""
 
 
       # ==================================================
-      # VERIFICAR ZIP
+      # VERIFICAR ZIP FINAL
       # ==================================================
 
-      - name: Verificar contenido del ZIP
+      - name: Verificar contenido final del ZIP
         shell: powershell
         run: |
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          Add-Type `
+            -AssemblyName System.IO.Compression.FileSystem
 
           $zipPath = (
             Resolve-Path -LiteralPath "update.zip"
           ).Path
 
-          $zip = [System.IO.Compression.ZipFile]::OpenRead(
-            $zipPath
-          )
+          $zip = `
+            [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 
           try {
-            $names = @(
-              $zip.Entries |
-              ForEach-Object {
-                $_.FullName
+
+              $names = @(
+                $zip.Entries |
+                ForEach-Object {
+                  $_.FullName
+                }
+              )
+
+              Write-Host ""
+              Write-Host "==========================================" `
+                -ForegroundColor Cyan
+              Write-Host "VERIFICACION FINAL DEL ZIP" `
+                -ForegroundColor Cyan
+              Write-Host "==========================================" `
+                -ForegroundColor Cyan
+              Write-Host ""
+
+              $required = @(
+                  "_internal/supabase/",
+                  "_internal/postgrest/",
+                  "_internal/realtime/",
+                  "_internal/storage3/",
+                  "_internal/supabase_auth/",
+                  "_internal/supabase_functions/",
+                  "_internal/pydantic/",
+                  "_internal/dotenv/__init__.py",
+                  "_internal/certifi/cacert.pem"
+              )
+
+              foreach ($requiredPath in $required) {
+
+                  $found = $names |
+                    Where-Object {
+                      $_ -replace "\\", "/" |
+                      ForEach-Object {
+                        $_ -like "*$requiredPath*"
+                      }
+                    } |
+                    Select-Object -First 1
+
+                  if ($null -eq $found) {
+
+                      Write-Error `
+                        "ERROR CRITICO: falta $requiredPath en update.zip"
+                      exit 1
+                  }
+
+                  Write-Host `
+                    "$requiredPath : OK" `
+                    -ForegroundColor Green
               }
-            )
 
-            Write-Host ""
-            Write-Host "==========================================" -ForegroundColor Cyan
-            Write-Host "CONTENIDO DEL ZIP" -ForegroundColor Cyan
-            Write-Host "==========================================" -ForegroundColor Cyan
-            Write-Host ""
+              $exeEntry = $names |
+                Where-Object {
+                  $_ -match "PAPELERA_POS\.exe$"
+                } |
+                Select-Object -First 1
 
-            $names |
-              Where-Object {
-                $_ -match "dotenv"
-              } |
-              ForEach-Object {
-                Write-Host $_
+              $versionEntry = $names |
+                Where-Object {
+                  $_ -match "version\.txt$"
+                } |
+                Select-Object -First 1
+
+              if ($null -eq $exeEntry) {
+
+                  Write-Error `
+                    "Falta PAPELERA_POS.exe en update.zip"
+                  exit 1
               }
 
-            Write-Host ""
+              if ($null -eq $versionEntry) {
 
-            $exeEntry = $names |
-              Where-Object {
-                $_ -match "PAPELERA_POS\.exe$"
-              } |
-              Select-Object -First 1
+                  Write-Error `
+                    "Falta version.txt en update.zip"
+                  exit 1
+              }
 
-            $versionEntry = $names |
-              Where-Object {
-                $_ -match "version\.txt$"
-              } |
-              Select-Object -First 1
+              $databaseEntry = $names |
+                Where-Object {
+                  $_ -replace "\\", "/" `
+                    -match "(^|/)database/|abril\.db$"
+                } |
+                Select-Object -First 1
 
-            $dotenvEntry = $names |
-              Where-Object {
-                $_ -match "_internal[/\\]dotenv[/\\]__init__\.py$"
-              } |
-              Select-Object -First 1
+              if ($null -ne $databaseEntry) {
 
-            $certEntry = $names |
-              Where-Object {
-                $_ -match "_internal[/\\]certifi[/\\]cacert\.pem$"
-              } |
-              Select-Object -First 1
+                  Write-Error `
+                    "ERROR CRITICO: database/abril.db aparece en update.zip"
+                  exit 1
+              }
 
-            if ($null -eq $exeEntry) {
-              Write-Error "Falta PAPELERA_POS.exe en update.zip"
-              exit 1
-            }
-
-            if ($null -eq $versionEntry) {
-              Write-Error "Falta version.txt en update.zip"
-              exit 1
-            }
-
-            if ($null -eq $dotenvEntry) {
-              Write-Error "ERROR CRITICO: update.zip NO contiene dotenv\__init__.py"
-              exit 1
-            }
-
-            if ($null -eq $certEntry) {
-              Write-Error "ERROR: update.zip NO contiene certifi\cacert.pem"
-              exit 1
-            }
-
-            Write-Host ""
-            Write-Host "PAPELERA_POS.exe: OK" -ForegroundColor Green
-            Write-Host "version.txt: OK" -ForegroundColor Green
-            Write-Host "dotenv\__init__.py: OK" -ForegroundColor Green
-            Write-Host "certifi\cacert.pem: OK" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "ZIP VERIFICADO CORRECTAMENTE." -ForegroundColor Green
-            Write-Host ""
+              Write-Host ""
+              Write-Host "PAPELERA_POS.exe: OK" `
+                -ForegroundColor Green
+              Write-Host "version.txt: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\supabase: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\postgrest: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\realtime: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\storage3: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\supabase_auth: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\supabase_functions: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\pydantic: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\dotenv: OK" `
+                -ForegroundColor Green
+              Write-Host "_internal\certifi: OK" `
+                -ForegroundColor Green
+              Write-Host "database: NO incluida" `
+                -ForegroundColor Green
+              Write-Host "abril.db: NO incluida" `
+                -ForegroundColor Green
+              Write-Host ""
+              Write-Host "ZIP FINAL VERIFICADO CORRECTAMENTE." `
+                -ForegroundColor Green
+              Write-Host ""
           }
           finally {
-            $zip.Dispose()
+
+              $zip.Dispose()
           }
 
 
@@ -541,8 +831,9 @@ jobs:
       - name: Subir update.zip como artifact
         uses: actions/upload-artifact@v4
         with:
-          name: update
+          name: update-${{ github.ref_name }}
           path: update.zip
+          if-no-files-found: error
 
 
       # ==================================================
