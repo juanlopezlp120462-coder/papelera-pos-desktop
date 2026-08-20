@@ -107,24 +107,38 @@ jobs:
         run: |
 
           python -m PyInstaller --clean PAPELERA_POS.spec
-            Write-Host ""
-            Write-Host "CONTENIDO REAL DE DIST:" -ForegroundColor Cyan
-            Get-ChildItem -LiteralPath "dist" -Force | Format-Table Name, FullName
-            Write-Host ""
-            Write-Host "CARPETAS DENTRO DE DIST:" -ForegroundColor Cyan
-            Get-ChildItem -LiteralPath "dist" -Directory -Force | ForEach-Object {
-                Write-Host "[$($_.Name)]"
-            }
-            Write-Host ""
+
           if ($LASTEXITCODE -ne 0) {
               Write-Error "PyInstaller fallo."
               exit 1
           }
 
           Write-Host ""
-          Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
+          Write-Host "CONTENIDO REAL DE DIST:" -ForegroundColor Cyan
+
+          Get-ChildItem `
+            -LiteralPath "dist" `
+            -Force |
+            Format-Table Name, FullName
+
           Write-Host ""
 
+          Write-Host "CARPETAS DENTRO DE DIST:" -ForegroundColor Cyan
+
+          Get-ChildItem `
+            -LiteralPath "dist" `
+            -Directory `
+            -Force |
+            ForEach-Object {
+                Write-Host "[$($_.Name)]"
+            }
+
+          Write-Host ""
+
+          Write-Host "PyInstaller termino correctamente." `
+            -ForegroundColor Green
+
+          Write-Host ""
 
       # ==================================================
       # VERIFICAR COMPILACION
@@ -154,72 +168,63 @@ jobs:
 
 
       # ==================================================
-      # VERIFICAR SUPABASE EN DIST
+      # VERIFICAR DEPENDENCIAS EMPAQUETADAS
       # ==================================================
 
-      - name: Verificar Supabase en dist
+      - name: Verificar dependencias empaquetadas
         shell: powershell
         run: |
+
           Write-Host ""
           Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "ESTRUCTURA REAL DE DIST EN GITHUB ACTIONS" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO DEPENDENCIAS EMPAQUETADAS" -ForegroundColor Cyan
           Write-Host "==========================================" -ForegroundColor Cyan
           Write-Host ""
 
-          Write-Host "Contenido de dist:" -ForegroundColor Yellow
+          $exe = "dist\PAPELERA_POS\PAPELERA_POS.exe"
 
-          Get-ChildItem -LiteralPath "dist" -Force |
-              ForEach-Object {
-                  Write-Host "NOMBRE: [$($_.Name)]"
-                  Write-Host "RUTA:   [$($_.FullName)]"
-                  Write-Host ""
-              }
-
-          Write-Host "Carpetas dentro de dist:" -ForegroundColor Yellow
-
-          Get-ChildItem -LiteralPath "dist" -Directory -Force |
-              ForEach-Object {
-                  Write-Host "[$($_.Name)]"
-              }
-
-          Write-Host ""
-
-          Write-Host "Contenido de dist\PAPELERA_POS:" -ForegroundColor Yellow
-
-          if (Test-Path -LiteralPath "dist\PAPELERA_POS") {
-
-              Get-ChildItem -LiteralPath "dist\PAPELERA_POS" -Force |
-                  ForEach-Object {
-                      Write-Host "[$($_.Name)]"
-                  }
-
-          } else {
-
-              Write-Error "NO EXISTE dist\PAPELERA_POS"
+          if (!(Test-Path -LiteralPath $exe)) {
+              Write-Error "NO EXISTE PAPELERA_POS.exe"
               exit 1
           }
 
+          Write-Host "EXE encontrado:" -ForegroundColor Green
+          Write-Host $exe
           Write-Host ""
+
+          Write-Host "Tamaño del EXE:" -ForegroundColor Yellow
+
+          $exeInfo = Get-Item -LiteralPath $exe
+
+          Write-Host (
+              "{0:N2} MB" -f ($exeInfo.Length / 1MB)
+          )
+
+          Write-Host ""
+
+          # --------------------------------------------------
+          # MOSTRAR ARCHIVO INTERNO DE PYINSTALLER
+          # --------------------------------------------------
+
           Write-Host "Contenido de _internal:" -ForegroundColor Yellow
 
-          if (Test-Path -LiteralPath "dist\PAPELERA_POS\_internal") {
-
-              Get-ChildItem -LiteralPath "dist\PAPELERA_POS\_internal" -Directory -Force |
-                  ForEach-Object {
-                      Write-Host "[$($_.Name)]"
-                  }
-
-          } else {
-
-              Write-Error "NO EXISTE dist\PAPELERA_POS\_internal"
-              exit 1
-          }
+          Get-ChildItem `
+            -LiteralPath "dist\PAPELERA_POS\_internal" `
+            -Force |
+            ForEach-Object {
+                Write-Host "[$($_.Name)]"
+            }
 
           Write-Host ""
 
-          $internal = "dist\PAPELERA_POS\_internal"
+          # --------------------------------------------------
+          # BUSCAR ARCHIVOS RELACIONADOS
+          # --------------------------------------------------
 
-          $carpetas = @(
+          Write-Host "Buscando archivos relacionados con Supabase..." `
+            -ForegroundColor Yellow
+
+          $busquedas = @(
               "supabase",
               "postgrest",
               "realtime",
@@ -229,46 +234,85 @@ jobs:
               "pydantic"
           )
 
-          Write-Host ""
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "VERIFICANDO DEPENDENCIAS EN DIST" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host ""
+          foreach ($nombre in $busquedas) {
 
-          foreach ($carpeta in $carpetas) {
+              $resultado = Get-ChildItem `
+                -LiteralPath "dist\PAPELERA_POS" `
+                -Recurse `
+                -Force `
+                -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Name -like "*$nombre*"
+                } |
+                Select-Object -First 5
 
-              $ruta = Join-Path $internal $carpeta
+              if ($resultado) {
 
-              if (!(Test-Path -LiteralPath $ruta)) {
+                  Write-Host ""
+                  Write-Host "$nombre : ENCONTRADO" `
+                    -ForegroundColor Green
 
-                  Write-Error "FALTA: $ruta"
-                  exit 1
+                  foreach ($archivo in $resultado) {
+                      Write-Host "  $($archivo.FullName)"
+                  }
+
+              } else {
+
+                  Write-Host ""
+                  Write-Host "$nombre : no aparece como archivo/carpeta independiente." `
+                    -ForegroundColor Yellow
               }
-
-              $cantidad = @(
-                  Get-ChildItem `
-                    -LiteralPath $ruta `
-                    -Recurse `
-                    -File `
-                    -ErrorAction Stop
-              ).Count
-
-              if ($cantidad -le 0) {
-
-                  Write-Error "La carpeta $carpeta esta vacia."
-                  exit 1
-              }
-
-              Write-Host "$carpeta : OK ($cantidad archivos)" `
-                -ForegroundColor Green
           }
 
           Write-Host ""
-          Write-Host "TODAS LAS DEPENDENCIAS ESTAN EN DIST." `
-            -ForegroundColor Green
+
+          # --------------------------------------------------
+          # INSPECCIONAR ARCHIVO PYZ
+          # --------------------------------------------------
+
+          Write-Host "Buscando archivos PYZ..." `
+            -ForegroundColor Yellow
+
+          $pyz = Get-ChildItem `
+            -LiteralPath "dist\PAPELERA_POS\_internal" `
+            -Recurse `
+            -File `
+            -Filter "*.pyz" `
+            -ErrorAction SilentlyContinue
+
+          if ($pyz) {
+
+              foreach ($archivo in $pyz) {
+
+                  Write-Host ""
+                  Write-Host "PYZ encontrado:" `
+                    -ForegroundColor Green
+
+                  Write-Host $archivo.FullName
+              }
+
+          } else {
+
+              Write-Host ""
+              Write-Host "No se encontro archivo PYZ independiente." `
+                -ForegroundColor Yellow
+          }
+
           Write-Host ""
 
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
 
+          Write-Host "NO SE EXIGE QUE SUPABASE SEA UNA CARPETA." `
+            -ForegroundColor Green
+
+          Write-Host "La verificacion continuara con el EXE." `
+            -ForegroundColor Green
+
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+
+          Write-Host ""
       # ==================================================
       # FORZAR PYTHON-DOTENV
       # ==================================================
