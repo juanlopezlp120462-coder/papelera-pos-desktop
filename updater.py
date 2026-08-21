@@ -415,7 +415,7 @@ def actualizar():
 
     python_dll = os.path.join(
         internal_actual,
-        "python314.dll"
+        "python312.dll"
     )
 
     if not os.path.exists(python_dll):
