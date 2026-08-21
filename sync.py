@@ -20,41 +20,61 @@ from ui.db import (
 
 if getattr(sys, "frozen", False):
 
+    # =====================================================
+    # INSTALACION COMPILADA
+    # =====================================================
+    #
+    # PAPELERA_POS.exe se encuentra en:
+    #
+    # PAPELERA_POS\
+    #
+    # Por lo tanto .env.pos queda FIJO en:
+    #
+    # PAPELERA_POS\.env.pos
+    #
+    # y NO dentro de _internal.
+    #
+
     BASE_DIR = os.path.dirname(
-        sys.executable
-    )
-
-    INTERNAL_DIR = os.path.join(
-        BASE_DIR,
-        "_internal"
-    )
-
-    ENV_FILE = os.path.join(
-        BASE_DIR,
-        ".env.pos"
-    )
-
-    if not os.path.exists(ENV_FILE):
-
-        ENV_FILE = os.path.join(
-            INTERNAL_DIR,
-            ".env.pos"
+        os.path.abspath(
+            sys.executable
         )
+    )
 
 else:
+
+    # =====================================================
+    # EJECUCION DESDE PYTHON
+    # =====================================================
+    #
+    # En desarrollo:
+    #
+    # C:\...\cotillon-pos-v2\.env.pos
+    #
 
     BASE_DIR = os.path.dirname(
         os.path.abspath(__file__)
     )
 
-    ENV_FILE = os.path.join(
-        BASE_DIR,
-        ".env.pos"
-    )
+
+# =========================================================
+# .ENV.POS FIJO
+# =========================================================
+
+ENV_FILE = os.path.join(
+    BASE_DIR,
+    ".env.pos"
+)
+
+
+# =========================================================
+# CARGAR CONFIGURACION
+# =========================================================
 
 load_dotenv(
-    ENV_FILE
+    dotenv_path=ENV_FILE
 )
+
 
 SUPABASE_URL = os.getenv(
     "SUPABASE_URL"
@@ -64,11 +84,30 @@ SUPABASE_KEY = os.getenv(
     "SUPABASE_KEY"
 )
 
+
+# =========================================================
+# VERIFICAR CONFIGURACION
+# =========================================================
+
+if not os.path.isfile(ENV_FILE):
+
+    raise RuntimeError(
+        "No se encontro .env.pos en: "
+        + ENV_FILE
+    )
+
+
 if not SUPABASE_URL or not SUPABASE_KEY:
 
     raise RuntimeError(
-        "Faltan SUPABASE_URL o SUPABASE_KEY en .env.pos"
+        "Faltan SUPABASE_URL o SUPABASE_KEY en: "
+        + ENV_FILE
     )
+
+
+# =========================================================
+# CREAR CLIENTE SUPABASE
+# =========================================================
 
 supabase = create_client(
     SUPABASE_URL,

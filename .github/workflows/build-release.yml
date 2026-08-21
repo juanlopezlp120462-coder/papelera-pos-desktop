@@ -253,7 +253,102 @@ jobs:
           Write-Host ""
           Write-Host "PyInstaller termino correctamente." -ForegroundColor Green
           Write-Host ""
+      # ==================================================
+      # CREAR PAPELERA UPDATER
+      # ==================================================
 
+      - name: Crear PAPELERA_UPDATER.exe
+        shell: powershell
+        run: |
+
+          $ErrorActionPreference = "Stop"
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "CREANDO PAPELERA_UPDATER.EXE" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          if (Test-Path -LiteralPath "build\PAPELERA_UPDATER") {
+
+              Remove-Item `
+                -LiteralPath "build\PAPELERA_UPDATER" `
+                -Recurse `
+                -Force
+          }
+
+          if (Test-Path -LiteralPath "dist\PAPELERA_UPDATER") {
+
+              Remove-Item `
+                -LiteralPath "dist\PAPELERA_UPDATER" `
+                -Recurse `
+                -Force
+          }
+
+          python -m PyInstaller --clean PAPELERA_UPDATER.spec
+
+          if ($LASTEXITCODE -ne 0) {
+
+              Write-Error "PyInstaller fallo al crear PAPELERA_UPDATER.exe."
+
+              exit 1
+          }
+
+          $updater = "dist\PAPELERA_UPDATER\PAPELERA_UPDATER.exe"
+
+          if (!(Test-Path -LiteralPath $updater)) {
+
+              Write-Error "No se creo PAPELERA_UPDATER.exe."
+
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "PAPELERA_UPDATER.exe creado correctamente." -ForegroundColor Green
+          Write-Host ""
+
+          Get-Item -LiteralPath $updater |
+              Select-Object Name, Length, FullName |
+              Format-Table -AutoSize
+
+          Write-Host ""
+
+      # ==================================================
+      # VERIFICAR PAPELERA UPDATER
+      # ==================================================
+
+      - name: Verificar PAPELERA_UPDATER
+        shell: powershell
+        run: |
+
+          $ErrorActionPreference = "Stop"
+
+          $updater = "dist\PAPELERA_UPDATER\PAPELERA_UPDATER.exe"
+
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "VERIFICANDO PAPELERA_UPDATER" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+
+          if (!(Test-Path -LiteralPath $updater)) {
+
+              Write-Error "FALTA PAPELERA_UPDATER.exe."
+
+              exit 1
+          }
+
+          $archivo = Get-Item -LiteralPath $updater
+
+          Write-Host ""
+          Write-Host "PAPELERA_UPDATER.exe : OK" -ForegroundColor Green
+          Write-Host "Nombre: $($archivo.Name)"
+          Write-Host "Tamano: $($archivo.Length) bytes"
+          Write-Host "Ruta: $($archivo.FullName)"
+          Write-Host ""
+
+          Write-Host "PAPELERA_UPDATER VERIFICADO CORRECTAMENTE." -ForegroundColor Green
+          Write-Host ""
 
       # ==================================================
       # VERIFICAR COMPILACION
@@ -817,7 +912,6 @@ jobs:
           Write-Host "certifi OK." `
             -ForegroundColor Green
 
-
       # ==================================================
       # PREPARAR UPDATE
       # ==================================================
@@ -839,88 +933,116 @@ jobs:
             -Path "update" |
             Out-Null
 
-            Copy-Item `
-              -LiteralPath "dist\PAPELERA_POS\PAPELERA_POS.exe" `
-              -Destination "update\PAPELERA_POS.exe" `
-              -Force
+          Copy-Item `
+            -LiteralPath "dist\PAPELERA_POS\PAPELERA_POS.exe" `
+            -Destination "update\PAPELERA_POS.exe" `
+            -Force
 
-            Copy-Item `
-              -LiteralPath "dist\PAPELERA_POS\version.txt" `
-              -Destination "update\version.txt" `
-              -Force
+          Copy-Item `
+            -LiteralPath "dist\PAPELERA_POS\version.txt" `
+            -Destination "update\version.txt" `
+            -Force
 
-            Copy-Item `
-              -LiteralPath "dist\PAPELERA_POS\_internal" `
-              -Destination "update\_internal" `
-              -Recurse `
-              -Force
-            # ==================================================
-            # VERIFICAR SUPABASE EN UPDATE
-            # ==================================================
-
-            $supabase = "update\_internal\supabase"
-
-            if (!(Test-Path -LiteralPath $supabase)) {
-
-                Write-Error `
-                  "ERROR CRITICO: falta update\_internal\supabase"
-
-                exit 1
-            }
-
-            $supabaseInit = `
-              "update\_internal\supabase\__init__.py"
-
-            if (!(Test-Path -LiteralPath $supabaseInit)) {
-
-                Write-Error `
-                  "ERROR CRITICO: falta update\_internal\supabase\__init__.py"
-
-                exit 1
-            }
-
-            $nestedInternal = `
-              "update\_internal\_internal"
-
-            if (Test-Path -LiteralPath $nestedInternal) {
-
-                Write-Error `
-                  "ERROR CRITICO: existe update\_internal\_internal"
-
-                exit 1
-            }
-
-            Write-Host ""
-            Write-Host "==========================================" `
-              -ForegroundColor Cyan
-            Write-Host "SUPABASE EN UPDATE" `
-              -ForegroundColor Cyan
-            Write-Host "==========================================" `
-              -ForegroundColor Cyan
-            Write-Host ""
-
-            Write-Host `
-              "update\_internal\supabase : OK" `
-              -ForegroundColor Green
-
-            Write-Host `
-              "supabase\__init__.py : OK" `
-              -ForegroundColor Green
-
-            Write-Host `
-              "_internal anidado : NO" `
-              -ForegroundColor Green
-
-            Write-Host ""
+          Copy-Item `
+            -LiteralPath "dist\PAPELERA_POS\_internal" `
+            -Destination "update\_internal" `
+            -Recurse `
+            -Force
 
 
+          # ==================================================
+          # COPIAR UPDATER
+          # ==================================================
 
-            Write-Host ""
+          $updater = "dist\PAPELERA_UPDATER\PAPELERA_UPDATER.exe"
 
-            Write-Host ""
-            Write-Host "Carpeta update preparada." `
-              -ForegroundColor Green
-            Write-Host ""
+          if (!(Test-Path -LiteralPath $updater)) {
+
+              Write-Error "ERROR CRITICO: no existe PAPELERA_UPDATER.exe"
+
+              exit 1
+          }
+
+          Copy-Item `
+            -LiteralPath $updater `
+            -Destination "update\PAPELERA_UPDATER.exe" `
+            -Force
+
+          if (!(Test-Path -LiteralPath "update\PAPELERA_UPDATER.exe")) {
+
+              Write-Error "ERROR CRITICO: no se pudo copiar PAPELERA_UPDATER.exe"
+
+              exit 1
+          }
+
+          Write-Host `
+            "PAPELERA_UPDATER.exe copiado correctamente." `
+            -ForegroundColor Green
+
+
+          # ==================================================
+          # VERIFICAR SUPABASE EN UPDATE
+          # ==================================================
+
+          $supabase = "update\_internal\supabase"
+
+          if (!(Test-Path -LiteralPath $supabase)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta update\_internal\supabase"
+
+              exit 1
+          }
+
+          $supabaseInit = `
+            "update\_internal\supabase\__init__.py"
+
+          if (!(Test-Path -LiteralPath $supabaseInit)) {
+
+              Write-Error `
+                "ERROR CRITICO: falta update\_internal\supabase\__init__.py"
+
+              exit 1
+          }
+
+          $nestedInternal = `
+            "update\_internal\_internal"
+
+          if (Test-Path -LiteralPath $nestedInternal) {
+
+              Write-Error `
+                "ERROR CRITICO: existe update\_internal\_internal"
+
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+          Write-Host "SUPABASE EN UPDATE" `
+            -ForegroundColor Cyan
+          Write-Host "==========================================" `
+            -ForegroundColor Cyan
+          Write-Host ""
+
+          Write-Host `
+            "update\_internal\supabase : OK" `
+            -ForegroundColor Green
+
+          Write-Host `
+            "supabase\__init__.py : OK" `
+            -ForegroundColor Green
+
+          Write-Host `
+            "_internal anidado : NO" `
+            -ForegroundColor Green
+
+          Write-Host ""
+
+          Write-Host ""
+          Write-Host "Carpeta update preparada." `
+            -ForegroundColor Green
+          Write-Host ""
 
 
       # ==================================================
@@ -1469,7 +1591,9 @@ jobs:
       - name: Crear Release y subir update.zip
         uses: softprops/action-gh-release@v2
         with:
-          files: update.zip
+          files: |
+            update.zip
+            dist\PAPELERA_UPDATER\PAPELERA_UPDATER.exe
           generate_release_notes: true
           overwrite_files: true
         env:
