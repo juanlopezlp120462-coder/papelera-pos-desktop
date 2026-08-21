@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import threading
 from datetime import datetime
@@ -17,14 +18,56 @@ from ui.db import (
 # SUPABASE
 # =========================================================
 
-load_dotenv()
+if getattr(sys, "frozen", False):
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    BASE_DIR = os.path.dirname(
+        sys.executable
+    )
+
+    INTERNAL_DIR = os.path.join(
+        BASE_DIR,
+        "_internal"
+    )
+
+    ENV_FILE = os.path.join(
+        BASE_DIR,
+        ".env.pos"
+    )
+
+    if not os.path.exists(ENV_FILE):
+
+        ENV_FILE = os.path.join(
+            INTERNAL_DIR,
+            ".env.pos"
+        )
+
+else:
+
+    BASE_DIR = os.path.dirname(
+        os.path.abspath(__file__)
+    )
+
+    ENV_FILE = os.path.join(
+        BASE_DIR,
+        ".env.pos"
+    )
+
+load_dotenv(
+    ENV_FILE
+)
+
+SUPABASE_URL = os.getenv(
+    "SUPABASE_URL"
+)
+
+SUPABASE_KEY = os.getenv(
+    "SUPABASE_KEY"
+)
 
 if not SUPABASE_URL or not SUPABASE_KEY:
+
     raise RuntimeError(
-        "Faltan SUPABASE_URL o SUPABASE_KEY en .env"
+        "Faltan SUPABASE_URL o SUPABASE_KEY en .env.pos"
     )
 
 supabase = create_client(

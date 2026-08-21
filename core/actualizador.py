@@ -5,60 +5,133 @@ import zipfile
 import tempfile
 import shutil
 import subprocess
-import time
-
-from dotenv import load_dotenv
-from supabase import create_client
 
 
 # ============================================================
-# SUPABASE
+# CONFIGURACIÓN SUPABASE
 # ============================================================
 
-load_dotenv()
+SUPABASE_URL = "https://vspfeihawhfdlpeqwxgp.supabase.co"
 
-SUPABASE_URL = os.getenv(
-    "SUPABASE_URL"
+# Clave pública.
+# NO usar service_role dentro del EXE.
+SUPABASE_KEY_PUBLICA = (
+    "sb_publishable_EReRHa9kq-8RLNusRzIC6Q_H2Q8TEk9"
 )
-
-SUPABASE_KEY = os.getenv(
-    "SUPABASE_KEY"
-)
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-
-    raise RuntimeError(
-        "Faltan SUPABASE_URL o SUPABASE_KEY en .env"
-    )
-
-supabase = create_client(
-    SUPABASE_URL,
-    SUPABASE_KEY
-)
-
-
-TIMEOUT = 10
 
 
 # ============================================================
-# ARCHIVO DE VERSION
+# CARGAR .ENV SI EXISTE
+# ============================================================
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+except Exception:
+    pass
+
+
+# ============================================================
+# CONFIGURACIÓN FINAL
+# ============================================================
+
+# Si existe .env y tiene valores válidos, los utiliza.
+# Si no existe .env, utiliza los valores incorporados.
+
+SUPABASE_URL_FINAL = (
+    os.getenv("SUPABASE_URL")
+    or SUPABASE_URL
+)
+
+SUPABASE_KEY_FINAL = (
+    os.getenv("SUPABASE_KEY")
+    or SUPABASE_KEY_PUBLICA
+)
+
+
+# ============================================================
+# CONFIGURACIÓN GENERAL
+# ============================================================
+
+TIMEOUT_VERSION = 10
+TIMEOUT_DESCARGA = 60
+
+
+# ============================================================
+# LIMPIAR VERSIÓN
+# ============================================================
+
+def limpiar_version(version):
+
+    if version is None:
+        return ""
+
+    version = str(version)
+
+    version = version.replace("\ufeff", "")
+    version = version.replace("ï»¿", "")
+
+    version = version.strip()
+
+    return version
+
+
+# ============================================================
+# CONVERTIR VERSIÓN A NÚMEROS
+# ============================================================
+
+def version_numerica(version):
+
+    version = limpiar_version(version)
+
+    try:
+
+        partes = version.split(".")
+
+        if len(partes) != 3:
+            return None
+
+        return (
+            int(partes[0]),
+            int(partes[1]),
+            int(partes[2])
+        )
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# OBTENER RUTA DE VERSION.TXT
 # ============================================================
 
 def obtener_ruta_version():
 
+    # --------------------------------------------------------
+    # PROGRAMA COMPILADO
+    # --------------------------------------------------------
+
     if getattr(sys, "frozen", False):
 
         exe_dir = os.path.dirname(
-            sys.executable
+            os.path.abspath(sys.executable)
         )
 
-        base_dir = getattr(
-            sys,
-            "_MEIPASS",
-            exe_dir
-        )
+        base_dir = exe_dir
+
+    # --------------------------------------------------------
+    # PYTHON
+    # --------------------------------------------------------
 
     else:
+
+        # core/actualizador.py
+        #
+        # dirname(__file__)          -> core
+        # dirname(dirname(__file__)) -> proyecto
 
         exe_dir = os.path.dirname(
             os.path.dirname(
@@ -68,6 +141,9 @@ def obtener_ruta_version():
 
         base_dir = exe_dir
 
+    # --------------------------------------------------------
+    # POSIBLES UBICACIONES
+    # --------------------------------------------------------
 
     posibles_rutas = [
 
@@ -94,13 +170,14 @@ def obtener_ruta_version():
         )
     ]
 
-
     for ruta in posibles_rutas:
 
         if os.path.exists(ruta):
-
             return ruta
 
+    # --------------------------------------------------------
+    # RUTA PRINCIPAL POR DEFECTO
+    # --------------------------------------------------------
 
     return os.path.join(
         exe_dir,
@@ -108,55 +185,58 @@ def obtener_ruta_version():
     )
 
 
-VERSION_FILE = obtener_ruta_version()
-
-
 # ============================================================
-# VERSION LOCAL
+# OBTENER VERSIÓN LOCAL
 # ============================================================
 
 def obtener_version_actual():
 
     version_por_defecto = "1.0.1"
 
+    print()
+    print("==========================================")
+    print("DIAGNOSTICO VERSION LOCAL")
+    print("==========================================")
+
+    print(
+        "DEBUG FROZEN:",
+        getattr(sys, "frozen", False)
+    )
+
+    print(
+        "DEBUG SYS.EXECUTABLE:",
+        sys.executable
+    )
+
+    ruta_version = obtener_ruta_version()
+
+    print(
+        "DEBUG VERSION_FILE:",
+        ruta_version
+    )
+
+    print(
+        "DEBUG EXISTE VERSION_FILE:",
+        os.path.exists(ruta_version)
+    )
 
     try:
 
-        ruta_actual = obtener_ruta_version()
-
-        print(
-            "RUTA DETECTADA VERSION_FILE:",
-            ruta_actual
-        )
-
-
-        if os.path.exists(ruta_actual):
+        if os.path.exists(ruta_version):
 
             with open(
-                ruta_actual,
+                ruta_version,
                 "r",
                 encoding="utf-8-sig"
             ) as archivo:
 
                 version = archivo.read()
 
-
-            version = version.replace(
-                "\ufeff",
-                ""
-            )
-
-            version = version.replace(
-                "ï»¿",
-                ""
-            )
-
-            version = version.strip()
-
+            version = limpiar_version(version)
 
             print(
                 "VERSION FILE:",
-                ruta_actual
+                ruta_version
             )
 
             print(
@@ -164,95 +244,186 @@ def obtener_version_actual():
                 repr(version)
             )
 
-
             if version:
 
-                return version
+                version_num = version_numerica(version)
 
+                if version_num is not None:
+
+                    print(
+                        "VERSION LOCAL NUMERICA:",
+                        version_num
+                    )
+
+                    print(
+                        "VERSION LOCAL FINAL:",
+                        version
+                    )
+
+                    print(
+                        "=========================================="
+                    )
+
+                    return version
+
+                print(
+                    "ADVERTENCIA: Formato de version invalido:",
+                    repr(version)
+                )
 
     except Exception as e:
 
         print(
-            "Error leyendo versión local:",
+            "ERROR leyendo version local:",
             repr(e)
         )
 
+    print(
+        "Usando version por defecto:",
+        version_por_defecto
+    )
 
     print(
-        "Usando versión por defecto:",
-        version_por_defecto
+        "=========================================="
     )
 
     return version_por_defecto
 
 
 # ============================================================
-# VERSION DEL SERVIDOR
-# ============================================================
-
-# ============================================================
-# VERSION DEL SERVIDOR
-# SUPABASE
+# OBTENER ÚLTIMA VERSIÓN DESDE SUPABASE
 # ============================================================
 
 def obtener_ultima_version():
 
     try:
 
+        endpoint = (
+            SUPABASE_URL_FINAL.rstrip("/")
+            + "/rest/v1/versiones"
+        )
+
+        # ----------------------------------------------------
+        # PARÁMETROS
+        # ----------------------------------------------------
+
+        parametros = {
+
+            "select": (
+                "version,url,activo,created_at"
+            ),
+
+            "activo": "eq.true",
+
+            "order": "created_at.desc",
+
+            "limit": "1"
+        }
+
+        # ----------------------------------------------------
+        # HEADERS
+        # ----------------------------------------------------
+
+        headers = {
+
+            "apikey": SUPABASE_KEY_FINAL,
+
+            "Authorization":
+                "Bearer "
+                + SUPABASE_KEY_FINAL,
+
+            "Accept": "application/json"
+        }
+
+        print()
         print(
             "Consultando versión en Supabase..."
         )
 
-        respuesta = (
-            supabase
-            .table("versiones")
-            .select(
-                "version,url,activo,created_at"
-            )
-            .eq(
-                "activo",
-                True
-            )
-            .order(
-                "created_at",
-                desc=True
-            )
-            .limit(
-                1
-            )
-            .execute()
+        print(
+            "URL SUPABASE:",
+            endpoint
         )
 
+        # ----------------------------------------------------
+        # CONSULTA
+        # ----------------------------------------------------
 
-        datos = respuesta.data
+        respuesta = requests.get(
 
+            endpoint,
+
+            params=parametros,
+
+            headers=headers,
+
+            timeout=TIMEOUT_VERSION
+        )
 
         print(
-            "Respuesta Supabase:",
-            repr(datos)
+            "HTTP SUPABASE:",
+            respuesta.status_code
         )
 
+        print(
+            "RESPUESTA SUPABASE:",
+            respuesta.text
+        )
 
-        if not datos:
+        # ----------------------------------------------------
+        # ERROR HTTP
+        # ----------------------------------------------------
+
+        if respuesta.status_code != 200:
 
             print(
-                "ERROR: Supabase no devolvió ninguna versión activa."
+                "ERROR: Supabase devolvió HTTP",
+                respuesta.status_code
             )
 
             return None
 
+        # ----------------------------------------------------
+        # CONVERTIR A JSON
+        # ----------------------------------------------------
+
+        try:
+
+            datos = respuesta.json()
+
+        except Exception as e:
+
+            print(
+                "ERROR convirtiendo respuesta Supabase a JSON:",
+                repr(e)
+            )
+
+            return None
+
+        print(
+            "DATOS SUPABASE:",
+            repr(datos)
+        )
+
+        # ----------------------------------------------------
+        # SIN REGISTROS
+        # ----------------------------------------------------
+
+        if not datos:
+
+            print(
+                "ERROR: No existe ninguna versión activa en Supabase."
+            )
+
+            return None
 
         registro = datos[0]
 
+        # ----------------------------------------------------
+        # OBTENER VERSIÓN
+        # ----------------------------------------------------
 
-        version = registro.get(
-            "version"
-        )
-
-        url = registro.get(
-            "url"
-        )
-
+        version = registro.get("version")
 
         if version is None:
 
@@ -262,6 +433,13 @@ def obtener_ultima_version():
 
             return None
 
+        version = limpiar_version(version)
+
+        # ----------------------------------------------------
+        # OBTENER URL
+        # ----------------------------------------------------
+
+        url = registro.get("url")
 
         if not url:
 
@@ -271,22 +449,11 @@ def obtener_ultima_version():
 
             return None
 
+        url = str(url).strip()
 
-        version = str(
-            version
-        ).replace(
-            "\ufeff",
-            ""
-        ).replace(
-            "Ã¯Â»Â¿",
-            ""
-        ).strip()
-
-
-        url = str(
-            url
-        ).strip()
-
+        # ----------------------------------------------------
+        # VALIDAR VERSIÓN
+        # ----------------------------------------------------
 
         if not version:
 
@@ -296,24 +463,43 @@ def obtener_ultima_version():
 
             return None
 
+        version_num = version_numerica(version)
 
-        if not url:
+        if version_num is None:
 
             print(
-                "ERROR: La URL de actualización está vacía."
+                "ERROR: Versión inválida en Supabase:",
+                repr(version)
             )
 
             return None
 
+        # ----------------------------------------------------
+        # VALIDAR URL
+        # ----------------------------------------------------
+
+        if not (
+            url.startswith("https://")
+            or url.startswith("http://")
+        ):
+
+            print(
+                "ERROR: URL de actualización inválida:",
+                repr(url)
+            )
+
+            return None
+
+        # ----------------------------------------------------
+        # RESULTADO
+        # ----------------------------------------------------
 
         resultado = {
 
             "version": version,
 
             "url": url
-
         }
-
 
         print(
             "VERSION SUPABASE:",
@@ -325,9 +511,16 @@ def obtener_ultima_version():
             url
         )
 
-
         return resultado
 
+    except requests.RequestException as e:
+
+        print(
+            "ERROR de conexión con Supabase:",
+            repr(e)
+        )
+
+        return None
 
     except Exception as e:
 
@@ -340,81 +533,111 @@ def obtener_ultima_version():
 
 
 # ============================================================
-# COMPROBAR ACTUALIZACION
+# COMPROBAR SI HAY ACTUALIZACIÓN
 # ============================================================
 
 def hay_actualizacion(version_actual):
 
-    version_actual = str(
+    # --------------------------------------------------------
+    # LIMPIAR VERSIÓN LOCAL
+    # --------------------------------------------------------
+
+    version_actual = limpiar_version(
         version_actual
-    ).replace(
-        "\ufeff",
-        ""
-    ).replace(
-        "ï»¿",
-        ""
-    ).strip()
+    )
 
-
+    print()
     print(
         "VERSION LOCAL PARA COMPARAR:",
         repr(version_actual)
     )
 
+    # --------------------------------------------------------
+    # CONVERTIR VERSIÓN LOCAL
+    # --------------------------------------------------------
+
+    version_local_num = version_numerica(
+        version_actual
+    )
+
+    if version_local_num is None:
+
+        print(
+            "ERROR: La versión local no tiene formato X.X.X:",
+            repr(version_actual)
+        )
+
+        return False, None
+
+    print(
+        "VERSION LOCAL NUMERICA:",
+        version_local_num
+    )
+
+    # --------------------------------------------------------
+    # CONSULTAR SERVIDOR
+    # --------------------------------------------------------
 
     datos = obtener_ultima_version()
-
 
     if datos is None:
 
         print(
-            "No se pudo obtener versión del servidor"
+            "No se pudo obtener versión del servidor."
         )
 
         return False, None
 
+    # --------------------------------------------------------
+    # VERSIÓN SERVIDOR
+    # --------------------------------------------------------
 
-    ultima_version = datos.get(
-        "version"
-    )
-
+    ultima_version = datos.get("version")
 
     if ultima_version is None:
 
         print(
-            "ERROR: El servidor no devolvió version"
+            "ERROR: El servidor no devolvió versión."
         )
 
         return False, None
 
-
-    ultima_version = str(
+    ultima_version = limpiar_version(
         ultima_version
-    ).replace(
-        "\ufeff",
-        ""
-    ).replace(
-        "ï»¿",
-        ""
-    ).strip()
-
+    )
 
     print(
         "VERSION SERVIDOR PARA COMPARAR:",
         repr(ultima_version)
     )
 
+    # --------------------------------------------------------
+    # CONVERTIR VERSIÓN SERVIDOR
+    # --------------------------------------------------------
 
-    if not ultima_version:
+    version_servidor_num = version_numerica(
+        ultima_version
+    )
+
+    if version_servidor_num is None:
 
         print(
-            "ERROR: Version servidor vacía"
+            "ERROR: Versión del servidor inválida:",
+            repr(ultima_version)
         )
 
         return False, None
 
+    print(
+        "VERSION SERVIDOR NUMERICA:",
+        version_servidor_num
+    )
 
-    if ultima_version == version_actual:
+    # --------------------------------------------------------
+    # COMPARACIÓN
+    # --------------------------------------------------------
+
+    if version_servidor_num <= version_local_num:
 
         print(
             "RESULTADO: NO HAY ACTUALIZACION"
@@ -422,28 +645,33 @@ def hay_actualizacion(version_actual):
 
         return False, ultima_version
 
+    # --------------------------------------------------------
+    # HAY ACTUALIZACIÓN
+    # --------------------------------------------------------
 
     print(
         "RESULTADO: HAY ACTUALIZACION ->",
         ultima_version
     )
 
-
     return True, ultima_version
 
 
 # ============================================================
-# DESCARGAR ACTUALIZACION
+# DESCARGAR ACTUALIZACIÓN
 # ============================================================
 
-def descargar_actualizacion(
-    callback_progreso=None
-):
+def descargar_actualizacion(callback_progreso=None):
+
+    carpeta_temp = None
 
     try:
 
-        datos = obtener_ultima_version()
+        # ----------------------------------------------------
+        # OBTENER DATOS
+        # ----------------------------------------------------
 
+        datos = obtener_ultima_version()
 
         if not datos:
 
@@ -453,55 +681,74 @@ def descargar_actualizacion(
 
             return None
 
-
-        url = datos.get(
-            "url"
-        )
-
+        url = datos.get("url")
 
         if not url:
 
             print(
-                "ERROR: El servidor no devolvió URL de actualización."
+                "ERROR: No existe URL de actualización."
             )
 
             return None
 
+        version = datos.get("version")
+
+        print(
+            "VERSION A DESCARGAR:",
+            version
+        )
 
         print(
             "URL ACTUALIZACION:",
             url
         )
 
+        # ----------------------------------------------------
+        # CARPETA TEMPORAL
+        # ----------------------------------------------------
 
         carpeta_temp = tempfile.mkdtemp(
             prefix="papelera_update_"
         )
-
 
         archivo_zip = os.path.join(
             carpeta_temp,
             "update.zip"
         )
 
+        print(
+            "CARPETA TEMPORAL:",
+            carpeta_temp
+        )
+
+        print(
+            "ARCHIVO ZIP:",
+            archivo_zip
+        )
+
+        # ----------------------------------------------------
+        # DESCARGA
+        # ----------------------------------------------------
 
         print(
             "Descargando actualización..."
         )
 
-
         respuesta = requests.get(
-            url,
-            stream=True,
-            timeout=60
-        )
 
+            url,
+
+            stream=True,
+
+            timeout=TIMEOUT_DESCARGA,
+
+            allow_redirects=True
+        )
 
         print(
             "HTTP descarga:",
             respuesta.status_code
         )
-
 
         if respuesta.status_code != 200:
 
@@ -517,17 +764,28 @@ def descargar_actualizacion(
 
             return None
 
+        # ----------------------------------------------------
+        # TAMAÑO
+        # ----------------------------------------------------
 
-        total = int(
-            respuesta.headers.get(
-                "content-length",
-                0
+        try:
+
+            total = int(
+                respuesta.headers.get(
+                    "content-length",
+                    0
+                )
             )
-        )
 
+        except Exception:
+
+            total = 0
 
         descargado = 0
 
+        # ----------------------------------------------------
+        # GUARDAR ZIP
+        # ----------------------------------------------------
 
         with open(
             archivo_zip,
@@ -539,19 +797,11 @@ def descargar_actualizacion(
             ):
 
                 if not bloque:
-
                     continue
 
+                archivo.write(bloque)
 
-                archivo.write(
-                    bloque
-                )
-
-
-                descargado += len(
-                    bloque
-                )
-
+                descargado += len(bloque)
 
                 if total > 0:
 
@@ -562,7 +812,6 @@ def descargar_actualizacion(
                 else:
 
                     porcentaje = 0
-
 
                 if callback_progreso:
 
@@ -576,16 +825,51 @@ def descargar_actualizacion(
 
                         pass
 
+        print(
+            "Actualización descargada:"
+        )
 
         print(
-            "Actualización descargada:",
             archivo_zip
         )
 
+        # ----------------------------------------------------
+        # VERIFICAR ARCHIVO
+        # ----------------------------------------------------
 
-        # ====================================================
+        if not os.path.exists(
+            archivo_zip
+        ):
+
+            print(
+                "ERROR: El ZIP no fue creado."
+            )
+
+            shutil.rmtree(
+                carpeta_temp,
+                ignore_errors=True
+            )
+
+            return None
+
+        if os.path.getsize(
+            archivo_zip
+        ) <= 0:
+
+            print(
+                "ERROR: El ZIP está vacío."
+            )
+
+            shutil.rmtree(
+                carpeta_temp,
+                ignore_errors=True
+            )
+
+            return None
+
+        # ----------------------------------------------------
         # VERIFICAR ZIP
-        # ====================================================
+        # ----------------------------------------------------
 
         if not zipfile.is_zipfile(
             archivo_zip
@@ -602,14 +886,27 @@ def descargar_actualizacion(
 
             return None
 
-
         print(
             "UPDATE.zip válido."
         )
 
-
         return archivo_zip
 
+    except requests.RequestException as e:
+
+        print(
+            "ERROR de conexión descargando actualización:",
+            repr(e)
+        )
+
+        if carpeta_temp:
+
+            shutil.rmtree(
+                carpeta_temp,
+                ignore_errors=True
+            )
+
+        return None
 
     except Exception as e:
 
@@ -618,11 +915,18 @@ def descargar_actualizacion(
             repr(e)
         )
 
+        if carpeta_temp:
+
+            shutil.rmtree(
+                carpeta_temp,
+                ignore_errors=True
+            )
+
         return None
 
 
 # ============================================================
-# INSTALAR ACTUALIZACION
+# INSTALAR ACTUALIZACIÓN
 # ============================================================
 
 def instalar_actualizacion(
@@ -630,7 +934,13 @@ def instalar_actualizacion(
     nueva_version
 ):
 
+    carpeta_temp = None
+
     try:
+
+        # ----------------------------------------------------
+        # VALIDAR ZIP
+        # ----------------------------------------------------
 
         if not archivo_zip:
 
@@ -639,7 +949,6 @@ def instalar_actualizacion(
             )
 
             return False
-
 
         if not os.path.exists(
             archivo_zip
@@ -652,10 +961,19 @@ def instalar_actualizacion(
 
             return False
 
+        if not zipfile.is_zipfile(
+            archivo_zip
+        ):
 
-        # ====================================================
-        # CARPETA DE LA INSTALACION
-        # ====================================================
+            print(
+                "ERROR: El archivo no es un ZIP válido."
+            )
+
+            return False
+
+        # ----------------------------------------------------
+        # CARPETA DEL PROGRAMA
+        # ----------------------------------------------------
 
         if getattr(
             sys,
@@ -664,16 +982,22 @@ def instalar_actualizacion(
         ):
 
             carpeta_programa = os.path.dirname(
-                sys.executable
+                os.path.abspath(
+                    sys.executable
+                )
             )
 
-            exe_actual = sys.executable
+            exe_actual = os.path.abspath(
+                sys.executable
+            )
 
         else:
 
             carpeta_programa = os.path.dirname(
                 os.path.dirname(
-                    os.path.abspath(__file__)
+                    os.path.abspath(
+                        __file__
+                    )
                 )
             )
 
@@ -681,7 +1005,6 @@ def instalar_actualizacion(
                 carpeta_programa,
                 "PAPELERA_POS.exe"
             )
-
 
         print(
             "CARPETA PROGRAMA:",
@@ -693,20 +1016,26 @@ def instalar_actualizacion(
             exe_actual
         )
 
-
-        # ====================================================
-        # CARPETA TEMPORAL DE EXTRACCION
-        # ====================================================
+        # ----------------------------------------------------
+        # CARPETA TEMPORAL
+        # ----------------------------------------------------
 
         carpeta_temp = tempfile.mkdtemp(
             prefix="papelera_extract_"
         )
 
+        print(
+            "CARPETA EXTRACCION:",
+            carpeta_temp
+        )
+
+        # ----------------------------------------------------
+        # EXTRAER ZIP
+        # ----------------------------------------------------
 
         print(
             "Extrayendo actualización..."
         )
-
 
         with zipfile.ZipFile(
             archivo_zip,
@@ -717,27 +1046,24 @@ def instalar_actualizacion(
                 carpeta_temp
             )
 
-
-        # ====================================================
-        # DETECTAR CONTENIDO DEL ZIP
-        # ====================================================
+        # ----------------------------------------------------
+        # DETECTAR CONTENIDO
+        # ----------------------------------------------------
 
         contenido = os.listdir(
             carpeta_temp
         )
-
 
         print(
             "CONTENIDO UPDATE:",
             contenido
         )
 
-
-        # Si GitHub tiene una carpeta raíz dentro del ZIP,
-        # la detectamos automáticamente.
-
         carpeta_update = carpeta_temp
 
+        # ----------------------------------------------------
+        # DETECTAR CARPETA RAÍZ
+        # ----------------------------------------------------
 
         if len(contenido) == 1:
 
@@ -746,31 +1072,41 @@ def instalar_actualizacion(
                 contenido[0]
             )
 
-
             if os.path.isdir(
                 posible_carpeta
             ):
 
                 carpeta_update = posible_carpeta
 
-
         print(
             "CARPETA UPDATE:",
             carpeta_update
         )
 
-
-        # ====================================================
-        # VERIFICAR EXE
-        # ====================================================
+        # ----------------------------------------------------
+        # RUTAS DE ACTUALIZACIÓN
+        # ----------------------------------------------------
 
         exe_update = os.path.join(
             carpeta_update,
             "PAPELERA_POS.exe"
         )
 
+        internal_update = os.path.join(
+            carpeta_update,
+            "_internal"
+        )
 
-        if not os.path.exists(
+        version_update = os.path.join(
+            carpeta_update,
+            "version.txt"
+        )
+
+        # ----------------------------------------------------
+        # VERIFICAR EXE
+        # ----------------------------------------------------
+
+        if not os.path.isfile(
             exe_update
         ):
 
@@ -785,16 +1121,9 @@ def instalar_actualizacion(
 
             return False
 
-
-        # ====================================================
-        # VERIFICAR _internal
-        # ====================================================
-
-        internal_update = os.path.join(
-            carpeta_update,
-            "_internal"
-        )
-
+        # ----------------------------------------------------
+        # VERIFICAR INTERNAL
+        # ----------------------------------------------------
 
         if not os.path.isdir(
             internal_update
@@ -811,46 +1140,93 @@ def instalar_actualizacion(
 
             return False
 
-
         print(
             "UPDATE.zip contiene PAPELERA_POS.exe y _internal."
         )
 
+        # ----------------------------------------------------
+        # VERIFICAR VERSION.TXT
+        # ----------------------------------------------------
 
-        # ====================================================
-        # CREAR SCRIPT DE ACTUALIZACION
-        # ====================================================
+        if os.path.isfile(
+            version_update
+        ):
+
+            try:
+
+                with open(
+                    version_update,
+                    "r",
+                    encoding="utf-8-sig"
+                ) as archivo:
+
+                    version_zip = limpiar_version(
+                        archivo.read()
+                    )
+
+                print(
+                    "VERSION DENTRO DEL ZIP:",
+                    repr(version_zip)
+                )
+
+                if nueva_version:
+
+                    nueva_version_limpia = limpiar_version(
+                        nueva_version
+                    )
+
+                    if version_zip != nueva_version_limpia:
+
+                        print(
+                            "ADVERTENCIA: version.txt del ZIP "
+                            "no coincide con nueva_version."
+                        )
+
+            except Exception as e:
+
+                print(
+                    "ADVERTENCIA leyendo version.txt del ZIP:",
+                    repr(e)
+                )
+
+        # ----------------------------------------------------
+        # RUTAS DESTINO
+        # ----------------------------------------------------
 
         script = os.path.join(
             carpeta_programa,
             "_actualizar_papelera.bat"
         )
 
+        internal_destino = os.path.join(
+            carpeta_programa,
+            "_internal"
+        )
 
-        # IMPORTANTE:
-        #
-        # NO copiamos database.
-        #
-        # Solamente reemplazamos:
-        #
-        # PAPELERA_POS.exe
-        # _internal
-        # version.txt
-        #
-        # La database existente queda intacta.
-        #
+        exe_destino = os.path.join(
+            carpeta_programa,
+            "PAPELERA_POS.exe"
+        )
+
+        version_destino = os.path.join(
+            carpeta_programa,
+            "version.txt"
+        )
+
+        # ----------------------------------------------------
+        # SCRIPT BAT
+        # ----------------------------------------------------
 
         contenido_bat = f'''@echo off
-setlocal
+setlocal EnableExtensions
 
 echo ==========================================
 echo ACTUALIZANDO PAPELERA POS
 echo ==========================================
-
-timeout /t 2 /nobreak >nul
-
 echo.
+
 echo Esperando que cierre PAPELERA_POS...
+echo.
 
 :ESPERAR
 tasklist /FI "IMAGENAME eq PAPELERA_POS.exe" 2>NUL | find /I "PAPELERA_POS.exe" >NUL
@@ -860,50 +1236,113 @@ if not errorlevel 1 (
     goto ESPERAR
 )
 
+echo Programa cerrado.
 echo.
-echo Reemplazando archivos...
+
+echo ==========================================
+echo REEMPLAZANDO ARCHIVOS
+echo ==========================================
+echo.
 
 echo Eliminando _internal anterior...
-if exist "{os.path.join(carpeta_programa, "_internal")}" (
-    rmdir /S /Q "{os.path.join(carpeta_programa, "_internal")}"
+
+if exist "{internal_destino}" (
+    rmdir /S /Q "{internal_destino}"
 )
+
+if exist "{internal_destino}" (
+    echo ERROR: No se pudo eliminar _internal anterior.
+    pause
+    exit /b 1
+)
+
+echo _internal anterior eliminado.
+echo.
 
 echo Copiando nuevo _internal...
-xcopy /E /I /Y "{internal_update}" "{os.path.join(carpeta_programa, "_internal")}" >nul
 
+xcopy "{internal_update}" "{internal_destino}" /E /I /Y /Q >nul
+
+if errorlevel 1 (
+    echo ERROR copiando _internal.
+    pause
+    exit /b 1
+)
+
+echo Nuevo _internal copiado.
 echo.
+
 echo Copiando PAPELERA_POS.exe...
-copy /Y "{exe_update}" "{os.path.join(carpeta_programa, "PAPELERA_POS.exe")}" >nul
 
+copy /Y "{exe_update}" "{exe_destino}" >nul
+
+if errorlevel 1 (
+    echo ERROR copiando PAPELERA_POS.exe.
+    pause
+    exit /b 1
+)
+
+echo Nuevo PAPELERA_POS.exe copiado.
 echo.
+
 echo Actualizando version.txt...
 
-if exist "{os.path.join(carpeta_update, "version.txt")}" (
-    copy /Y "{os.path.join(carpeta_update, "version.txt")}" "{os.path.join(carpeta_programa, "version.txt")}" >nul
+if exist "{version_update}" (
+
+    copy /Y "{version_update}" "{version_destino}" >nul
+
+    if errorlevel 1 (
+        echo ERROR copiando version.txt.
+        pause
+        exit /b 1
+    )
+
+    echo version.txt actualizado.
+
+) else (
+
+    echo No se encontro version.txt dentro del ZIP.
 )
 
 echo.
+
 echo ==========================================
 echo ACTUALIZACION TERMINADA
 echo ==========================================
-
 echo.
-echo Iniciando nueva version...
 
-start "" "{exe_actual}"
-
+echo Version instalada:
+echo {nueva_version}
 echo.
-echo Limpiando archivos temporales...
+
+echo Iniciando PAPELERA POS...
+echo.
 
 timeout /t 2 /nobreak >nul
 
-rmdir /S /Q "{carpeta_temp}"
+start "" "{exe_actual}"
+
+echo Programa iniciado.
+echo.
+
+echo Limpiando archivos temporales...
+
+timeout /t 3 /nobreak >nul
+
+rmdir /S /Q "{carpeta_temp}" >nul 2>&1
+
+echo.
+
+echo Eliminando actualizador...
 
 del "%~f0"
 
 endlocal
 '''
 
+        # ----------------------------------------------------
+        # ESCRIBIR BAT
+        # ----------------------------------------------------
 
         with open(
             script,
@@ -915,18 +1354,21 @@ endlocal
                 contenido_bat
             )
 
-
         print(
             "SCRIPT ACTUALIZACION:",
             script
         )
 
-
-        # ====================================================
+        # ----------------------------------------------------
         # EJECUTAR BAT
-        # ====================================================
+        # ----------------------------------------------------
+
+        print(
+            "Iniciando actualizador externo..."
+        )
 
         subprocess.Popen(
+
             [
                 "cmd.exe",
                 "/c",
@@ -934,18 +1376,19 @@ endlocal
                 "",
                 script
             ],
-            cwd=carpeta_programa,
-            creationflags=subprocess.CREATE_NEW_CONSOLE
-        )
 
+            cwd=carpeta_programa,
+
+            creationflags=(
+                subprocess.CREATE_NEW_CONSOLE
+            )
+        )
 
         print(
             "Actualizador externo iniciado."
         )
 
-
         return True
-
 
     except Exception as e:
 
@@ -953,5 +1396,12 @@ endlocal
             "ERROR instalando actualización:",
             repr(e)
         )
+
+        if carpeta_temp:
+
+            shutil.rmtree(
+                carpeta_temp,
+                ignore_errors=True
+            )
 
         return False

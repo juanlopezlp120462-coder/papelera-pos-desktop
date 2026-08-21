@@ -278,6 +278,31 @@ else:
     )
 
 # ============================================================
+# CONFIGURACION SUPABASE PARA LA APLICACION
+# ============================================================
+
+ENV_POS_FILE = os.path.join(
+    PROJECT_DIR,
+    ".env.pos"
+)
+
+if os.path.exists(ENV_POS_FILE):
+
+    datas.append(
+        (
+            ENV_POS_FILE,
+            "."
+        )
+    )
+
+else:
+
+    print(
+        "[PyInstaller] ADVERTENCIA: "
+        "no existe .env.pos"
+    )
+
+# ============================================================
 # RESUMEN
 # ============================================================
 

@@ -1,76 +1,38 @@
-# =========================
-# PYTHON
-# =========================
+﻿@"
+.env
+.env.pos
+
+_supabase_manual_update.py
+_supabase_publish_test.py
 
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-
-
-# =========================
-# ENTORNOS VIRTUALES
-# =========================
-
-venv/
-.venv/
-
-
-# =========================
-# PYINSTALLER
-# =========================
 
 build/
 dist/
 
-
-# =========================
-# EJECUTABLES Y ACTUALIZACIONES
-# =========================
-
-*.exe
 *.zip
-UPDATE.zip
-PAPELERA_POS_update.zip
+*.exe
 
-
-# =========================
-# ARCHIVOS INTERNOS GRANDES
-# =========================
-
-_internal/
-
-
-# =========================
-# BASE DE DATOS LOCAL
-# =========================
-
-*.db
-
-
-# =========================
-# TICKETS Y ARCHIVOS GENERADOS
-# =========================
-
-tickets/
 backups/
 
-
-# =========================
-# TEMPORALES
-# =========================
-
-*.log
-*.tmp
-
-
-# =========================
-# ARCHIVOS DE PRUEBA GRANDES
-# =========================
-
-prueba.zip
-codigo_completo.txt
+venv/
 venv311/
-build/
-dist/
-__pycache__/
+
+database/*.db
+
+build_supabase.log
+
+test_update_2.0.71/
+PRUEBA_DIAGNOSTICO/
+
+tickets/
+
+ui/*.zip
+ui/codigo_completo.txt
+"@ | Set-Content .gitignore -Encoding UTF8
+update/
+.env
+.env.pos
+_supabase_manual_update.py
+_supabase_publish_test.py
