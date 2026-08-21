@@ -786,17 +786,21 @@ Write-Host "       VERIFICACION FINAL" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-$SUPABASE_VERIFY = @"
+$SUPABASE_VERIFY = @'
 from dotenv import load_dotenv
 from supabase import create_client
 import os
 
-load_dotenv()
+load_dotenv(".env.pos")
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
-)
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
+
+if not url or not key:
+    print("ERROR: faltan SUPABASE_URL o SUPABASE_KEY")
+    raise SystemExit(1)
+
+supabase = create_client(url, key)
 
 respuesta = (
     supabase
@@ -810,9 +814,9 @@ respuesta = (
 
 print("VERSION ACTIVA EN SUPABASE:")
 print(respuesta.data)
-"@
+'@
 
-$VERIFY_RESULT = python -c $SUPABASE_VERIFY
+$VERIFY_RESULT = $SUPABASE_VERIFY | python -
 
 if ($LASTEXITCODE -ne 0) {
 
