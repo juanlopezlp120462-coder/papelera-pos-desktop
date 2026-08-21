@@ -45,7 +45,7 @@ def esperar_programa():
 
                 return True
 
-        except:
+        except Exception:
 
             pass
 
@@ -72,7 +72,7 @@ def borrar_carpeta(ruta):
 
             return True
 
-        except:
+        except Exception:
 
             time.sleep(ESPERA)
 
@@ -97,7 +97,7 @@ def borrar_archivo(ruta):
 
             return True
 
-        except:
+        except Exception:
 
             time.sleep(ESPERA)
 
@@ -120,7 +120,7 @@ def leer_version(ruta):
 
             return f.read().strip()
 
-    except:
+    except Exception:
 
         return ""
 
@@ -135,11 +135,14 @@ def copiar_archivo(origen, destino):
 
         try:
 
-            shutil.copy2(origen, destino)
+            shutil.copy2(
+                origen,
+                destino
+            )
 
             return True
 
-        except:
+        except Exception:
 
             time.sleep(ESPERA)
 
@@ -159,7 +162,9 @@ def actualizar():
         return False
 
 
-    zip_path = os.path.abspath(sys.argv[1])
+    zip_path = os.path.abspath(
+        sys.argv[1]
+    )
 
     if not os.path.exists(zip_path):
 
@@ -171,6 +176,7 @@ def actualizar():
     carpeta_actual = os.path.dirname(
         os.path.abspath(sys.executable)
     )
+
 
     print("")
     print("===================================")
@@ -202,7 +208,9 @@ def actualizar():
         CARPETA_TEMP
     )
 
-    borrar_carpeta(carpeta_temp)
+    borrar_carpeta(
+        carpeta_temp
+    )
 
     os.makedirs(
         carpeta_temp,
@@ -218,9 +226,14 @@ def actualizar():
 
     try:
 
-        with zipfile.ZipFile(zip_path, "r") as z:
+        with zipfile.ZipFile(
+            zip_path,
+            "r"
+        ) as z:
 
-            z.extractall(carpeta_temp)
+            z.extractall(
+                carpeta_temp
+            )
 
     except Exception as e:
 
@@ -251,11 +264,13 @@ def actualizar():
 
         return False
 
+
     if not os.path.isdir(nuevo_internal):
 
         print("Falta _internal")
 
         return False
+
 
     if not os.path.exists(nueva_version):
 
@@ -299,14 +314,65 @@ def actualizar():
     )
 
 
-    borrar_archivo(exe_backup)
-    borrar_carpeta(internal_backup)
+    # ========================================================
+    # .ENV.POS
+    #
+    # ESTE ARCHIVO NO DEBE SER REEMPLAZADO POR EL UPDATE.
+    # ========================================================
+
+    env_pos_actual = os.path.join(
+        internal_actual,
+        ".env.pos"
+    )
+
+    env_pos_backup = os.path.join(
+        internal_backup,
+        ".env.pos"
+    )
+
+    env_pos_nuevo = os.path.join(
+        internal_actual,
+        ".env.pos"
+    )
 
 
+    conservar_env_pos = os.path.isfile(
+        env_pos_actual
+    )
+
+
+    if conservar_env_pos:
+
+        print("")
+        print("Configuracion .env.pos encontrada.")
+        print("Se conservara durante la actualizacion.")
+
+    else:
+
+        print("")
+        print("No se encontro .env.pos en la instalacion actual.")
+
+
+    # ========================================================
+    # LIMPIAR BACKUPS ANTERIORES
+    # ========================================================
+
+    borrar_archivo(
+        exe_backup
+    )
+
+    borrar_carpeta(
+        internal_backup
+    )
+
+
+    print("")
     print("Creando backups...")
 
 
-    # EXE
+    # ========================================================
+    # BACKUP EXE
+    # ========================================================
 
     if os.path.exists(exe_actual):
 
@@ -319,12 +385,17 @@ def actualizar():
 
         except Exception as e:
 
-            print("No se pudo respaldar EXE:", e)
+            print(
+                "No se pudo respaldar EXE:",
+                e
+            )
 
             return False
 
 
-    # INTERNAL
+    # ========================================================
+    # BACKUP INTERNAL
+    # ========================================================
 
     if os.path.exists(internal_actual):
 
@@ -337,9 +408,13 @@ def actualizar():
 
         except Exception as e:
 
-            print("No se pudo respaldar _internal:", e)
+            print(
+                "No se pudo respaldar _internal:",
+                e
+            )
 
-            # restaurar exe
+
+            # Restaurar EXE
 
             if os.path.exists(exe_backup):
 
@@ -355,56 +430,124 @@ def actualizar():
     # INSTALAR NUEVA VERSION
     # ========================================================
 
+    print("")
     print("Instalando nueva version...")
 
 
     try:
 
-        # MOVER CARPETA COMPLETA
+        # ----------------------------------------------------
+        # MOVER NUEVO INTERNAL
+        # ----------------------------------------------------
 
         shutil.move(
             nuevo_internal,
             internal_actual
         )
 
+
+        # ----------------------------------------------------
+        # RESTAURAR .ENV.POS
+        # ----------------------------------------------------
+        #
+        # El .env.pos anterior queda dentro de:
+        #
+        # _internal_BACKUP\.env.pos
+        #
+        # Lo copiamos al nuevo _internal.
+        #
+
+        if conservar_env_pos:
+
+            if os.path.isfile(
+                env_pos_backup
+            ):
+
+                print(
+                    "Restaurando .env.pos..."
+                )
+
+                if not copiar_archivo(
+                    env_pos_backup,
+                    env_pos_nuevo
+                ):
+
+                    raise Exception(
+                        "No se pudo restaurar .env.pos"
+                    )
+
+            else:
+
+                raise Exception(
+                    "Se esperaba .env.pos en el backup pero no existe"
+                )
+
+
+        # ----------------------------------------------------
         # COPIAR EXE
+        # ----------------------------------------------------
 
         shutil.copy2(
             nuevo_exe,
             exe_actual
         )
 
+
+        # ----------------------------------------------------
         # VERSION
+        # ----------------------------------------------------
 
         shutil.copy2(
             nueva_version,
             version_actual
         )
 
+
     except Exception as e:
 
-        print("Error instalando:", e)
+        print(
+            "Error instalando:",
+            e
+        )
+
 
         # ====================================================
-        # RESTAURAR
+        # RESTAURAR VERSION ANTERIOR
         # ====================================================
 
-        borrar_archivo(exe_actual)
-        borrar_carpeta(internal_actual)
+        print(
+            "Restaurando version anterior..."
+        )
 
-        if os.path.exists(exe_backup):
+
+        borrar_archivo(
+            exe_actual
+        )
+
+        borrar_carpeta(
+            internal_actual
+        )
+
+
+        if os.path.exists(
+            exe_backup
+        ):
 
             shutil.move(
                 exe_backup,
                 exe_actual
             )
 
-        if os.path.exists(internal_backup):
+
+        if os.path.exists(
+            internal_backup
+        ):
 
             shutil.move(
                 internal_backup,
                 internal_actual
             )
+
 
         return False
 
@@ -418,40 +561,120 @@ def actualizar():
         "python312.dll"
     )
 
-    if not os.path.exists(python_dll):
 
-        print("ERROR: falta python314.dll")
+    if not os.path.exists(
+        python_dll
+    ):
 
-        borrar_archivo(exe_actual)
-        borrar_carpeta(internal_actual)
+        print(
+            "ERROR: falta python312.dll"
+        )
 
-        if os.path.exists(exe_backup):
+
+        borrar_archivo(
+            exe_actual
+        )
+
+        borrar_carpeta(
+            internal_actual
+        )
+
+
+        if os.path.exists(
+            exe_backup
+        ):
 
             shutil.move(
                 exe_backup,
                 exe_actual
             )
 
-        if os.path.exists(internal_backup):
+
+        if os.path.exists(
+            internal_backup
+        ):
 
             shutil.move(
                 internal_backup,
                 internal_actual
             )
 
+
         return False
+
+
+    # ========================================================
+    # VERIFICAR .ENV.POS
+    # ========================================================
+
+    if conservar_env_pos:
+
+        if not os.path.isfile(
+            env_pos_nuevo
+        ):
+
+            print(
+                "ERROR: .env.pos no fue restaurado"
+            )
+
+
+            # Restaurar version anterior
+
+            borrar_archivo(
+                exe_actual
+            )
+
+            borrar_carpeta(
+                internal_actual
+            )
+
+
+            if os.path.exists(
+                exe_backup
+            ):
+
+                shutil.move(
+                    exe_backup,
+                    exe_actual
+                )
+
+
+            if os.path.exists(
+                internal_backup
+            ):
+
+                shutil.move(
+                    internal_backup,
+                    internal_actual
+                )
+
+
+            return False
+
+
+        print(
+            ".env.pos conservado correctamente."
+        )
 
 
     # ========================================================
     # VERIFICAR VERSION
     # ========================================================
 
-    version_nueva = leer_version(nueva_version)
-    version_instalada = leer_version(version_actual)
+    version_nueva = leer_version(
+        nueva_version
+    )
+
+    version_instalada = leer_version(
+        version_actual
+    )
+
 
     if version_nueva != version_instalada:
 
-        print("Version incorrecta")
+        print(
+            "Version incorrecta"
+        )
 
         return False
 
@@ -460,21 +683,29 @@ def actualizar():
     # ELIMINAR BACKUPS
     # ========================================================
 
-    borrar_archivo(exe_backup)
-    borrar_carpeta(internal_backup)
+    borrar_archivo(
+        exe_backup
+    )
+
+    borrar_carpeta(
+        internal_backup
+    )
 
 
     # ========================================================
     # ABRIR NUEVA VERSION
     # ========================================================
 
+    print("")
     print("Actualizacion correcta")
     print("Abriendo programa...")
+
 
     subprocess.Popen(
         [exe_actual],
         cwd=carpeta_actual
     )
+
 
     return True
 
@@ -491,8 +722,8 @@ if __name__ == "__main__":
 
     except Exception as e:
 
+        print("")
         print("ERROR GENERAL")
-
         print(e)
 
         time.sleep(5)

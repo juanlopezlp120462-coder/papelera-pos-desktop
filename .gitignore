@@ -36,3 +36,4 @@ update/
 .env.pos
 _supabase_manual_update.py
 _supabase_publish_test.py
+.env
