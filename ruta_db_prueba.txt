@@ -1,1 +1,1 @@
-C:\Users\Admin\Pictures\dist\PAPELERA_POS\database\abril.db
+C:\Users\Admin\Desktop\cotillon-pos-v2\database\abril.db
