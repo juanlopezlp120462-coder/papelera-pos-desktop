@@ -1,5 +1,5 @@
-import os
 import sys
+import os
 import json
 import threading
 from datetime import datetime
@@ -83,6 +83,21 @@ SUPABASE_URL = os.getenv(
 SUPABASE_KEY = os.getenv(
     "SUPABASE_KEY"
 )
+
+
+# =========================================================
+# HEADERS SUPABASE
+# =========================================================
+
+def obtener_headers():
+
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+    }
+
 
 
 # =========================================================

@@ -583,7 +583,7 @@ Write-Host "URL esperada:" -ForegroundColor DarkGray
 Write-Host $UPDATE_URL -ForegroundColor DarkGray
 Write-Host ""
 
-$MAX_ESPERA = 600
+$MAX_ESPERA = 1800
 $INTERVALO = 10
 $TIEMPO = 0
 $RELEASE_LISTO = $false
