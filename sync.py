@@ -23,17 +23,6 @@ if getattr(sys, "frozen", False):
     # =====================================================
     # INSTALACION COMPILADA
     # =====================================================
-    #
-    # PAPELERA_POS.exe se encuentra en:
-    #
-    # PAPELERA_POS\
-    #
-    # Por lo tanto .env.pos queda FIJO en:
-    #
-    # PAPELERA_POS\.env.pos
-    #
-    # y NO dentro de _internal.
-    #
 
     BASE_DIR = os.path.dirname(
         os.path.abspath(
@@ -41,30 +30,36 @@ if getattr(sys, "frozen", False):
         )
     )
 
+    # Primero buscar junto al EXE
+    ENV_FILE = os.path.join(
+        BASE_DIR,
+        ".env.pos"
+    )
+
+    # PyInstaller 6 puede colocar los datas dentro
+    # de _internal.
+    if not os.path.isfile(ENV_FILE):
+
+        ENV_FILE = os.path.join(
+            BASE_DIR,
+            "_internal",
+            ".env.pos"
+        )
+
 else:
 
     # =====================================================
     # EJECUCION DESDE PYTHON
     # =====================================================
-    #
-    # En desarrollo:
-    #
-    # C:\...\cotillon-pos-v2\.env.pos
-    #
 
     BASE_DIR = os.path.dirname(
         os.path.abspath(__file__)
     )
 
-
-# =========================================================
-# .ENV.POS FIJO
-# =========================================================
-
-ENV_FILE = os.path.join(
-    BASE_DIR,
-    ".env.pos"
-)
+    ENV_FILE = os.path.join(
+        BASE_DIR,
+        ".env.pos"
+    )
 
 
 # =========================================================
