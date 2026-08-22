@@ -951,7 +951,113 @@ def sincronizar_ventas():
     conexion.close()
 
     return sincronizadas
+# =========================================================
+# ELIMINAR VENTAS LOCALES QUE YA NO EXISTEN EN SUPABASE
+# =========================================================
 
+def eliminar_ventas_locales_que_no_existen_en_supabase(
+    ventas_remotas
+):
+
+    conexion = None
+
+    try:
+
+        conexion = create_connection()
+        cursor = conexion.cursor()
+
+        # UUID de todas las ventas que realmente existen
+        # actualmente en Supabase
+        uuids_remotos = {
+            str(v.get("uuid"))
+            for v in (ventas_remotas or [])
+            if v.get("uuid")
+        }
+
+        ventas_locales = cursor.execute(
+            """
+            SELECT
+                id,
+                uuid
+            FROM ventas
+            WHERE uuid IS NOT NULL
+            """
+        ).fetchall()
+
+        eliminadas = 0
+
+        for venta_id, venta_uuid in ventas_locales:
+
+            venta_uuid = str(venta_uuid)
+
+            # Si existe remotamente, se conserva
+            if venta_uuid in uuids_remotos:
+                continue
+
+            # =============================================
+            # BORRAR DETALLES PRIMERO
+            # =============================================
+
+            cursor.execute(
+                """
+                DELETE FROM detalle_ventas
+                WHERE venta_id=?
+                """,
+                (venta_id,)
+            )
+
+            # =============================================
+            # BORRAR VENTA
+            # =============================================
+
+            cursor.execute(
+                """
+                DELETE FROM ventas
+                WHERE id=?
+                """,
+                (venta_id,)
+            )
+
+            eliminadas += 1
+
+            print(
+                "VENTA LOCAL ELIMINADA - YA NO EXISTE EN SUPABASE:",
+                venta_uuid
+            )
+
+        conexion.commit()
+
+        print(
+            "VENTAS LOCALES ELIMINADAS:",
+            eliminadas
+        )
+
+        return eliminadas
+
+    except Exception as e:
+
+        print(
+            "Error eliminando ventas locales obsoletas:",
+            repr(e)
+        )
+
+        if conexion:
+
+            try:
+                conexion.rollback()
+            except Exception:
+                pass
+
+        return 0
+
+    finally:
+
+        if conexion:
+
+            try:
+                conexion.close()
+            except Exception:
+                pass
 
 # =========================================================
 # 4. DESCARGA DE VENTAS
@@ -979,7 +1085,13 @@ def descargar_ventas():
         ventas_remotas = (
             respuesta.data or []
         )
+        # =================================================
+        # ELIMINAR LOCALES QUE YA NO EXISTEN EN SUPABASE
+        # =================================================
 
+        eliminar_ventas_locales_que_no_existen_en_supabase(
+            ventas_remotas
+        )
         conexion = create_connection()
         cursor = conexion.cursor()
 
