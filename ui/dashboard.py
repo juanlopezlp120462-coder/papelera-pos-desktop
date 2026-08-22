@@ -716,14 +716,42 @@ class ArqueoMensual(QDialog):
             "📅 Arqueo mensual"
         )
 
+        # ====================================================
+        # TAMAÑO ADAPTABLE A LA RESOLUCIÓN DE WINDOWS
+        # ====================================================
+
+        pantalla = QApplication.primaryScreen()
+        area_disponible = pantalla.availableGeometry()
+
+        ancho_disponible = area_disponible.width()
+        alto_disponible = area_disponible.height()
+
+        # La ventana nunca puede superar el área visible
+        # de Windows (excluye automáticamente la barra de tareas).
+        ancho_inicial = min(
+            1400,
+            ancho_disponible - 40
+        )
+
+        alto_inicial = min(
+            900,
+            alto_disponible - 40
+        )
+
+        # Mínimos razonables para poder usar el arqueo
         self.setMinimumSize(
-            1100,
-            720
+            850,
+            500
+        )
+
+        self.setMaximumSize(
+            max(850, ancho_disponible - 20),
+            max(500, alto_disponible - 20)
         )
 
         self.resize(
-            1400,
-            900
+            max(850, ancho_inicial),
+            max(500, alto_inicial)
         )
 
         # ====================================================
@@ -1025,7 +1053,7 @@ class ArqueoMensual(QDialog):
         root.setContentsMargins(
             20,
             20,
-            100,
+            20,
             20
         )
 
