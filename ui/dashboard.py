@@ -4407,11 +4407,7 @@ class Dashboard(QMainWindow):
             # SUPABASE
             # =================================================
 
-            from core.sync import (
-                SUPABASE_URL,
-                obtener_headers
-            )
-
+            from sync import supabase
             tablas_supabase = [
                 # Primero los detalles
                 "detalle_ventas",
@@ -4427,37 +4423,22 @@ class Dashboard(QMainWindow):
                 "arqueos"
             ]
 
-            headers = obtener_headers()
-
             for tabla in tablas_supabase:
 
-                respuesta_supabase = requests.delete(
-                    f"{SUPABASE_URL}/rest/v1/{tabla}",
-                    params={
-                        "id": "gt.0"
-                    },
-                    headers=headers,
-                    timeout=15
+                respuesta_supabase = (
+                    supabase
+                    .table(tabla)
+                    .delete()
+                    .gt("id", 0)
+                    .execute()
                 )
 
                 print(
                     "LIMPIAR SUPABASE:",
                     tabla,
-                    respuesta_supabase.status_code,
-                    respuesta_supabase.text
+                    "OK",
+                    respuesta_supabase.data
                 )
-
-                if respuesta_supabase.status_code not in (
-                    200,
-                    204
-                ):
-
-                    raise Exception(
-                        "Error eliminando "
-                        f"{tabla} en Supabase: "
-                        f"{respuesta_supabase.status_code} "
-                        f"{respuesta_supabase.text}"
-                    )
 
             # =================================================
             # SQLITE LOCAL

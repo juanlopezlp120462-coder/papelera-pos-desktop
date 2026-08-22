@@ -15,7 +15,45 @@ from ui.db import (
 # CARGAR VARIABLES DE ENTORNO
 # ============================================================
 
-load_dotenv()
+import sys
+
+if getattr(sys, "frozen", False):
+    # Programa compilado con PyInstaller.
+    # .env.pos queda junto al .exe
+    BASE_CONFIG = os.path.dirname(
+        sys.executable
+    )
+else:
+    # Programa ejecutado desde el proyecto
+    BASE_CONFIG = os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+
+ENV_POS = os.path.join(
+    BASE_CONFIG,
+    ".env.pos"
+)
+
+ENV_NORMAL = os.path.join(
+    BASE_CONFIG,
+    ".env"
+)
+
+# Primero intentar .env.pos
+if os.path.exists(ENV_POS):
+    load_dotenv(
+        ENV_POS,
+        override=True
+    )
+
+# Si no existe .env.pos, usar .env
+elif os.path.exists(ENV_NORMAL):
+    load_dotenv(
+        ENV_NORMAL,
+        override=True
+    )
 
 
 SUPABASE_URL = os.getenv(
